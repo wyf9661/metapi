@@ -7,6 +7,6 @@ describe('Toast accessibility', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/web/components/Toast.tsx'), 'utf8');
     expect(source).toContain("role={t.type === 'error' ? 'alert' : 'status'}");
     expect(source).toContain('aria-live');
-    expect(source).toContain('aria-label="关闭通知"');
+    expect(source).toContain("aria-label={tr('关闭通知')}");
   });
 });

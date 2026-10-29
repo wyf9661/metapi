@@ -1350,7 +1350,7 @@ export default function Sites() {
             { value: 'balance-desc', label: '余额高到低' },
             { value: 'balance-asc', label: '余额低到高' },
             ]}
-            placeholder="默认排序"
+            placeholder={tr('默认排序')}
             />
             </div>
           )}
@@ -1427,7 +1427,7 @@ export default function Sites() {
                   { value: 'balance-desc', label: '余额高到低' },
                   { value: 'balance-asc', label: '余额低到高' },
                 ]}
-                placeholder="默认排序"
+                placeholder={tr('默认排序')}
               />
             </div>
           </div>
@@ -1442,7 +1442,7 @@ export default function Sites() {
         open={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
-        title="确认删除站点"
+        title={tr('确认删除站点')}
         confirmText="确认删除"
         loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
         description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
@@ -1496,8 +1496,8 @@ export default function Sites() {
         >
           <ResponsiveFormGrid>
             <input
-              aria-label="站点名称"
-              placeholder="站点名称"
+              aria-label={tr('站点名称')}
+              placeholder={tr('站点名称')}
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               style={formInputStyle}
@@ -1505,9 +1505,9 @@ export default function Sites() {
             {!selectedOauthProvider && (
               <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
                 <input
-                  aria-label="主站点 URL"
+                  aria-label={tr('主站点 URL')}
                   data-testid="site-primary-url-input"
-                  placeholder="准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）"
+                  placeholder={tr('准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）')}
                   value={form.url}
                   onChange={(e) => setForm((prev) => ({ ...prev, url: e.target.value }))}
                   onBlur={() => {
@@ -1563,7 +1563,7 @@ export default function Sites() {
                   setSelectedInitializationPresetId(null);
                 }}
                 options={platformOptions}
-                placeholder="平台类型（可自动检测）"
+                placeholder={tr('平台类型（可自动检测）')}
               />
             </div>
           </ResponsiveFormGrid>
@@ -1723,14 +1723,14 @@ export default function Sites() {
               >
                 <input
                   aria-label={`自定义请求头 ${index + 1} 名称`}
-                  placeholder="Header 名称"
+                  placeholder={tr('Header 名称')}
                   value={header.key}
                   onChange={(e) => updateCustomHeaderRow(index, 'key', e.target.value)}
                   style={{ ...formInputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
                 />
                 <input
                   aria-label={`自定义请求头 ${index + 1} 值`}
-                  placeholder="Header 值"
+                  placeholder={tr('Header 值')}
                   value={header.value}
                   onChange={(e) => updateCustomHeaderRow(index, 'value', e.target.value)}
                   style={{ ...formInputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
@@ -1843,7 +1843,7 @@ export default function Sites() {
               {probeScope === 'single' && (
                 <input
                   type="text"
-                  placeholder="探测模型名（留空则自动取第一个发现的模型）"
+                  placeholder={tr('探测模型名（留空则自动取第一个发现的模型）')}
                   value={probeModel}
                   onChange={(e) => setProbeModel(e.target.value)}
                   disabled={!probeEnabled}
@@ -1963,9 +1963,9 @@ export default function Sites() {
           <ResponsiveFormGrid>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
-                aria-label="站点代理"
+                aria-label={tr('站点代理')}
                 data-testid="site-proxy-url-input"
-                placeholder="站点代理（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）"
+                placeholder={tr('站点代理（可选，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）')}
                 value={form.proxyUrl}
                 onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
                 style={formInputStyle}
@@ -1976,7 +1976,7 @@ export default function Sites() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
-                placeholder="站点全局权重（默认 1）"
+                placeholder={tr('站点全局权重（默认 1）')}
                 value={form.globalWeight}
                 onChange={(e) => setForm((prev) => ({ ...prev, globalWeight: e.target.value }))}
                 style={formInputStyle}

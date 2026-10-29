@@ -225,7 +225,7 @@ export default function ModelTester() {
             <input
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder="https://api.example.com 或 …/v1"
+              placeholder={tr('https://api.example.com 或 …/v1')}
               style={inputBaseStyle}
               autoComplete="off"
               spellCheck={false}
@@ -239,7 +239,7 @@ export default function ModelTester() {
             <input
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder="不需要认证时可留空"
+              placeholder={tr('不需要认证时可留空')}
               style={inputBaseStyle}
               autoComplete="off"
               spellCheck={false}
@@ -261,7 +261,7 @@ export default function ModelTester() {
                 }
               }}
               options={PROTOCOL_OPTIONS}
-              placeholder="选择协议"
+              placeholder={tr('选择协议')}
             />
           </div>
 

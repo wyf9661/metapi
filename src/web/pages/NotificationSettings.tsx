@@ -450,7 +450,7 @@ export default function NotificationSettings() {
                             type="password"
                             value={serverChanKey}
                             onChange={(e) => setServerChanKey(e.target.value)}
-                            placeholder="输入新的 Server酱 Key（留空则不改）"
+                            placeholder={tr('输入新的 Server酱 Key（留空则不改）')}
                             style={inputStyle}
                             disabled={!runtime.serverChanEnabled}
                         />
@@ -489,7 +489,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.telegramApiBaseUrl}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, telegramApiBaseUrl: e.target.value }))}
-                                placeholder="例如: https://your-proxy.example.com"
+                                placeholder={tr('例如: https://your-proxy.example.com')}
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
@@ -502,7 +502,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.telegramChatId}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, telegramChatId: e.target.value }))}
-                                placeholder="例如: -1001234567890 或 @your_channel"
+                                placeholder={tr('例如: -1001234567890 或 @your_channel')}
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
@@ -512,7 +512,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.telegramMessageThreadId}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, telegramMessageThreadId: e.target.value }))}
-                                placeholder="例如: 77"
+                                placeholder={tr('例如: 77')}
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
@@ -526,7 +526,7 @@ export default function NotificationSettings() {
                                 type="password"
                                 value={telegramBotToken}
                                 onChange={(e) => setTelegramBotToken(e.target.value)}
-                                placeholder="输入新的 Bot Token（留空则不改）"
+                                placeholder={tr('输入新的 Bot Token（留空则不改）')}
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
@@ -565,7 +565,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.smtpHost}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpHost: e.target.value }))}
-                                placeholder="例如: smtp.qq.com"
+                                placeholder={tr('例如: smtp.qq.com')}
                                 style={inputStyle}
                                 disabled={!runtime.smtpEnabled}
                             />
@@ -599,7 +599,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.smtpUser}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpUser: e.target.value }))}
-                                placeholder="SMTP 用户名"
+                                placeholder={tr('SMTP 用户名')}
                                 style={inputStyle}
                                 disabled={!runtime.smtpEnabled}
                             />
@@ -614,7 +614,7 @@ export default function NotificationSettings() {
                                 type="password"
                                 value={smtpPass}
                                 onChange={(e) => setSmtpPass(e.target.value)}
-                                placeholder="输入以更改密码..."
+                                placeholder={tr('输入以更改密码...')}
                                 style={inputStyle}
                                 disabled={!runtime.smtpEnabled}
                             />
@@ -625,7 +625,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.smtpFrom}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpFrom: e.target.value }))}
-                                placeholder="例如: admin@example.com"
+                                placeholder={tr('例如: admin@example.com')}
                                 style={inputStyle}
                                 disabled={!runtime.smtpEnabled}
                             />
@@ -636,7 +636,7 @@ export default function NotificationSettings() {
                             <input
                                 value={runtime.smtpTo}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpTo: e.target.value }))}
-                                placeholder="例如: target@example.com"
+                                placeholder={tr('例如: target@example.com')}
                                 style={inputStyle}
                                 disabled={!runtime.smtpEnabled}
                             />

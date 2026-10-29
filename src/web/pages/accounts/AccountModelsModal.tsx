@@ -203,7 +203,7 @@ export default function AccountModelsModal({
                 <input
                   value={modelSearch}
                   onChange={(e) => setModelSearch(e.target.value)}
-                  placeholder="搜索模型（支持模糊匹配）"
+                  placeholder={tr('搜索模型（支持模糊匹配）')}
                   style={{ ...inputStyle, flex: 1, minWidth: 0, padding: '8px 10px', fontSize: 12 }}
                 />
                 {searchQuery ? (
@@ -273,7 +273,7 @@ export default function AccountModelsModal({
                             void onRemoveManualModel(model.name);
                           }}
                           disabled={removingManualModelName !== null}
-                          title="删除该手动模型"
+                          title={tr('删除该手动模型')}
                           className="btn btn-soft-danger"
                           style={{
                             fontSize: 10,
@@ -306,7 +306,7 @@ export default function AccountModelsModal({
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
-                placeholder="例如: gpt-4-custom, claude-3-5-sonnet-20241022"
+                placeholder={tr('例如: gpt-4-custom, claude-3-5-sonnet-20241022')}
                 value={modelModal.manualModelsInput}
                 onChange={(e) => onManualInputChange(e.target.value)}
                 style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}

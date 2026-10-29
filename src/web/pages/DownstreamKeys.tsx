@@ -246,8 +246,8 @@ function DownstreamKeyCopyIconButton({ fullKey }: { fullKey: string | undefined 
   return (
     <button
       type="button"
-      title="复制完整密钥"
-      aria-label="复制完整密钥"
+      title={tr('复制完整密钥')}
+      aria-label={tr('复制完整密钥')}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -974,7 +974,7 @@ export default function DownstreamKeys() {
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="搜索名称、备注、模型、主分组或标签"
+              placeholder={tr('搜索名称、备注、模型、主分组或标签')}
             />
           </div>
           <InlineToggle value={tagMatchMode} onChange={setTagMatchMode} />
@@ -1308,7 +1308,7 @@ export default function DownstreamKeys() {
       <CenteredModal
         open={batchMetadataOpen}
         onClose={() => { setBatchMetadataOpen(false); resetBatchMetadataForm(); }}
-        title="批量归类 / 标签"
+        title={tr('批量归类 / 标签')}
         maxWidth={720}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         footer={(
@@ -1339,7 +1339,7 @@ export default function DownstreamKeys() {
               value={batchMetadataForm.groupName}
               onChange={(e) => setBatchMetadataForm((prev) => ({ ...prev, groupName: e.target.value }))}
               disabled={batchMetadataForm.groupOperation !== 'set'}
-              placeholder="例如：VIP / 内部项目"
+              placeholder={tr('例如：VIP / 内部项目')}
               list="downstream-group-suggestions"
               style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)' }}
             />
@@ -1359,7 +1359,7 @@ export default function DownstreamKeys() {
                 tags={batchMetadataForm.tags}
                 onChange={(tags) => setBatchMetadataForm((prev) => ({ ...prev, tags }))}
                 suggestions={tagSuggestions}
-                placeholder="批量追加标签"
+                placeholder={tr('批量追加标签')}
               />
             </div>
           </div>
@@ -1370,7 +1370,7 @@ export default function DownstreamKeys() {
         open={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={() => void confirmDelete()}
-        title="确认删除下游密钥"
+        title={tr('确认删除下游密钥')}
         confirmText="确认删除"
         loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!rowLoading[`delete-${deleteConfirm.item.id}`])}
         description={deleteConfirm?.mode === 'single'

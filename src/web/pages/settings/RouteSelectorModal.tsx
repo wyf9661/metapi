@@ -93,7 +93,7 @@ export default function RouteSelectorModal({
                 <input
                   value={selectorModelSearch}
                   onChange={(e) => onSelectorModelSearchChange(e.target.value)}
-                  placeholder="搜索精确模型（支持模糊匹配）"
+                  placeholder={tr('搜索精确模型（支持模糊匹配）')}
                   style={{ ...inputStyle, padding: '8px 10px', fontSize: 12, marginBottom: 8 }}
                 />
                 <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>

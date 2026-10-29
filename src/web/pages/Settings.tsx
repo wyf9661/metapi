@@ -1184,7 +1184,7 @@ export default function Settings() {
                 <input
                   value={runtime.turnstileSolverBaseUrl}
                   onChange={(e) => setRuntime((prev) => ({ ...prev, turnstileSolverBaseUrl: e.target.value }))}
-                  placeholder="http://127.0.0.1:5091（自建求解器）"
+                  placeholder={tr('http://127.0.0.1:5091（自建求解器）')}
                   style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                   disabled={!runtime.turnstileSolverEnabled}
                 />
@@ -1295,7 +1295,7 @@ export default function Settings() {
           <textarea
             value={proxyErrorKeywordsText}
             onChange={(e) => setProxyErrorKeywordsText(e.target.value)}
-            placeholder="一行一个关键词，或逗号分隔"
+            placeholder={tr('一行一个关键词，或逗号分隔')}
             style={{
               ...inputStyle,
               fontFamily: 'var(--font-mono)',
@@ -1410,7 +1410,7 @@ export default function Settings() {
                         value={rule.action}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { action: value as PayloadRuleAction })}
                         options={PAYLOAD_RULE_ACTION_OPTIONS}
-                        placeholder="选择动作"
+                        placeholder={tr('选择动作')}
                       />
                     </div>
                     <div>
@@ -1421,7 +1421,7 @@ export default function Settings() {
                         value={rule.protocol}
                         onChange={(value) => updatePayloadVisualRule(rule.id, { protocol: String(value || '') })}
                         options={PAYLOAD_RULE_PROTOCOL_OPTIONS}
-                        placeholder="全部协议"
+                        placeholder={tr('全部协议')}
                       />
                     </div>
                     <div>
@@ -1431,7 +1431,7 @@ export default function Settings() {
                         aria-label={`Payload 规则可视化模型 ${index + 1}`}
                         value={rule.modelPattern}
                         onChange={(e) => updatePayloadVisualRule(rule.id, { modelPattern: e.target.value })}
-                        placeholder="例如 gpt-*"
+                        placeholder={tr('例如 gpt-*')}
                         style={inputStyle}
                       />
                     </div>
@@ -1442,7 +1442,7 @@ export default function Settings() {
                         aria-label={`Payload 规则可视化路径 ${index + 1}`}
                         value={rule.path}
                         onChange={(e) => updatePayloadVisualRule(rule.id, { path: e.target.value })}
-                        placeholder="例如 reasoning.effort"
+                        placeholder={tr('例如 reasoning.effort')}
                         style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                       />
                     </div>
@@ -1467,7 +1467,7 @@ export default function Settings() {
                                 : rule.value,
                             })}
                             options={PAYLOAD_RULE_VALUE_MODE_OPTIONS}
-                            placeholder="值类型"
+                            placeholder={tr('值类型')}
                           />
                         </div>
                       )}
@@ -1500,7 +1500,7 @@ export default function Settings() {
                             aria-label={`Payload 规则可视化值 ${index + 1}`}
                             value={rule.value}
                             onChange={(e) => updatePayloadVisualRule(rule.id, { value: e.target.value })}
-                            placeholder="例如 high"
+                            placeholder={tr('例如 high')}
                             style={inputStyle}
                           />
                         )}
@@ -1768,7 +1768,7 @@ export default function Settings() {
                 { value: 'round_robin', label: '轮询' },
                 { value: 'stable_first', label: '稳定优先' },
               ]}
-              placeholder="选择路由策略"
+              placeholder={tr('选择路由策略')}
             />
             <div style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--color-text-muted)', marginTop: 6 }}>
               轮询：公平轮转，最久未选中的通道优先；稳定优先：按近期成功率加权，低成功率站点每 24 次请求灰度试探一次。
@@ -1783,7 +1783,7 @@ export default function Settings() {
               min={0}
               max={1}
               step={0.01}
-              aria-label="路由探测率"
+              aria-label={tr('路由探测率')}
               value={runtime.proxyRouteProbeRate}
               onChange={(e) => {
                 const nextValue = Number(e.target.value);
@@ -1848,7 +1848,7 @@ export default function Settings() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
               <input
                 type="number"
-                aria-label="路由失败冷却上限数值"
+                aria-label={tr('路由失败冷却上限数值')}
                 min={1}
                 step={1}
                 value={runtime.routeFailureCooldownMaxValue}
@@ -1876,7 +1876,7 @@ export default function Settings() {
                     value: option.value,
                     label: option.label,
                   }))}
-                  placeholder="选择单位"
+                  placeholder={tr('选择单位')}
                 />
               </div>
             </div>
@@ -1897,7 +1897,7 @@ export default function Settings() {
               type="number"
               min={0}
               step={1}
-              aria-label="首字超时秒数"
+              aria-label={tr('首字超时秒数')}
               value={runtime.proxyFirstByteTimeoutSec}
               onChange={(e) => {
                 const nextValue = Number(e.target.value);
@@ -1980,7 +1980,7 @@ export default function Settings() {
                     min={0.03}
                     max={0.15}
                     step={0.01}
-                    aria-label="概率保底下限"
+                    aria-label={tr('概率保底下限')}
                     value={runtime.routeProbabilityFloor ?? 0.05}
                     onChange={(e) => {
                       const v = Number(e.target.value);

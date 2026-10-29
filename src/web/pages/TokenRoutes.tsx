@@ -1741,7 +1741,7 @@ export default function TokenRoutes() {
                 type="button"
                 className="badge"
                 onClick={() => setEnabledFilter(enabledFilter === 'cooling' ? 'all' : 'cooling')}
-                title="点击筛选/取消筛选冷却中的路由"
+                title={tr('点击筛选/取消筛选冷却中的路由')}
                 style={{
                   fontSize: 12,
                   fontWeight: 600,

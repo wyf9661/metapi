@@ -4,6 +4,7 @@ import PageJumpInput from './PageJumpInput.js';
 import ModernSelect from './ModernSelect.js';
 import { MOBILE_PAGE_SIZE_OPTIONS, PAGE_SIZE_OPTIONS } from './usePersistedPageSize.js';
 import { useIsMobile } from './useIsMobile.js';
+import { tr } from '../i18n.js';
 
 type PaginationControlsProps = {
   page: number;
@@ -119,8 +120,8 @@ export default function PaginationControls({
                   type="button"
                   className="pagination-btn"
                   onClick={() => goTo(1)}
-                  aria-label="回到第一页"
-                  title="回到第一页"
+                  aria-label={tr('回到第一页')}
+                  title={tr('回到第一页')}
                 >
                   首页
                 </button>
@@ -166,8 +167,8 @@ export default function PaginationControls({
               type="button"
               className="pagination-btn"
               onClick={() => goTo(1)}
-              aria-label="回到第一页"
-              title="回到第一页"
+              aria-label={tr('回到第一页')}
+              title={tr('回到第一页')}
             >
               首页
             </button>

@@ -872,7 +872,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 { value: '0', label: '选择账号后同步站点令牌' },
                 ...activeAccountSelectOptions,
               ]}
-              placeholder="选择账号后同步站点令牌"
+              placeholder={tr('选择账号后同步站点令牌')}
               searchable
               searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
             />
@@ -937,7 +937,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                   { value: '0', label: '选择账号后同步站点令牌' },
                   ...activeAccountSelectOptions,
                 ]}
-                placeholder="选择账号后同步站点令牌"
+                placeholder={tr('选择账号后同步站点令牌')}
                 searchable
                 searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
               />
@@ -970,7 +970,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         open={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
-        title="确认删除令牌"
+        title={tr('确认删除令牌')}
         confirmText="确认删除"
         loading={Boolean(deleteConfirm?.tokenId && rowLoading[`token-${deleteConfirm.tokenId}-delete`])}
         description={<>{tr('确定要删除令牌')} <strong>{deleteConfirm?.tokenName || `#${deleteConfirm?.tokenId}`}</strong> 吗？</>}
@@ -979,7 +979,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       <CenteredModal
         open={Boolean(editingToken)}
         onClose={closeEditPanel}
-        title="编辑令牌"
+        title={tr('编辑令牌')}
         maxWidth={760}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
         footer={(
@@ -1025,7 +1025,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 <div>
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('令牌名称')}</div>
                   <input
-                    placeholder="令牌名称"
+                    placeholder={tr('令牌名称')}
                     value={editForm.name}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
                     style={inputStyle}
@@ -1098,7 +1098,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       <CenteredModal
         open={showAdd}
         onClose={handleToggleAdd}
-        title="新增令牌"
+        title={tr('新增令牌')}
         maxWidth={820}
         bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       >
@@ -1118,7 +1118,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 { value: '0', label: '选择账号' },
                 ...activeAccountSelectOptions,
               ]}
-              placeholder="选择账号"
+              placeholder={tr('选择账号')}
               searchable
               searchPlaceholder={ACCOUNT_SELECT_SEARCH_PLACEHOLDER}
             />
@@ -1143,7 +1143,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             <input
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="例如 metapi"
+              placeholder={tr('例如 metapi')}
               style={inputStyle}
             />
           </div>
@@ -1173,7 +1173,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               <input
                 value={form.remainQuota}
                 onChange={(e) => setForm((prev) => ({ ...prev, remainQuota: e.target.value.replace(/[^\d]/g, '') }))}
-                placeholder="额度（正整数）"
+                placeholder={tr('额度（正整数）')}
                 style={{ ...inputStyle, maxWidth: 220 }}
               />
             )}
@@ -1192,7 +1192,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             <input
               value={form.allowIps}
               onChange={(e) => setForm((prev) => ({ ...prev, allowIps: e.target.value }))}
-              placeholder="多个用英文逗号分隔"
+              placeholder={tr('多个用英文逗号分隔')}
               style={inputStyle}
             />
           </div>

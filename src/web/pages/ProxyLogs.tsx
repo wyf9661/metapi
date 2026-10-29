@@ -844,7 +844,7 @@ export default function ProxyLogs() {
             setPage(1);
           }}
           options={resolvedDownstreamKeyOptions}
-          placeholder="全部密钥"
+          placeholder={tr('全部密钥')}
         />
       </div>
       <div className="proxy-logs-filter-select">
@@ -856,7 +856,7 @@ export default function ProxyLogs() {
             setPage(1);
           }}
           options={siteOptions}
-          placeholder="全部站点"
+          placeholder={tr('全部站点')}
         />
       </div>
       <div className="proxy-logs-filter-select">
@@ -868,21 +868,21 @@ export default function ProxyLogs() {
             setPage(1);
           }}
           options={modelSelectOptions}
-          placeholder="全部模型"
+          placeholder={tr('全部模型')}
         />
       </div>
       <DateTimeInput
         value={fromInput}
         max={toInput || undefined}
         onChange={(v) => { setFromInput(v); setPage(1); }}
-        placeholder="开始时间"
+        placeholder={tr('开始时间')}
         label="开始"
       />
       <DateTimeInput
         value={toInput}
         min={fromInput || undefined}
         onChange={(v) => { setToInput(v); setPage(1); }}
-        placeholder="结束时间"
+        placeholder={tr('结束时间')}
         label="结束"
       />
       <div className="toolbar-search" style={{ maxWidth: 280 }}>
@@ -906,7 +906,7 @@ export default function ProxyLogs() {
             setSearchInput(e.target.value);
             setPage(1);
           }}
-          placeholder="搜索模型、下游 Key、主分组、标签..."
+          placeholder={tr('搜索模型、下游 Key、主分组、标签...')}
         />
       </div>
       <button
@@ -1179,7 +1179,7 @@ export default function ProxyLogs() {
               style={{ border: '1px solid var(--color-border)' }}
               onClick={() => void handleClearDebugTraces()}
               disabled={debugPanelSaving || debugPanelLoading}
-              data-tooltip="删除全部调试追踪，下一条从 #1 开始"
+              data-tooltip={tr('删除全部调试追踪，下一条从 #1 开始')}
             >
               删除追踪
             </button>
@@ -1417,7 +1417,7 @@ export default function ProxyLogs() {
                 </div>
                 <button
                   className="pagination-btn"
-                  aria-label="调试追踪上一页"
+                  aria-label={tr('调试追踪上一页')}
                   disabled={safeDebugTracePage <= 1}
                   onClick={() => setDebugTracePage((current) => current - 1)}
                 >
@@ -1450,7 +1450,7 @@ export default function ProxyLogs() {
                 ))}
                 <button
                   className="pagination-btn"
-                  aria-label="调试追踪下一页"
+                  aria-label={tr('调试追踪下一页')}
                   disabled={safeDebugTracePage >= debugTraceTotalPages}
                   onClick={() => setDebugTracePage((current) => current + 1)}
                 >
@@ -1485,7 +1485,7 @@ export default function ProxyLogs() {
             setShowDebugSettingsModal(false);
             setDebugDraftSettings(debugSettings);
           }}
-          title="调试设置"
+          title={tr('调试设置')}
           closeLabel="关闭调试设置"
           side="right"
         >
@@ -1500,7 +1500,7 @@ export default function ProxyLogs() {
             setShowDebugSettingsModal(false);
             setDebugDraftSettings(debugSettings);
           }}
-          title="调试设置"
+          title={tr('调试设置')}
           footer={debugSettingsFooter}
           maxWidth={880}
           closeOnBackdrop
@@ -1872,7 +1872,7 @@ export default function ProxyLogs() {
                 <th>{tr('模型')}</th>
                 <th>{tr('站点')}</th>
                 <th>{tr('推理强度')}</th>
-                <th style={{ width: 48, minWidth: 48 }} title="流式 / 非流">
+                <th style={{ width: 48, minWidth: 48 }} title={tr('流式 / 非流')}>
                   {tr('模式')}
                 </th>
                 <th>{tr('状态')}</th>

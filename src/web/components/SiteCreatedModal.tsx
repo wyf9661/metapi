@@ -45,7 +45,7 @@ export default function SiteCreatedModal({
     <CenteredModal
       open
       onClose={onClose}
-      title="站点创建成功"
+      title={tr('站点创建成功')}
       maxWidth={520}
       closeOnBackdrop
       closeOnEscape

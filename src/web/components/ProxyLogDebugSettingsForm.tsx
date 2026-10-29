@@ -156,7 +156,7 @@ export function ProxyLogDebugSettingsForm({
                     proxyDebugTargetSessionId: e.target.value,
                   }))
                 }
-                placeholder="留空表示不过滤"
+                placeholder={tr('留空表示不过滤')}
                 style={formInputStyle}
               />
             </label>
@@ -174,7 +174,7 @@ export function ProxyLogDebugSettingsForm({
                     proxyDebugTargetClientKind: e.target.value,
                   }))
                 }
-                placeholder="如 codex / claude_code"
+                placeholder={tr('如 codex / claude_code')}
                 style={formInputStyle}
               />
             </label>
@@ -192,7 +192,7 @@ export function ProxyLogDebugSettingsForm({
                     proxyDebugTargetModel: e.target.value,
                   }))
                 }
-                placeholder="如 gpt-4o"
+                placeholder={tr('如 gpt-4o')}
                 style={formInputStyle}
               />
             </label>

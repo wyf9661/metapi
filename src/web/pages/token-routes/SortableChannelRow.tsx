@@ -103,7 +103,7 @@ export function SortableChannelRow({
               ...dragHandleStyle,
             }}
             data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
-            aria-label="拖拽调整优先级桶"
+            aria-label={tr('拖拽调整优先级桶')}
           >
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
               <circle cx="3" cy="2" r="1" />
@@ -280,7 +280,7 @@ export function SortableChannelRow({
                         description: buildFixedTokenOptionDescription(token),
                       })),
                     ]}
-                    placeholder="选择令牌绑定方式"
+                    placeholder={tr('选择令牌绑定方式')}
                   />
                   <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.35 }}>
                     {tokenBinding.helperText}
@@ -348,7 +348,7 @@ export function SortableChannelRow({
           className="btn btn-ghost"
           style={dragHandleStyle}
           data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
-          aria-label="拖拽调整优先级桶"
+          aria-label={tr('拖拽调整优先级桶')}
         >
           <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
             <circle cx="3" cy="2" r="1" />
@@ -507,7 +507,7 @@ export function SortableChannelRow({
                     description: buildFixedTokenOptionDescription(token),
                   })),
                 ]}
-                placeholder="选择令牌绑定方式"
+                placeholder={tr('选择令牌绑定方式')}
               />
               <div style={{ marginTop: 3, fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.35 }}>
                 {tokenBinding.helperText}

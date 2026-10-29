@@ -690,8 +690,8 @@ export default function Dashboard({
             }}
             disabled={refreshing}
             className="topbar-icon-btn"
-            data-tooltip="刷新"
-            aria-label="刷新"
+            data-tooltip={tr('刷新')}
+            aria-label={tr('刷新')}
           >
             <svg
               width="18"
@@ -1255,7 +1255,7 @@ export default function Dashboard({
                   <Link
                     to={buildSiteLast24hLogsRoute(site.siteId)}
                     className="site-observability-log-link-compact"
-                    title="查看日志"
+                    title={tr('查看日志')}
                   >
                     <svg
                       width="14"
@@ -1442,7 +1442,7 @@ export default function Dashboard({
                   <Link
                     to={buildModelLast24hLogsRoute(modelRow.model)}
                     className="site-observability-log-link-compact"
-                    title="查看日志"
+                    title={tr('查看日志')}
                   >
                     <svg
                       width="14"

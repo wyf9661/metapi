@@ -72,7 +72,7 @@ export default function DownstreamApiKeyModal({
             <input
               value={downstreamCreate.maxCost}
               onChange={(e) => onChange((prev) => ({ ...prev, maxCost: e.target.value }))}
-              placeholder="最大费用（可选）"
+              placeholder={tr('最大费用（可选）')}
               type="number"
               min={0}
               step={0.000001}
@@ -81,7 +81,7 @@ export default function DownstreamApiKeyModal({
             <input
               value={downstreamCreate.maxRequests}
               onChange={(e) => onChange((prev) => ({ ...prev, maxRequests: e.target.value }))}
-              placeholder="最大请求数（可选）"
+              placeholder={tr('最大请求数（可选）')}
               type="number"
               min={0}
               step={1}
@@ -91,13 +91,13 @@ export default function DownstreamApiKeyModal({
               value={downstreamCreate.expiresAt}
               onChange={(e) => onChange((prev) => ({ ...prev, expiresAt: e.target.value }))}
               type="datetime-local"
-              placeholder="过期时间（可选）"
+              placeholder={tr('过期时间（可选）')}
               style={inputStyle}
             />
             <input
               value={downstreamCreate.description}
               onChange={(e) => onChange((prev) => ({ ...prev, description: e.target.value }))}
-              placeholder="备注（可选）"
+              placeholder={tr('备注（可选）')}
               style={inputStyle}
             />
           </div>

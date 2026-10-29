@@ -379,7 +379,7 @@ export default function ProbeLogs() {
               value={siteId}
               onChange={(v) => { setSiteId(v); setPage(1); updateSearchParams('siteId', v); }}
               options={siteOptions}
-              placeholder="站点"
+              placeholder={tr('站点')}
               size="sm"
               searchable
             />
@@ -387,7 +387,7 @@ export default function ProbeLogs() {
               value={accountId}
               onChange={(v) => { setAccountId(v); setPage(1); updateSearchParams('accountId', v); }}
               options={accountOptions}
-              placeholder="账号"
+              placeholder={tr('账号')}
               size="sm"
               searchable
             />
@@ -395,7 +395,7 @@ export default function ProbeLogs() {
               value={modelName}
               onChange={(v) => { setModelName(v); setPage(1); updateSearchParams('modelName', v); }}
               options={modelOptions}
-              placeholder="模型"
+              placeholder={tr('模型')}
               size="sm"
               searchable
             />
@@ -403,14 +403,14 @@ export default function ProbeLogs() {
               value={startTime}
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
-              placeholder="开始时间"
+              placeholder={tr('开始时间')}
               label="开始"
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
-              placeholder="结束时间"
+              placeholder={tr('结束时间')}
               label="结束"
             />
             <div className="probe-filter-total">共 {total} 条</div>
@@ -442,7 +442,7 @@ export default function ProbeLogs() {
                 value={siteId}
                 onChange={(v) => { setSiteId(v); setPage(1); updateSearchParams('siteId', v); }}
                 options={siteOptions}
-                placeholder="全部站点"
+                placeholder={tr('全部站点')}
                 size="sm"
                 searchable
               />
@@ -453,7 +453,7 @@ export default function ProbeLogs() {
                 value={accountId}
                 onChange={(v) => { setAccountId(v); setPage(1); updateSearchParams('accountId', v); }}
                 options={accountOptions}
-                placeholder="全部账号"
+                placeholder={tr('全部账号')}
                 size="sm"
                 searchable
               />
@@ -464,7 +464,7 @@ export default function ProbeLogs() {
                 value={modelName}
                 onChange={(v) => { setModelName(v); setPage(1); updateSearchParams('modelName', v); }}
                 options={modelOptions}
-                placeholder="全部模型"
+                placeholder={tr('全部模型')}
                 size="sm"
                 searchable
               />
@@ -473,14 +473,14 @@ export default function ProbeLogs() {
               value={startTime}
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
-              placeholder="开始时间"
+              placeholder={tr('开始时间')}
               label="开始"
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
-              placeholder="结束时间"
+              placeholder={tr('结束时间')}
               label="结束"
             />
             <div style={{ marginLeft: 'auto' }}>
@@ -632,7 +632,7 @@ export default function ProbeLogs() {
             <MobileDrawer
               open={Boolean(selectedLog)}
               onClose={() => setSelectedLog(null)}
-              title="测活详情"
+              title={tr('测活详情')}
               closeLabel="关闭测活详情"
               side="right"
             >
@@ -644,7 +644,7 @@ export default function ProbeLogs() {
             <CenteredModal
               open={Boolean(selectedLog)}
               onClose={() => setSelectedLog(null)}
-              title="测活详情"
+              title={tr('测活详情')}
               maxWidth={900}
               closeOnBackdrop
               closeOnEscape

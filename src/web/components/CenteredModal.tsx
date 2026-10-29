@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { tr } from '../i18n.js';
 
 type CenteredModalProps = {
   open: boolean;
@@ -93,7 +94,7 @@ export default function CenteredModal({
               type="button"
               className="modal-close-button"
               onClick={onClose}
-              aria-label="关闭弹框"
+              aria-label={tr('关闭弹框')}
             >
               ×
             </button>

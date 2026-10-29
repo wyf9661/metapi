@@ -140,7 +140,7 @@ export default function DownstreamKeyDrawer({
             type="button"
             className="modal-close-button"
             onClick={onClose}
-            aria-label="关闭弹框"
+            aria-label={tr('关闭弹框')}
           >
             ×
           </button>

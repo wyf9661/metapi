@@ -652,7 +652,7 @@ export default function ImportExport() {
               <textarea
                 value={importData}
                 onChange={(e) => setImportData(e.target.value)}
-                placeholder="粘贴 JSON 数据或通过上面的拖拽区域导入..."
+                placeholder={tr('粘贴 JSON 数据或通过上面的拖拽区域导入...')}
                 style={{
                   width: '100%',
                   minHeight: 100,
@@ -765,7 +765,7 @@ export default function ImportExport() {
             <input
               value={webdavConfig.username}
               onChange={(e) => setWebdavConfig((prev) => ({ ...prev, username: e.target.value }))}
-              placeholder="可留空"
+              placeholder={tr('可留空')}
               style={settingsInputStyle}
             />
           </div>

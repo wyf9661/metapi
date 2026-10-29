@@ -758,7 +758,7 @@ function RouteCardInner({
                     color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
-                  data-tooltip="单通道路由：无冗余，该通道冷却即整路由不可用"
+                  data-tooltip={tr('单通道路由：无冗余，该通道冷却即整路由不可用')}
                 >
                   单通道
                 </span>

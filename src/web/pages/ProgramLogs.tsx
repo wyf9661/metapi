@@ -236,7 +236,7 @@ export default function ProgramLogs() {
                 value: item.value,
                 label: item.label,
               }))}
-              placeholder="全部类型"
+              placeholder={tr('全部类型')}
             />
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>
               <input
@@ -268,7 +268,7 @@ export default function ProgramLogs() {
                   value: item.value,
                   label: item.label,
                 }))}
-                placeholder="全部类型"
+                placeholder={tr('全部类型')}
               />
             </div>
 

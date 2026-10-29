@@ -1518,5 +1518,6 @@ export const zhToEnSupplemental: Record<string, string> = {
   '跳转': 'Go',
   '← 返回': '← Back',
   '推测': 'Inferred',
+  '回到第一页': 'Back to first page',
 
 };
