@@ -1,6 +1,6 @@
 import { db, schema } from '../db/index.js';
 import { getAdapter } from './platforms/index.js';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { isCloudflareChallenge, isTokenExpiredError } from './alertRules.js';
 import { reportTokenExpired } from './alertService.js';
 import { refreshBalance } from './balanceService.js';
@@ -381,12 +381,10 @@ export async function checkinAll(
     .select()
     .from(schema.accounts)
     .innerJoin(schema.sites, eq(schema.accounts.siteId, schema.sites.id))
-    .where(
-      and(
-        eq(schema.accounts.checkinEnabled, true),
-        eq(schema.accounts.status, 'active'),
-      ),
-    )
+    // Disabling a connection only removes it from routing; the account keeps
+    // checking in on schedule. Only the per-account check-in switch and the
+    // site's own status decide whether a check-in runs.
+    .where(eq(schema.accounts.checkinEnabled, true))
     .all();
 
   const scopedAccountIds = options?.accountIds ? new Set(options.accountIds) : null;

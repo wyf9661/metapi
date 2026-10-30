@@ -272,7 +272,7 @@ async function executeIntervalCheckinPass(now = new Date()) {
 
   const dueAccountIds = selectDueIntervalCheckinAccountIds(
     rows
-      .filter((row: any) => row.accounts?.checkinEnabled === true && row.accounts?.status === 'active' && row.sites?.status !== 'disabled')
+      .filter((row: any) => row.accounts?.checkinEnabled === true && row.sites?.status !== 'disabled')
       .map((row: any) => ({
         id: row.accounts.id,
         lastCheckinAt: row.accounts.lastCheckinAt,
