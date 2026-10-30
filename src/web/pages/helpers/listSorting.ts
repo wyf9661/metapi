@@ -5,7 +5,17 @@ type SortableBase = {
   isPinned?: boolean | null;
   sortOrder?: number | null;
   status?: string | null;
+  healthState?: { state?: string | null } | null;
 };
+
+// Sites rank by availability: healthy first, then sites whose accounts are all
+// disabled (the site itself is still enabled), then disabled sites. Without the
+// middle tier a site with every account disabled sat among the healthy ones.
+function availabilityRank(item: SortableBase): number {
+  if (item.status === 'disabled') return 2;
+  if (item.healthState?.state === 'disabled') return 1;
+  return 0;
+}
 
 export function sortItemsForDisplay<T extends SortableBase>(
   items: T[],
@@ -18,10 +28,10 @@ export function sortItemsForDisplay<T extends SortableBase>(
     const bPinned = b.isPinned ? 1 : 0;
     if (aPinned !== bPinned) return bPinned - aPinned;
 
-    // 在默认排序下,已禁用的站点排到最后
-    const aDisabled = a.status === 'disabled' ? 1 : 0;
-    const bDisabled = b.status === 'disabled' ? 1 : 0;
-    if (aDisabled !== bDisabled) return aDisabled - bDisabled;
+    // 在默认排序下, 可用性差的排到最后: 账号全禁用 > 站点禁用
+    const aRank = availabilityRank(a);
+    const bRank = availabilityRank(b);
+    if (aRank !== bRank) return aRank - bRank;
 
     const aOrder = Number.isFinite(a.sortOrder as number) ? Number(a.sortOrder) : Number.MAX_SAFE_INTEGER;
     const bOrder = Number.isFinite(b.sortOrder as number) ? Number(b.sortOrder) : Number.MAX_SAFE_INTEGER;

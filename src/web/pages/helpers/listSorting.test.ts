@@ -15,6 +15,7 @@ type Item = {
   sortOrder?: number | null;
   balance?: number | null;
   status?: string | null;
+  healthState?: { state?: string | null } | null;
 };
 
 function ids(items: Item[]): number[] {
@@ -43,6 +44,16 @@ describe('sortItemsForDisplay', () => {
   it('sorts by balance asc while keeping pinned items first', () => {
     const sorted = sortItemsForDisplay(base, 'balance-asc', (item) => item.balance || 0);
     expect(ids(sorted)).toEqual([2, 4, 1, 3]);
+  });
+
+  it('ranks healthy, then all-accounts-disabled, then disabled sites', () => {
+    const rows: Item[] = [
+      { id: 1, status: 'disabled', sortOrder: 0 },
+      { id: 2, status: 'active', sortOrder: 0 },
+      { id: 3, status: 'active', sortOrder: 0, healthState: { state: 'disabled' } },
+      { id: 4, status: 'active', sortOrder: 0, healthState: { state: 'healthy' } },
+    ];
+    expect(ids(sortItemsForDisplay(rows, 'custom', () => 0))).toEqual([2, 4, 3, 1]);
   });
 });
 
