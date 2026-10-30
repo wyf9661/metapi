@@ -1,5 +1,6 @@
 import React from 'react';
 import MobileFilterSheet from './MobileFilterSheet.js';
+import { tr } from '../i18n.js';
 
 type ResponsiveFilterPanelProps = {
   isMobile: boolean;
@@ -26,7 +27,7 @@ export default function ResponsiveFilterPanel({
   mobileContent,
   desktopContent = null,
   mobileTrigger,
-  mobileTriggerLabel = '筛选',
+  mobileTriggerLabel = tr('筛选'),
   mobileTriggerWrapperClassName = 'mobile-filter-row',
   mobileTriggerWrapperStyle,
   mobileTriggerButtonClassName = 'btn btn-ghost',

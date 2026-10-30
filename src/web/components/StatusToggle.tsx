@@ -1,4 +1,5 @@
 import React from 'react';
+import { tr } from '../i18n.js';
 
 /**
  * The single toggle behind every "is this on" switch (route enabled, account
@@ -20,8 +21,8 @@ type StatusToggleProps = {
 
 export function StatusToggle({
   enabled,
-  onLabel = '启用',
-  offLabel = '禁用',
+  onLabel = tr('启用'),
+  offLabel = tr('禁用'),
   onClick,
   disabled,
   busy,

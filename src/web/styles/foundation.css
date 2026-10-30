@@ -1,0 +1,536 @@
+/* ===== Foundation: design tokens, base, animations, utilities,
+   skeletons and spinners. Imported first so the cascade order matches the
+   single-file era exactly. ===== */
+/* ===== Design Tokens ===== */
+:root {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Warm neutral base (hue ~90) + teal brand accent (hue ~208) */
+  --color-bg: oklch(0.962 0.006 90);
+  --color-bg-card: oklch(0.992 0.003 90);
+  /* Inset surfaces (inputs, code wells): identical to the page bg in light mode
+     (the approved look); dark mode lifts it toward the card layer. */
+  --color-bg-inset: var(--color-bg);
+  --color-bg-sidebar: oklch(0.992 0.003 90);
+  --color-bg-topbar: oklch(0.992 0.003 90);
+  --color-border: oklch(0.905 0.008 90);
+  --color-border-light: oklch(0.938 0.006 90);
+  --color-text-primary: oklch(0.270 0.020 80);
+  --color-text-secondary: oklch(0.430 0.018 80);
+  --color-text-muted: oklch(0.470 0.014 80);
+  --color-primary: oklch(0.505 0.090 208);
+  --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
+  --color-primary-hover: oklch(0.440 0.078 208);
+  --color-success: oklch(0.575 0.135 152);
+  --color-success-soft: oklch(0.938 0.060 152);
+  --color-warning: oklch(0.565 0.150 57);
+  --color-warning-soft: oklch(0.945 0.055 58);
+  --color-danger: oklch(0.555 0.180 25);
+  --color-danger-soft: oklch(0.938 0.060 25);
+  --color-info: oklch(0.540 0.148 255);
+  --color-info-soft: oklch(0.935 0.058 255);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --topbar-height: 56px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+  --z-topbar: 100;
+  --z-mobile-batch-bar: 210;
+  --z-overlay: 320;
+  --z-drawer: 340;
+}
+
+[data-theme="dark"] {
+  /* Deep teal-tinted charcoal, layered by lightness */
+  --color-bg: oklch(0.235 0.018 190);
+  --color-bg-card: oklch(0.285 0.020 190);
+  /* Inset surfaces (inputs, code wells, small wells on cards): in dark mode the
+     page background is far below the card layer, so an inset that uses the raw
+     page bg reads as a black hole on the card. Lift it most of the way to the
+     card so the step stays visible but soft. */
+  --color-bg-inset: color-mix(in srgb, var(--color-bg-card) 80%, var(--color-bg));
+  --color-bg-sidebar: oklch(0.265 0.019 190);
+  --color-bg-topbar: oklch(0.265 0.019 190);
+  --color-border: oklch(0.355 0.020 190);
+  --color-border-light: oklch(0.315 0.020 190);
+  --color-text-primary: oklch(0.930 0.008 90);
+  --color-text-secondary: oklch(0.790 0.014 90);
+  --color-text-muted: oklch(0.660 0.014 90);
+  --color-primary: oklch(0.720 0.126 208);
+  --color-selection-bg: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-primary) 6%);
+  --color-primary-hover: oklch(0.775 0.138 208);
+  --color-success: oklch(0.720 0.135 152);
+  --color-success-soft: oklch(0.298 0.055 152);
+  --color-warning: oklch(0.740 0.140 65);
+  --color-warning-soft: oklch(0.335 0.068 62);
+  --color-danger: oklch(0.663 0.170 25);
+  --color-danger-soft: oklch(0.338 0.068 25);
+  --color-info: oklch(0.700 0.138 255);
+  --color-info-soft: oklch(0.308 0.062 255);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ===== Base ===== */
+html {
+  /* Managed dark theme: with color-scheme declared, browser force-dark engines
+     (Chrome/Edge auto-dark, Android WebView) leave our palette alone instead of
+     re-darkening the dark theme into flat neutral gray. */
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Desktop: lock the chrome so only the main pane scrolls.
+   Without this, body scroll lets a tall logs page stretch .app-layout,
+   and position:sticky on .sidebar slides up at the bottom. */
+html[data-layout="desktop"],
+html[data-layout="desktop"] body {
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+html[data-layout="desktop"] #root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+html[data-layout="desktop"] .topbar {
+  flex-shrink: 0;
+  position: relative;
+  top: auto;
+}
+
+html[data-layout="desktop"] .app-layout {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html[data-layout="desktop"] .sidebar {
+  position: relative;
+  top: auto;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+html[data-layout="desktop"] .main-content {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 0;
+  overflow-anchor: none;
+  scrollbar-gutter: stable; /* prevent width jitter from vertical scrollbar appearing/disappearing */
+}
+
+
+
+.oauth-site-config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg));
+}
+
+.oauth-site-config-title {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oauth-site-config-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.oauth-site-config-row strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* ===== Animations ===== */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mirror+spin combined so rotation stays on one transform channel —
+   used by the dashboard refresh icon (scaleX(-1) baked into each frame).
+   Angles run negative: scaleX(-1) reverses visual handedness, so a negative
+   rotation reads as CLOCKWISE on screen (matching the old scale:'-1 1' +
+   `spin ... reverse` behaviour). Positive angles here spin counter-clockwise. */
+@keyframes spin-mirrored {
+  from {
+    transform: scaleX(-1) rotate(0deg);
+  }
+  to {
+    transform: scaleX(-1) rotate(-360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes dropdown-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+}
+
+@keyframes progress-bar {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-4px);
+  }
+
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes success-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes sidebar-expand {
+  from {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  to {
+    width: var(--sidebar-width);
+  }
+}
+
+/* ===== Utility ===== */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-slide-up {
+  /* Pre-promote to its own layer: mobile GPUs drop transform/opacity
+     composite frames under memory pressure, which showed as a page flash. */
+  will-change: transform, opacity;
+  animation: slide-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-count-up {
+  animation: count-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+.animate-success {
+  animation: success-pop 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stagger-1 {
+  animation-delay: 0.04s;
+}
+
+.stagger-2 {
+  animation-delay: 0.08s;
+}
+
+.stagger-3 {
+  animation-delay: 0.12s;
+}
+
+.stagger-4 {
+  animation-delay: 0.16s;
+}
+
+.stagger-5 {
+  animation-delay: 0.2s;
+}
+
+.stagger-6 {
+  animation-delay: 0.24s;
+}
+
+/* ===== Skeleton ===== */
+.skeleton {
+  background: linear-gradient(90deg, #e5dfd7 25%, #eee9e2 50%, #e5dfd7 75%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.8s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #232a29 25%, #2b3231 50%, #232a29 75%);
+  background-size: 200% 100%;
+}
+
+/* ===== Spinner ===== */
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+
+.spinner-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+}
+
+.spinner-lg {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}

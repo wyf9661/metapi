@@ -29,8 +29,8 @@ interface SiteTrendData {
 type Metric = 'spend' | 'calls';
 
 const METRIC_OPTIONS: { key: Metric; label: string }[] = [
-  { key: 'spend', label: '消耗趋势' },
-  { key: 'calls', label: '调用趋势' },
+  { key: 'spend', label: tr('消耗趋势') },
+  { key: 'calls', label: tr('调用趋势') },
 ];
 
 const METRIC_STORAGE_KEY = 'metapi:site-trend-metric';
@@ -337,9 +337,9 @@ export default function SiteTrendChart({ active = true }: SiteTrendChartProps) {
           <MetricToggle metric={metric} onChange={setMetric} />
           <SegmentedToggle
             options={[
-              { key: '1', label: '1天' },
-              { key: '3', label: '3天' },
-              { key: '7', label: '7天' },
+              { key: '1', label: tr('1天') },
+              { key: '3', label: tr('3天') },
+              { key: '7', label: tr('7天') },
             ]}
             value={String(trendDays)}
             onChange={(key) => setTrendDays(Number(key))}

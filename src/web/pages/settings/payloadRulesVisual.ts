@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.js';
 export type PayloadRuleAction = 'default' | 'default-raw' | 'override' | 'override-raw' | 'filter';
 export type VisualPayloadRuleValueMode = 'text' | 'json';
 
@@ -180,12 +181,12 @@ function normalizeValueForRule(rule: VisualPayloadRule): { success: true; value:
   if (rule.action === 'default-raw' || rule.action === 'override-raw') {
     const trimmed = rule.value.trim();
     if (!trimmed) {
-      return { success: false, message: '原始 JSON 值不能为空' };
+      return { success: false, message: tr('原始 JSON 值不能为空') };
     }
     try {
       JSON.parse(trimmed);
     } catch (error: any) {
-      return { success: false, message: `原始 JSON 无效：${error?.message || '解析失败'}` };
+      return { success: false, message: `原始 JSON 无效：${error?.message || tr('解析失败')}` };
     }
     return { success: true, value: trimmed };
   }
@@ -193,17 +194,17 @@ function normalizeValueForRule(rule: VisualPayloadRule): { success: true; value:
   if (rule.valueMode === 'json') {
     const trimmed = rule.value.trim();
     if (!trimmed) {
-      return { success: false, message: 'JSON 值不能为空' };
+      return { success: false, message: tr('JSON 值不能为空') };
     }
     try {
       return { success: true, value: JSON.parse(trimmed) };
     } catch (error: any) {
-      return { success: false, message: `JSON 值无效：${error?.message || '解析失败'}` };
+      return { success: false, message: `JSON 值无效：${error?.message || tr('解析失败')}` };
     }
   }
 
   if (!rule.value) {
-    return { success: false, message: '文本值不能为空' };
+    return { success: false, message: tr('文本值不能为空') };
   }
   return { success: true, value: rule.value };
 }

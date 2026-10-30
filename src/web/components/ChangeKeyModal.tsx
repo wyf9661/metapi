@@ -27,15 +27,15 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
   const handleSubmit = async () => {
     setError('');
     if (!oldToken || !newToken || !confirmToken) {
-      setError('请填写所有字段');
+      setError(tr('请填写所有字段'));
       return;
     }
     if (newToken !== confirmToken) {
-      setError('两次输入的新 Token 不一致');
+      setError(tr('两次输入的新 Token 不一致'));
       return;
     }
     if (newToken.length < 8) {
-      setError('新 Token 至少 8 个字符');
+      setError(tr('新 Token 至少 8 个字符'));
       return;
     }
 
@@ -43,18 +43,18 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
     try {
       const res = await api.changeAuthToken(oldToken, newToken);
       if (res.success) {
-        toast.success('Token 已更新，请使用新 Token 重新登录');
+        toast.success(tr('Token 已更新，请使用新 Token 重新登录'));
         persistAuthSession(localStorage, newToken);
         onClose();
         setOldToken('');
         setNewToken('');
         setConfirmToken('');
       } else {
-        setError(res.message || '更新失败');
+        setError(res.message || tr('更新失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      setError(eMessage || '更新失败');
+      setError(eMessage || tr('更新失败'));
     } finally {
       setSaving(false);
     }
@@ -71,11 +71,11 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
   const modal = (
     <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
       <div className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-        <div className="modal-header">修改管理员 Token</div>
+        <div className="modal-header">{tr('修改管理员 Token')}</div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>旧 Token</label>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('旧 Token')}</label>
             <input
               type="password"
               value={oldToken}
@@ -85,7 +85,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
             />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>新 Token</label>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('新 Token')}</label>
             <input
               type="password"
               value={newToken}
@@ -95,7 +95,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
             />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>确认新 Token</label>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('确认新 Token')}</label>
             <input
               type="password"
               value={confirmToken}
@@ -115,7 +115,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : '确认修改'}
+            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : tr('确认修改')}
           </button>
         </div>
       </div>

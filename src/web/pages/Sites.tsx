@@ -2,6 +2,9 @@ import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } f
 
 /** Debounce before auto-detecting while the operator is still typing. */
 const AUTO_DETECT_DEBOUNCE_MS = 700;
+// Raw, untranslated group key: the brand list is sorted against it, so it must
+// not change with the UI language.
+const OTHER_BRAND_NAME = '其他';
 
 /**
  * Only probe once what was typed is host-like. `new URL('htt')` parses fine, so
@@ -216,7 +219,7 @@ function SortableSiteTableRow({
         // focusable element, so those are set explicitly.
         {...sortable.listeners}
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的站点行'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的站点行')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         data-testid={`site-row-${id}`}
@@ -265,7 +268,7 @@ function SortableSiteMobileItem({
         // Same reasoning as the table row: no role="button" on a container that
         // already holds buttons and links inside it.
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的站点卡片'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的站点卡片')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         className={`${sortable.isDragging ? 'site-sort-dragging' : ''} ${dropPosition ? `site-sort-drop-${dropPosition}` : ''} ${!disabled ? 'site-card-draggable' : ''}`.trim()}
@@ -373,7 +376,7 @@ export default function Sites() {
   // 让「不填=跟随主站」的后果直接出现在决策点上（保存语义不变：空行不存，运行时回退）。
   const apiEndpointGhostPlaceholder = useMemo(() => {
     const primary = String(form.url ?? '').trim();
-    return primary ? `留空则跟随主站：${primary}` : 'API 请求地址（如 https://api.nih.cc）';
+    return primary ? `留空则跟随主站：${primary}` : tr('API 请求地址（如 https://api.nih.cc）');
   }, [form.url]);
   const latestPrimarySiteUrlRef = useRef(form.url);
   const latestProxyUrlRef = useRef(form.proxyUrl);
@@ -418,13 +421,13 @@ export default function Sites() {
     const groups = new Map<string, string[]>();
     for (const model of allModels) {
       const brand = getBrand(model);
-      const brandName = brand?.name || '其他';
+      const brandName = brand?.name || OTHER_BRAND_NAME;
       if (!groups.has(brandName)) groups.set(brandName, []);
       groups.get(brandName)!.push(model);
     }
     return [...groups.entries()].sort((a, b) => {
-      if (a[0] === '其他') return 1;
-      if (b[0] === '其他') return -1;
+      if (a[0] === OTHER_BRAND_NAME) return 1;
+      if (b[0] === OTHER_BRAND_NAME) return -1;
       return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
     });
   }, [availableModels]);
@@ -449,7 +452,7 @@ export default function Sites() {
       const rows = await api.getSites();
       setSites(rows || []);
     } catch {
-      toast.error('加载站点列表失败');
+      toast.error(tr('加载站点列表失败'));
     } finally {
       setLoaded(true);
     }
@@ -549,7 +552,7 @@ export default function Sites() {
     const current = normalizedFormPlatform;
     const options = SITE_PLATFORM_OPTIONS
       .map((option) => option.value === 'claude'
-        ? { ...option, label: 'claude API', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' }
+        ? { ...option, label: 'claude API', description: tr('Claude / Anthropic 接口，手填 Base URL + API Key') }
         : option);
     return (!current || options.some((option) => option.value === current))
       ? options
@@ -664,10 +667,10 @@ export default function Sites() {
         ? { ...s, postRefreshProbeEnabled: probeEnabled, postRefreshProbeModel: String(probeModel ?? '').trim(), postRefreshProbeScope: probeScope, postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0) }
         : s,
       ));
-      toast.success('刷新后探测设置已保存');
+      toast.success(tr('刷新后探测设置已保存'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存失败');
+      toast.error(eMessage || tr('保存失败'));
     } finally {
       setProbeSaving(false);
     }
@@ -718,14 +721,14 @@ export default function Sites() {
         try {
           const d = JSON.parse(rawData);
           if (type === 'start') {
-            addLog(`开始探测，范围：${d.scope === 'all' ? '全部模型' : '指定模型'}，共 ${d.modelsCount} 个`);
+            addLog(`开始探测，范围：${d.scope === 'all' ? tr('全部模型') : tr('指定模型')}，共 ${d.modelsCount} 个`);
           } else if (type === 'model') {
-            const s = d.status === 'supported' ? '✓ 可用'
+            const s = d.status === 'supported' ? tr('✓ 可用')
               : d.status === 'unsupported'
-                ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : '✗ 不可用')
-              : d.status === 'skipped' ? '— 已跳过'
-              : d.status === 'inconclusive' ? '? 未得出结论'
-              : '✗ 不可用';
+                ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : tr('✗ 不可用'))
+              : d.status === 'skipped' ? tr('— 已跳过')
+              : d.status === 'inconclusive' ? tr('? 未得出结论')
+              : tr('✗ 不可用');
             const lat = d.latencyMs != null && d.status !== 'skipped' ? ` (${d.latencyMs}ms)` : '';
             const c = d.status === 'supported' ? 'var(--color-success)'
               : d.status === 'skipped' || d.status === 'inconclusive' ? 'var(--color-text-muted)'
@@ -733,20 +736,20 @@ export default function Sites() {
             const reasonText = (() => {
               if (!d.reason || d.status === 'supported' || d.status === 'skipped') return '';
               const r = d.reason;
-              if (/timeout/i.test(r)) return '超时';
-              if (/missing credential|no.*token/i.test(r)) return '无 Token';
-              if (/no compatible.*endpoint|no.*endpoint candidate/i.test(r)) return '无可用端点';
-              if (/no such model|unknown model/i.test(r)) return '模型不存在';
-              if (/not found/i.test(r)) return '未找到';
-              if (/access denied|forbidden|permission/i.test(r)) return '无权限';
-              if (/rate.?limit|too many request/i.test(r)) return '触发频率限制';
+              if (/timeout/i.test(r)) return tr('超时');
+              if (/missing credential|no.*token/i.test(r)) return tr('无 Token');
+              if (/no compatible.*endpoint|no.*endpoint candidate/i.test(r)) return tr('无可用端点');
+              if (/no such model|unknown model/i.test(r)) return tr('模型不存在');
+              if (/not found/i.test(r)) return tr('未找到');
+              if (/access denied|forbidden|permission/i.test(r)) return tr('无权限');
+              if (/rate.?limit|too many request/i.test(r)) return tr('触发频率限制');
               if (/响应延迟/.test(r)) return r;
               return r.length > 60 ? r.slice(0, 57) + '…' : r;
             })();
             addLog(`${s}${lat}  ${d.modelName}${reasonText ? `  —  ${reasonText}` : ''}`, c);
             setTimeout(() => probeLogEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (type === 'action') {
-            if (d.action === 'disabled') addLog(`  ↳ 已加入该 key 的禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
+            if (d.action === 'disabled') addLog(`  ↳ ${tr('已加入该 key 的禁用列表')}: ${d.modelName}`, 'var(--color-text-muted)');
           } else if (type === 'complete') {
             const inconclusiveCount = Number(d.inconclusive || 0);
             if (d.unsupported > 0) {
@@ -771,12 +774,12 @@ export default function Sites() {
               .catch((err: unknown) => {
                 // Silent before: the model list silently kept stale data.
                 console.warn('[sites] failed to refresh available models after probe', err);
-                toast.error('刷新可用模型失败');
+                toast.error(tr('刷新可用模型失败'));
               })
               .finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
-            addLog(d.message || '探测失败', 'var(--color-danger)');
-            toast.error(d.message || '探测失败');
+            addLog(d.message || tr('探测失败'), 'var(--color-danger)');
+            toast.error(d.message || tr('探测失败'));
             // Refresh model state even on error
             api.getSiteAvailableModels(siteId)
               .then((res: any) => {
@@ -785,7 +788,7 @@ export default function Sites() {
               .catch((err: unknown) => {
                 // Silent before: the model list silently kept stale data.
                 console.warn('[sites] failed to refresh available models after probe', err);
-                toast.error('刷新可用模型失败');
+                toast.error(tr('刷新可用模型失败'));
               })
               .finally(() => setProbeCompleted(true));
           }
@@ -811,11 +814,11 @@ export default function Sites() {
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       if (e instanceof Error && e.name === 'AbortError') {
-        setProbeLog((prev) => [...prev, { id: probeLogSeqRef.current++, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: '已手动停止', color: 'var(--color-text-muted)' }]);
+        setProbeLog((prev) => [...prev, { id: probeLogSeqRef.current++, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: tr('已手动停止'), color: 'var(--color-text-muted)' }]);
         return;
       }
-      addLog(eMessage || '探测失败', 'var(--color-danger)');
-      toast.error(eMessage || '探测失败');
+      addLog(eMessage || tr('探测失败'), 'var(--color-danger)');
+      toast.error(eMessage || tr('探测失败'));
     } finally {
       setProbing(false);
       probeAbortRef.current = null;
@@ -826,17 +829,17 @@ export default function Sites() {
     if (!editor) return;
     const parsedGlobalWeight = Number(form.globalWeight);
     if (!Number.isFinite(parsedGlobalWeight) || parsedGlobalWeight <= 0) {
-      toast.error('全局权重必须是大于 0 的数字');
+      toast.error(tr('全局权重必须是大于 0 的数字'));
       return;
     }
     const serializedCustomHeaders = serializeSiteCustomHeaders(form.customHeaders);
     if (!serializedCustomHeaders.valid) {
-      toast.error(serializedCustomHeaders.error || '自定义请求头格式不正确');
+      toast.error(serializedCustomHeaders.error || tr('自定义请求头格式不正确'));
       return;
     }
     const serializedApiEndpoints = serializeSiteApiEndpoints(form.apiEndpoints);
     if (!serializedApiEndpoints.valid) {
-      toast.error(serializedApiEndpoints.error || 'API 请求地址格式不正确');
+      toast.error(serializedApiEndpoints.error || tr('API 请求地址格式不正确'));
       return;
     }
 
@@ -860,11 +863,11 @@ export default function Sites() {
       postRefreshProbeLatencyThresholdMs: Math.max(0, parseInt(probeLatencyThreshold, 10) || 0),
     };
     if (!payload.name || !payload.url) {
-      toast.error('请填写站点名称和 URL');
+      toast.error(tr('请填写站点名称和 URL'));
       return;
     }
     if (editor.mode === 'add' && !payload.platform) {
-      toast.error('无法自动识别站点类型，请手动选择站点类型后再保存');
+      toast.error(tr('无法自动识别站点类型，请手动选择站点类型后再保存'));
       return;
     }
 
@@ -912,7 +915,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存失败');
+      toast.error(eMessage || tr('保存失败'));
     } finally {
       setSaving(false);
     }
@@ -1036,7 +1039,7 @@ export default function Sites() {
     const requestedInitializationPresetId = selectedInitializationPresetId;
     const requestedSignature = `${requestedUrl}\n${requestedProxyUrl}`;
     if (!requestedUrl) {
-      if (!options?.silent) toast.error('请先输入 URL');
+      if (!options?.silent) toast.error(tr('请先输入 URL'));
       return;
     }
     const requestedPrimarySiteUrl = analyzePrimarySiteUrl(requestedUrl);
@@ -1090,14 +1093,14 @@ export default function Sites() {
         if (autoDetectSignatureRef.current === requestedSignature) {
           autoDetectSignatureRef.current = null;
         }
-        if (!options?.silent) toast.error(result?.error || '无法识别平台类型');
+        if (!options?.silent) toast.error(result?.error || tr('无法识别平台类型'));
       }
     } catch (e) {
       if (autoDetectSignatureRef.current === requestedSignature) {
         autoDetectSignatureRef.current = null;
       }
       const eMessage = e instanceof Error ? e.message : String(e);
-      if (!options?.silent) toast.error(eMessage || '自动检测失败');
+      if (!options?.silent) toast.error(eMessage || tr('自动检测失败'));
     } finally {
       setDetecting(false);
     }
@@ -1123,11 +1126,11 @@ export default function Sites() {
     setTogglingSiteId(site.id);
     try {
       await api.updateSite(site.id, { status: nextStatus });
-      toast.success(nextStatus === 'disabled' ? `站点 "${site.name}" 已禁用` : `站点 "${site.name}" 已启用`);
+      toast.success(nextStatus === 'disabled' ? `${tr('站点')} "${site.name}" ${tr('已禁用')}` : `${tr('站点')} "${site.name}" ${tr('已启用')}`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换站点状态失败');
+      toast.error(eMessage || tr('切换站点状态失败'));
     } finally {
       setTogglingSiteId(null);
     }
@@ -1160,11 +1163,11 @@ export default function Sites() {
           ...unpinUpdates.map((update) => api.updateSite(update.id, { sortOrder: update.sortOrder })),
         ]);
       }
-      toast.success(nextPinned ? `站点 "${site.name}" 已置顶` : `站点 "${site.name}" 已取消置顶`);
+      toast.success(nextPinned ? `${tr('站点')} "${site.name}" ${tr('已置顶')}` : `${tr('站点')} "${site.name}" ${tr('已取消置顶')}`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换置顶失败');
+      toast.error(eMessage || tr('切换置顶失败'));
     } finally {
       setPinningSiteId(null);
     }
@@ -1195,7 +1198,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新排序失败');
+      toast.error(eMessage || tr('更新排序失败'));
       await load();
     } finally {
       setOrderingSiteId(null);
@@ -1276,7 +1279,7 @@ export default function Sites() {
       !!activeSite.isPinned !== !!overSite.isPinned
       || (activeSite.status === 'disabled') !== (overSite.status === 'disabled')
     ) {
-      toast.info('置顶、普通和禁用站点需在各自分组内排序');
+      toast.info(tr('置顶、普通和禁用站点需在各自分组内排序'));
       return;
     }
 
@@ -1305,7 +1308,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '删除失败');
+      toast.error(eMessage || tr('删除失败'));
     } finally {
       setDeleting(null);
     }
@@ -1344,9 +1347,9 @@ export default function Sites() {
             value={sortMode}
             onChange={handleSortModeChange}
             options={[
-            { value: 'custom', label: '默认排序' },
-            { value: 'balance-desc', label: '余额高到低' },
-            { value: 'balance-asc', label: '余额低到高' },
+            { value: 'custom', label: tr('默认排序') },
+            { value: 'balance-desc', label: tr('余额高到低') },
+            { value: 'balance-asc', label: tr('余额低到高') },
             ]}
             placeholder={tr('默认排序')}
             />
@@ -1356,10 +1359,10 @@ export default function Sites() {
             onClick={async () => {
               try {
                 const res = await api.triggerCheckinAll();
-                toast.success(res?.message || '已触发全部签到');
+                toast.success(res?.message || tr('已触发全部签到'));
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '签到触发失败');
+                toast.error(eMessage || tr('签到触发失败'));
               }
             }}
             className="btn btn-soft-primary"
@@ -1371,13 +1374,13 @@ export default function Sites() {
               try {
                 const res = await api.refreshAccountHealth();
                 if (res?.queued) {
-                  toast.info(res.message || '账号状态刷新任务已提交');
+                  toast.info(res.message || tr('账号状态刷新任务已提交'));
                 } else {
-                  toast.success(res?.message || '账号状态已刷新');
+                  toast.success(res?.message || tr('账号状态已刷新'));
                 }
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '刷新状态失败');
+                toast.error(eMessage || tr('刷新状态失败'));
               }
             }}
             className="btn btn-soft-primary"
@@ -1389,13 +1392,13 @@ export default function Sites() {
               try {
                 const res = await api.syncAllAccountTokens();
                 if (res?.queued) {
-                  toast.info(res.message || '已开始同步令牌，请稍后查看日志');
+                  toast.info(res.message || tr('已开始同步令牌，请稍后查看日志'));
                 } else {
-                  toast.success('同步全部账号令牌完成');
+                  toast.success(tr('同步全部账号令牌完成'));
                 }
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '同步失败');
+                toast.error(eMessage || tr('同步失败'));
               }
             }}
             className="btn btn-soft-primary"
@@ -1403,7 +1406,7 @@ export default function Sites() {
             {tr('同步全部账号')}
           </button>
           <button onClick={openAdd} className="btn btn-primary">
-            {isAdding ? '取消' : '+ 添加站点'}
+            {isAdding ? tr('取消') : tr('+ 添加站点')}
           </button>
         </div>
       </div>
@@ -1412,7 +1415,7 @@ export default function Sites() {
         isMobile={isMobile}
         mobileOpen={showMobileTools}
         onMobileClose={() => setShowMobileTools(false)}
-        mobileTitle="站点排序与操作"
+        mobileTitle={tr('站点排序与操作')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1421,9 +1424,9 @@ export default function Sites() {
                 value={sortMode}
                 onChange={handleSortModeChange}
                 options={[
-                  { value: 'custom', label: '默认排序' },
-                  { value: 'balance-desc', label: '余额高到低' },
-                  { value: 'balance-asc', label: '余额低到高' },
+                  { value: 'custom', label: tr('默认排序') },
+                  { value: 'balance-desc', label: tr('余额高到低') },
+                  { value: 'balance-asc', label: tr('余额低到高') },
                 ]}
                 placeholder={tr('默认排序')}
               />
@@ -1441,9 +1444,9 @@ export default function Sites() {
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
         title={tr('确认删除站点')}
-        confirmText="确认删除"
+        confirmText={tr('确认删除')}
         loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
-        description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> 吗？</>}
+        description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> {tr('吗？')}</>}
       />
 
       {createdSiteForChoice && (
@@ -1466,7 +1469,7 @@ export default function Sites() {
           onClose={closeEditor}
           title={(
             <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {isEditing ? '编辑站点' : '添加站点'}
+              {isEditing ? tr('编辑站点') : tr('添加站点')}
             </div>
           )}
           maxWidth={920}
@@ -1487,7 +1490,7 @@ export default function Sites() {
                 disabled={saving || !String(form.name ?? '').trim() || !String(form.url ?? '').trim()}
                 className="btn btn-primary"
               >
-                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : (isEditing ? '保存修改' : '保存站点')}
+                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : (isEditing ? tr('保存修改') : tr('保存站点'))}
               </button>
             </>
           )}
@@ -1521,7 +1524,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ padding: '10px 14px', minWidth: 96, border: '1px solid var(--color-border)' }}
                 >
-                  {detecting ? <><span className="spinner spinner-sm" /> {tr('检测中')}</> : '自动检测'}
+                  {detecting ? <><span className="spinner spinner-sm" /> {tr('检测中')}</> : tr('自动检测')}
                 </button>
               </div>
             )}
@@ -1567,8 +1570,8 @@ export default function Sites() {
           </ResponsiveFormGrid>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
             {selectedOauthProvider
-              ? '该平台使用 OAuth 授权，官方连接地址已自动配置。'
-              : '主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。'}
+              ? tr('该平台使用 OAuth 授权，官方连接地址已自动配置。')
+              : tr('主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。')}
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-info animate-scale-in">
@@ -1606,21 +1609,15 @@ export default function Sites() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                API 请求地址池
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{tr('API 请求地址池')}</div>
               <button
                 type="button"
                 onClick={addApiEndpointRow}
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
-              >
-                + 添加 API 地址
-              </button>
+              >{tr('+ 添加 API 地址')}</button>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-              仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>{tr('仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。')}</div>
             {form.apiEndpoints.map((endpoint, index) => (
               <div
                 key={endpoint.draftId || `site-api-endpoint-draft-${index}`}
@@ -1699,9 +1696,7 @@ export default function Sites() {
                 onClick={addCustomHeaderRow}
                 className="btn btn-ghost"
                 style={{ border: '1px solid var(--color-border)' }}
-              >
-                + 添加请求头
-              </button>
+              >{tr('+ 添加请求头')}</button>
             </div>
             {form.customHeaders.map((header, index) => (
               <div
@@ -1770,11 +1765,8 @@ export default function Sites() {
 
           <div style={{ display: selectedOauthProvider ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
             <div style={{ padding: 14, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'color-mix(in srgb, var(--color-surface) 82%, transparent)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>请求体参数覆盖（paramOverride）</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
-                JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>。留空表示不覆盖。
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{tr('请求体参数覆盖（paramOverride）')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>{tr('JSON 对象，转发请求时合并进上游请求体（顶层字段覆盖客户端传参）。例如：')}<code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{'{"max_tokens": 64, "temperature": 0}'}</code>{tr('。留空表示不覆盖。')}</div>
               <textarea
                 placeholder='{"max_tokens": 64, "temperature": 0}'
                 value={form.paramOverride}
@@ -1793,10 +1785,8 @@ export default function Sites() {
 
           {isEditing && (
             <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-inset)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>刷新后自动测试请求</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{tr('刷新后自动测试请求')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>{tr('开启后，每次自动获取模型列表成功后，会对指定模型发送一次真实测试请求。若判定不可用，自动加入该 key 的禁用列表并重建路由。')}</div>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -1804,10 +1794,10 @@ export default function Sites() {
                   onChange={(e) => setProbeEnabled(e.target.checked)}
                   style={{ width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
                 />
-                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>开启刷新后自动探测</span>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{tr('开启刷新后自动探测')}</span>
               </label>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', opacity: probeEnabled ? 1 : 0.5 }}>
-                {([['single', '指定模型'] , ['all', '全部模型']] as const).map(([val, label]) => (
+                {([['single', tr('指定模型')] , ['all', tr('全部模型')]] as const).map(([val, label]) => (
                   <label
                     key={val}
                     style={{
@@ -1849,7 +1839,7 @@ export default function Sites() {
                 />
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>延迟阈值</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{tr('延迟阈值')}</span>
                 <input
                   type="number"
                   min="0"
@@ -1863,7 +1853,7 @@ export default function Sites() {
                     background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
                   }}
                 />
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ms（响应超过该时间则自动禁用，0=不限）</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ms{tr('（响应超过该时间则自动禁用，0=不限）')}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <button
@@ -1872,7 +1862,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-border)' }}
                 >
-                  {probeSaving ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存探测设置'}
+                  {probeSaving ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : tr('保存探测设置')}
                 </button>
                 <button
                   onClick={() => void handleProbeNow()}
@@ -1880,19 +1870,17 @@ export default function Sites() {
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '6px 16px' }}
                 >
-                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 探测中...</> : '立即探测'}
+                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('探测中...')}</> : tr('立即探测')}
                 </button>
                 {probing && (
                   <button
                     onClick={() => { probeAbortRef.current?.abort(); }}
                     className="btn btn-ghost"
                     style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-danger)', color: 'var(--color-danger)' }}
-                  >
-                    停止
-                  </button>
+                  >{tr('停止')}</button>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  {probeEnabled ? '实际探测超时复用「模型探测超时」设置' : '当前已关闭'}
+                  {probeEnabled ? tr('实际探测超时复用「模型探测超时」设置') : tr('当前已关闭')}
                 </span>
               </div>
               {probeLog.length > 0 && (
@@ -1914,9 +1902,7 @@ export default function Sites() {
               )}
               {probeCompleted && brandGroups.length > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
-                    探测后可用模型
-                    <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>{tr('探测后可用模型')}<span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
                       — 共 {availableModels.length} 个
                     </span>
                   </div>
@@ -1962,9 +1948,7 @@ export default function Sites() {
                 onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
                 style={formInputStyle}
               />
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                HTTP/SOCKS 代理地址，填写后该站点的出站请求将通过此代理。留空则直连。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('HTTP/SOCKS 代理地址，填写后该站点的出站请求将通过此代理。留空则直连。')}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
@@ -1973,9 +1957,7 @@ export default function Sites() {
                 onChange={(e) => setForm((prev) => ({ ...prev, globalWeight: e.target.value }))}
                 style={formInputStyle}
               />
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                越大越容易被路由选中。建议 0.5-3，默认 1。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('越大越容易被路由选中。建议 0.5-3，默认 1。')}</div>
             </div>
           </ResponsiveFormGrid>
         </CenteredModal>
@@ -2024,7 +2006,7 @@ export default function Sites() {
                     title={(
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                          <span>{site.name || '-'}</span>
+                          <span data-i18n-skip>{site.name || '-'}</span>
                           <SiteOutboundFlags
                             proxyUrl={site.proxyUrl}
                             customHeaders={site.customHeaders}
@@ -2056,48 +2038,42 @@ export default function Sites() {
                           type="button"
                           onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
-                        >
-                          详情
-                        </button>
+                        >{tr('详情')}</button>
                         <button
                           type="button"
                           onClick={() => toggleSiteDetails(site.id)}
                           className="btn btn-link"
                         >
-                          {isExpanded ? '收起' : '展开'}
+                          {isExpanded ? tr('收起') : tr('展开')}
                         </button>
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          添加 Key
-                        </button>
+                        >{tr('添加 Key')}</button>
                         <button
                           onClick={() => openEdit(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          编辑
-                        </button>
+                        >{tr('编辑')}</button>
                         <button
                           onClick={() => handleToggleStatus(site)}
                           disabled={togglingSiteId === site.id}
                           className={`btn btn-link ${site.status === 'disabled' ? 'btn-link-primary' : 'btn-link-warning'}`}
                         >
-                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? '启用' : '禁用')}
+                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? tr('启用') : tr('禁用'))}
                         </button>
                       </>
                     )}
                   >
                     <MobileField
-                      label="状态"
+                      label={tr('状态')}
                       value={(
                         <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
-                          {site.status === 'disabled' ? '禁用' : '启用'}
+                          {site.status === 'disabled' ? tr('禁用') : tr('启用')}
                         </StatusPill>
                       )}
                     />
                     <MobileField
-                      label="平台"
+                      label={tr('平台')}
                       value={(
                         <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>
                           {site.platform || '-'}
@@ -2105,7 +2081,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField
-                      label="余额"
+                      label={tr('余额')}
                       value={(
                         <SiteBalanceDisplay
                           balance={site.totalBalance}
@@ -2117,7 +2093,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField
-                      label="健康"
+                      label={tr('健康')}
                       value={(
                         <StatusPill
                           badgeClass={site.healthState?.state === 'healthy'
@@ -2127,24 +2103,24 @@ export default function Sites() {
                               : site.healthState?.state === 'degraded'
                                 ? 'badge-warning'
                                 : 'badge-muted'}
-                          title={site.healthState?.reason || '尚未检测'}
+                          title={site.healthState?.reason || tr('尚未检测')}
                           style={{ fontSize: 11 }}
                         >
                           {site.healthState?.state === 'healthy'
-                            ? '正常'
+                            ? tr('正常')
                             : site.healthState?.state === 'unhealthy'
-                              ? '异常'
+                              ? tr('异常')
                               : site.healthState?.state === 'degraded'
-                                ? '降级'
+                                ? tr('降级')
                                 : site.healthState?.state === 'disabled'
-                                  ? '禁用'
-                                  : '未检测'}
+                                  ? tr('禁用')
+                                  : tr('未检测')}
                         </StatusPill>
                       )}
                     />
-                    <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
+                    <MobileField label={tr('权重')} value={(site.globalWeight || 1).toFixed(2)} />
                     <MobileField
-                      label="连接"
+                      label={tr('连接')}
                       value={(
                         <span
                           className="sites-connection-summary"
@@ -2157,7 +2133,7 @@ export default function Sites() {
                     {isExpanded ? (
                       <div className="mobile-card-extra">
                         <MobileField
-                          label="主站点 URL"
+                          label={tr('主站点 URL')}
                           stacked
                           value={site.url ? (
                             <a
@@ -2179,7 +2155,7 @@ export default function Sites() {
                         />
                         {getConfiguredSiteApiEndpoints(site).length > 0 ? (
                           <MobileField
-                            label="API 请求地址"
+                            label={tr('API 请求地址')}
                             stacked
                             value={(
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -2194,7 +2170,7 @@ export default function Sites() {
                                     }}
                                   >
                                     {endpoint.url}
-                                    {endpoint.enabled === false ? '（已禁用）' : ''}
+                                    {endpoint.enabled === false ? tr('（已禁用）') : ''}
                                   </span>
                                 ))}
                               </div>
@@ -2202,7 +2178,7 @@ export default function Sites() {
                           />
                         ) : null}
                         <MobileField
-                          label="创建时间"
+                          label={tr('创建时间')}
                           value={formatDateTimeLocal(site.createdAt)}
                         />
                         <div className="mobile-card-actions">
@@ -2211,7 +2187,7 @@ export default function Sites() {
                             disabled={pinningSiteId === site.id}
                             className={`btn btn-link ${site.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                           >
-                            {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? '取消置顶' : '置顶')}
+                            {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? tr('取消置顶') : tr('置顶'))}
                           </button>
                           <button
                             onClick={() => handleDelete(site)}
@@ -2245,15 +2221,15 @@ export default function Sites() {
             <table className="data-table sites-table">
               <thead>
                 <tr>
-                  <th>名称</th>
-                  <th>创建时间</th>
-                  <th>余额</th>
-                  <th>状态</th>
-                  <th>健康</th>
-                  <th>权重</th>
-                  <th>平台</th>
-                  <th>连接</th>
-                  <th className="sites-actions-col">操作</th>
+                  <th>{tr('名称')}</th>
+                  <th>{tr('创建时间')}</th>
+                  <th>{tr('余额')}</th>
+                  <th>{tr('状态')}</th>
+                  <th>{tr('健康')}</th>
+                  <th>{tr('权重')}</th>
+                  <th>{tr('平台')}</th>
+                  <th>{tr('连接')}</th>
+                  <th className="sites-actions-col">{tr('操作')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2272,7 +2248,7 @@ export default function Sites() {
                   >
                     <td className="sites-name-col" style={{ fontWeight: 600 }}>
                       <div className="sites-name-cell">
-                        <div className="sites-name-primary">
+                        <div className="sites-name-primary" data-i18n-skip>
                           <a
                             href={site.url}
                             target="_blank"
@@ -2315,10 +2291,10 @@ export default function Sites() {
                     </td>
                     <td>
                       <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
-                        {site.status === 'disabled' ? '禁用' : '启用'}
+                        {site.status === 'disabled' ? tr('禁用') : tr('启用')}
                       </StatusPill>
                     </td>
-                    <td title={site.healthState?.reason || '尚未检测'}>
+                    <td title={site.healthState?.reason || tr('尚未检测')}>
                       <StatusPill
                         badgeClass={site.healthState?.state === 'healthy'
                           ? 'badge-success'
@@ -2330,14 +2306,14 @@ export default function Sites() {
                         style={{ fontSize: 11 }}
                       >
                         {site.healthState?.state === 'healthy'
-                          ? '正常'
+                          ? tr('正常')
                           : site.healthState?.state === 'unhealthy'
-                            ? '异常'
+                            ? tr('异常')
                             : site.healthState?.state === 'degraded'
-                              ? '降级'
+                              ? tr('降级')
                               : site.healthState?.state === 'disabled'
-                                ? '禁用'
-                                : '未检测'}
+                                ? tr('禁用')
+                                : tr('未检测')}
                       </StatusPill>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
@@ -2368,34 +2344,28 @@ export default function Sites() {
                         <button
                           onClick={() => navigate(`/sites/${site.id}`, { state: { fromSearch: location.search } })}
                           className="btn btn-link btn-link-primary"
-                        >
-                          详情
-                        </button>
+                        >{tr('详情')}</button>
                         <button
                           onClick={() => handleTogglePin(site)}
                           disabled={pinningSiteId === site.id}
                           className={`btn btn-link ${site.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                         >
-                          {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? '取消置顶' : '置顶')}
+                          {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? tr('取消置顶') : tr('置顶'))}
                         </button>
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          添加 Key
-                        </button>
+                        >{tr('添加 Key')}</button>
                         <button
                           onClick={() => openEdit(site)}
                           className="btn btn-link btn-link-primary"
-                        >
-                          编辑
-                        </button>
+                        >{tr('编辑')}</button>
                         <button
                           onClick={() => handleToggleStatus(site)}
                           disabled={togglingSiteId === site.id}
                           className={`btn btn-link ${site.status === 'disabled' ? 'btn-link-primary' : 'btn-link-warning'}`}
                         >
-                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? '启用' : '禁用')}
+                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? tr('启用') : tr('禁用'))}
                         </button>
                         <button
                           onClick={() => handleDelete(site)}
@@ -2431,8 +2401,8 @@ export default function Sites() {
                 d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"
               />
             </svg>
-            <div className="empty-state-title">暂无站点</div>
-            <div className="empty-state-desc">点击“+ 添加站点”开始使用。</div>
+            <div className="empty-state-title">{tr('暂无站点')}</div>
+            <div className="empty-state-desc">{tr('点击“+ 添加站点”开始使用。')}</div>
           </div>
         )}
         <PaginationControls

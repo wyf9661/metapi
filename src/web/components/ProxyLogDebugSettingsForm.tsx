@@ -28,10 +28,7 @@ export function ProxyLogDebugSettingsForm({
 }) {
   return (
       <div style={{ display: 'grid', gap: 12 }}>
-        <div className="info-tip" style={{ marginBottom: 0 }}>
-          只记录开启后的新请求。需要更精确定位时，再按
-          Session、客户端或模型定向过滤。
-        </div>
+        <div className="info-tip" style={{ marginBottom: 0 }}>{tr('只记录开启后的新请求。需要更精确定位时，再按 Session、客户端或模型定向过滤。')}</div>
 
         <div style={formSectionStyle}>
           <div style={formSectionLabelStyle}>{tr('记录内容')}</div>
@@ -97,9 +94,7 @@ export function ProxyLogDebugSettingsForm({
                   color: 'var(--color-text-muted)',
                   marginLeft: 24,
                 }}
-              >
-                默认不抓 body，只有显式开启后才记录。
-              </div>
+              >{tr('默认不抓 body，只有显式开启后才记录。')}</div>
             </div>
             <div style={{ display: 'grid', gap: 4 }}>
               <label style={debugCheckboxRowStyle}>
@@ -120,9 +115,7 @@ export function ProxyLogDebugSettingsForm({
                   color: 'var(--color-text-muted)',
                   marginLeft: 24,
                 }}
-              >
-                适合定位 SSE / streaming 过程中的兼容问题。
-              </div>
+              >{tr('适合定位 SSE / streaming 过程中的兼容问题。')}</div>
             </div>
           </div>
         </div>
@@ -131,9 +124,7 @@ export function ProxyLogDebugSettingsForm({
           <div style={formSectionStyle}>
             <div style={formSectionLabelStyle}>{tr('定向过滤')}</div>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                目标 Session ID
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('目标 Session ID')}</span>
               <input
                 type="text"
                 value={settings.proxyDebugTargetSessionId}
@@ -255,7 +246,7 @@ export function ProxyLogDebugSettingsFooter({
           onClick={() => onSave()}
           disabled={saving}
         >
-          {saving ? '保存中...' : '保存调试设置'}
+          {saving ? tr('保存中...') : tr('保存调试设置')}
         </button>
       </div>
   

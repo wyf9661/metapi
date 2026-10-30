@@ -93,7 +93,7 @@ export default function DebugPanel({
           overflow: 'auto',
           maxHeight: '100%',
         }}>
-          {debugTabContent || '// 暂无数据'}
+          {debugTabContent || tr('// 暂无数据')}
         </pre>
       </div>
 

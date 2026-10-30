@@ -63,7 +63,7 @@ export default function AccountModelsModal({
     <CenteredModal
       open={modelModal.open}
       onClose={onClose}
-      title={modelModal.siteName ? `模型管理 · ${modelModal.siteName}` : '模型管理'}
+      title={modelModal.siteName ? `模型管理 · ${modelModal.siteName}` : tr('模型管理')}
       maxWidth={600}
       footer={(
         <>
@@ -73,7 +73,7 @@ export default function AccountModelsModal({
             disabled={modelModal.saving || modelModal.loading}
             className="btn btn-primary"
           >
-            {modelModal.saving ? <><span className="spinner spinner-sm" />{tr('保存中...')}</> : '保存'}
+            {modelModal.saving ? <><span className="spinner spinner-sm" />{tr('保存中...')}</> : tr('保存')}
           </button>
         </>
       )}
@@ -96,7 +96,7 @@ export default function AccountModelsModal({
               borderRadius: 8,
             }}
           >
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>上游新增模型：</span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('上游新增模型：')}</span>
             {(['auto', 'disable'] as const).map((policy) => (
               <button
                 key={policy}
@@ -109,13 +109,13 @@ export default function AccountModelsModal({
                 }}
                 onClick={() => onNewModelPolicyChange(policy)}
               >
-                {policy === 'auto' ? '自动启用' : '自动禁用'}
+                {policy === 'auto' ? tr('自动启用') : tr('自动禁用')}
               </button>
             ))}
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
               {modelModal.newModelPolicy === 'disable'
-                ? '刷新发现新模型时自动保持禁用，直到你手动启用'
-                : '刷新发现的新模型立即启用（默认）'}
+                ? tr('刷新发现新模型时自动保持禁用，直到你手动启用')
+                : tr('刷新发现的新模型立即启用（默认）')}
             </span>
           </div>
           {modelModal.models.length === 0 ? (
@@ -274,7 +274,7 @@ export default function AccountModelsModal({
                             lineHeight: '16px',
                           }}
                         >
-                          {removingManualModelName === model.name ? <span className="spinner spinner-sm" /> : '删除'}
+                          {removingManualModelName === model.name ? <span className="spinner spinner-sm" /> : tr('删除')}
                         </button>
                       ) : null}
                       {isDisabled ? (
@@ -284,9 +284,7 @@ export default function AccountModelsModal({
                   );
                 })}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                💡 禁用的模型只对这个 key 生效，同一站点的其他 key 不受影响。
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{tr('💡 禁用的模型只对这个 key 生效，同一站点的其他 key 不受影响。')}</div>
             </>
           )}
 
@@ -311,7 +309,7 @@ export default function AccountModelsModal({
                 className="btn btn-primary btn-sm"
                 style={{ whiteSpace: 'nowrap' }}
               >
-                {modelModal.addingManualModels ? <span className="spinner spinner-sm" /> : '添加'}
+                {modelModal.addingManualModels ? <span className="spinner spinner-sm" /> : tr('添加')}
               </button>
             </div>
           </div>

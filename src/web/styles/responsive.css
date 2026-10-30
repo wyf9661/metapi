@@ -1,0 +1,318 @@
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 900px) {
+  .topbar-search-trigger {
+    min-width: 0;
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .topbar-search-label {
+    display: none;
+  }
+
+  .topbar-search-kbd {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+
+  .accounts-page-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .accounts-page-actions .accounts-sort-select {
+    flex: 1 1 100%;
+    min-width: 0 !important;
+  }
+
+  .accounts-page-actions .btn-soft-primary,
+  .accounts-page-actions .btn-primary,
+  .accounts-page-actions .btn-ghost {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .accounts-actions-col,
+  .accounts-actions-cell {
+    width: 30%;
+    min-width: 220px;
+  }
+
+  .token-table-actions-col,
+  .token-actions-cell {
+    width: 18%;
+  }
+
+  .accounts-table th:nth-child(4),
+  .accounts-table td:nth-child(4) {
+    display: none;
+  }
+
+  .sites-page-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .sites-page-actions .sites-sort-select {
+    flex: 1 1 100%;
+    min-width: 0 !important;
+  }
+
+  .sites-page-actions .btn-primary {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .sites-actions-col,
+  .sites-actions-cell {
+    width: 30%;
+    min-width: 240px;
+  }
+
+  .sites-table th:nth-child(5),
+  .sites-table td:nth-child(5),
+  .sites-table th:nth-child(8),
+  .sites-table td:nth-child(8) {
+    display: none;
+  }
+
+  .filter-panel {
+    display: none;
+  }
+
+  .site-observability-row {
+    padding: 12px;
+  }
+
+  .site-observability-row-header {
+    flex-direction: column;
+  }
+
+  .site-observability-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .site-observability-site-stats {
+    gap: 8px;
+  }
+
+  .site-availability-strip {
+    gap: 3px;
+  }
+
+  .site-availability-cell {
+    height: 10px;
+    border-radius: var(--radius-sm);
+  }
+
+  .site-availability-strip-compact {
+    gap: 3px;
+  }
+
+  .site-availability-strip-compact .site-availability-cell {
+    height: 18px;
+    width: 9px;
+    border-radius: var(--radius-sm);
+  }
+
+  .site-availability-strip-compact {
+    grid-template-columns: repeat(24, 9px);
+  }
+
+  .proxy-logs-filter-select,
+  .proxy-logs-time-field,
+  .proxy-logs-filter-reset {
+    width: 100%;
+  }
+
+  .proxy-logs-time-field {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .proxy-logs-time-field input {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar-search-kbd {
+    display: none;
+  }
+}
+
+@import "./route-cards.css";
+
+
+@import "./dashboard-endpoints.css";
+
+
+/* Model tester live markdown rendering */
+.model-tester-markdown {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+.model-tester-markdown > :first-child { margin-top: 0; }
+.model-tester-markdown > :last-child { margin-bottom: 0; }
+.model-tester-markdown p,
+.model-tester-markdown ul,
+.model-tester-markdown ol,
+.model-tester-markdown pre,
+.model-tester-markdown blockquote {
+  margin: 0 0 0.65em;
+}
+.model-tester-markdown pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg) 82%, var(--color-text-primary));
+}
+.model-tester-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.model-tester-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+.model-tester-markdown ul,
+.model-tester-markdown ol {
+  padding-left: 1.25em;
+}
+.model-tester-markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* DateTimeInput: 自定义占位层覆盖 datetime-local 原生占位文字 */
+.dt-input-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-input-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.dt-input-box {
+  position: relative;
+  display: inline-block;
+}
+
+.dt-input-box input[type="datetime-local"] {
+  min-width: 150px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.dt-input-box input[type="datetime-local"]:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+/* 空值时隐藏原生占位文字（yyyy/mm/dd --:--），改用自定义 overlay */
+.dt-input-box input[type="datetime-local"].dt-empty {
+  color: transparent;
+}
+
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit {
+  color: transparent;
+}
+
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-text,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-year-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-month-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-day-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-hour-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-minute-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-second-field,
+.dt-input-box input[type="datetime-local"].dt-empty::-webkit-datetime-edit-ampm-field {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.dt-input-placeholder {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ===== Motion preferences ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-theme="dark"] .login-auth-input {
+  background: var(--color-bg-inset);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+}
+
+[data-theme="dark"] .login-auth-input:focus {
+  background: var(--color-bg-card);
+}
+
+/* 移动端使用日志详情：计费过程是辅助信息，字号必须小于字段值（12px），
+   否则会出现"非核心内容比核心字段还大"的观感。 */
+.mobile-billing-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mobile-billing-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.mobile-path-code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* 移动端详情里的辅助文字（加载中/提示等）：与字段标签同级，不随卡片基础字号放大。 */
+.mobile-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.mobile-note.is-error {
+  color: var(--color-danger);
+}

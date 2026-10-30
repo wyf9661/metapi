@@ -263,7 +263,7 @@ export default function ProxyLogs() {
         label: `站点 #${siteFilter}（已删除）`,
       });
     }
-    return [{ value: '', label: '全部站点' }, ...options];
+    return [{ value: '', label: tr('全部站点') }, ...options];
   }, [siteFilter, sites]);
 
   const modelSelectOptions = useMemo(() => {
@@ -277,7 +277,7 @@ export default function ProxyLogs() {
         label: modelFilter,
       });
     }
-    return [{ value: '', label: '全部模型' }, ...options];
+    return [{ value: '', label: tr('全部模型') }, ...options];
   }, [modelFilter, modelOptions]);
 
   const resolvedDownstreamKeyOptions = useMemo(() => {
@@ -285,11 +285,11 @@ export default function ProxyLogs() {
       value: String(k.id),
       label: k.name + (k.groupName ? ` (${k.groupName})` : ''),
     }));
-    return [{ value: '', label: '全部密钥' }, ...options];
+    return [{ value: '', label: tr('全部密钥') }, ...options];
   }, [downstreamKeyOptions]);
 
   const activeSiteLabel = useMemo(() => {
-    if (!siteFilter) return '全部站点';
+    if (!siteFilter) return tr('全部站点');
     return (
       siteOptions.find((option) => option.value === String(siteFilter))
         ?.label || `站点 #${siteFilter}`
@@ -346,7 +346,7 @@ export default function ProxyLogs() {
         if (controller.signal.aborted) return;
         const eMessage = e instanceof Error ? e.message : String(e);
         if (seq !== loadSeq.current) return;
-        if (!silent) toast.error(eMessage || '加载日志失败');
+        if (!silent) toast.error(eMessage || tr('加载日志失败'));
       } finally {
         if (loadAbortRef.current === controller) loadAbortRef.current = null;
         if (seq === loadSeq.current) setLoading(false);
@@ -400,7 +400,7 @@ export default function ProxyLogs() {
         )
           .map((site: any) => ({
             id: Number(site?.id || 0),
-            name: String(site?.name || '').trim() || `站点 #${site?.id ?? ''}`,
+            name: String(site?.name || 'tr(').trim() || `站点 #${site?.id ?? ')'}`,
             status: typeof site?.status === 'string' ? site.status : null,
           }))
           .filter((site: ProxyLogSiteFilterOption) => site.id > 0)
@@ -490,7 +490,7 @@ export default function ProxyLogs() {
         }));
       } catch (e) {
         const eMessage = e instanceof Error ? e.message : String(e);
-        const message = eMessage || '加载日志详情失败';
+        const message = eMessage || tr('加载日志详情失败');
         setDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -544,7 +544,7 @@ export default function ProxyLogs() {
         }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const message = errorMessage || '加载调试追踪详情失败';
+        const message = errorMessage || tr('加载调试追踪详情失败');
         setDebugDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -608,7 +608,7 @@ export default function ProxyLogs() {
         if (controller.signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!options?.suppressToast) {
-          toast.error(errorMessage || '加载代理调试追踪失败');
+          toast.error(errorMessage || tr('加载代理调试追踪失败'));
         }
       } finally {
         if (debugListAbortRef.current === controller) {
@@ -637,7 +637,7 @@ export default function ProxyLogs() {
         await syncDebugTraceItems(items, { refreshSelectedDetail: true });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(errorMessage || '加载代理调试面板失败');
+        toast.error(errorMessage || tr('加载代理调试面板失败'));
       } finally {
         if (!silent) setDebugPanelLoading(false);
       }
@@ -701,7 +701,7 @@ export default function ProxyLogs() {
         return normalized;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(errorMessage || '保存代理调试设置失败');
+        toast.error(errorMessage || tr('保存代理调试设置失败'));
         return null;
       } finally {
         setDebugPanelSaving(false);
@@ -712,7 +712,7 @@ export default function ProxyLogs() {
 
   const handleSaveDebugSettings = useCallback(async () => {
     await persistDebugSettings(debugDraftSettings, {
-      successMessage: '代理调试设置已保存',
+      successMessage: tr('代理调试设置已保存'),
       closeAfterSave: true,
     });
   }, [debugDraftSettings, persistDebugSettings]);
@@ -725,8 +725,8 @@ export default function ProxyLogs() {
       },
       {
         successMessage: debugSettings.proxyDebugTraceEnabled
-          ? '代理调试追踪已关闭'
-          : '代理调试追踪已开启',
+          ? tr('代理调试追踪已关闭')
+          : tr('代理调试追踪已开启'),
       },
     );
   }, [debugSettings, persistDebugSettings]);
@@ -734,7 +734,7 @@ export default function ProxyLogs() {
   const handleClearDebugTraces = useCallback(async () => {
     if (debugPanelSaving) return;
     const confirmed = globalThis.confirm?.(
-      '确定删除全部代理调试追踪？删除后编号会从 1 重新开始。',
+      tr('确定删除全部代理调试追踪？删除后编号会从 1 重新开始。'),
     );
     if (confirmed === false) return;
 
@@ -751,7 +751,7 @@ export default function ProxyLogs() {
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '删除调试追踪失败');
+      toast.error(errorMessage || tr('删除调试追踪失败'));
     } finally {
       setDebugPanelSaving(false);
     }
@@ -805,17 +805,17 @@ export default function ProxyLogs() {
         {[
           {
             key: 'all' as ProxyLogStatusFilter,
-            label: '全部',
+            label: tr('全部'),
             count: summary.totalCount,
           },
           {
             key: 'success' as ProxyLogStatusFilter,
-            label: '成功',
+            label: tr('成功'),
             count: summary.successCount,
           },
           {
             key: 'failed' as ProxyLogStatusFilter,
-            label: '失败',
+            label: tr('失败'),
             count: summary.failedCount,
           },
         ].map((tab) => (
@@ -876,14 +876,14 @@ export default function ProxyLogs() {
         max={toInput || undefined}
         onChange={(v) => { setFromInput(v); setPage(1); }}
         placeholder={tr('开始时间')}
-        label="开始"
+        label={tr('开始')}
       />
       <DateTimeInput
         value={toInput}
         min={fromInput || undefined}
         onChange={(v) => { setToInput(v); setPage(1); }}
         placeholder={tr('结束时间')}
-        label="结束"
+        label={tr('结束')}
       />
       <div className="toolbar-search" style={{ maxWidth: 280 }}>
         <svg
@@ -923,7 +923,7 @@ export default function ProxyLogs() {
           setPage(1);
         }}
         disabled={!hasActiveFilters}
-        title={hasActiveFilters ? '清空全部筛选条件' : '当前没有筛选条件'}
+        title={hasActiveFilters ? tr('清空全部筛选条件') : tr('当前没有筛选条件')}
       >
         {tr('清空筛选')}
       </button>
@@ -972,7 +972,7 @@ export default function ProxyLogs() {
               border: '1px solid var(--color-border)',
               padding: '6px 14px',
             }}
-            title={autoRefresh ? '关闭自动刷新' : '开启自动刷新'}
+            title={autoRefresh ? tr('关闭自动刷新') : tr('开启自动刷新')}
           >
             <svg
               width="14"
@@ -992,7 +992,7 @@ export default function ProxyLogs() {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {autoRefresh ? '自动刷新中' : '自动刷新'}
+            {autoRefresh ? tr('自动刷新中') : tr('自动刷新')}
           </button>
           <button
             onClick={() => {
@@ -1024,7 +1024,7 @@ export default function ProxyLogs() {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {loading ? '加载中...' : '刷新'}
+            {loading ? tr('加载中...') : tr('刷新')}
           </button>
         </div>
       </div>
@@ -1130,7 +1130,7 @@ export default function ProxyLogs() {
                   d="M19 9l-7 7-7-7"
                 />
               </svg>
-              {debugTracePanelExpanded ? '收起追踪面板' : '展开追踪面板'}
+              {debugTracePanelExpanded ? tr('收起追踪面板') : tr('展开追踪面板')}
             </button>
             <button
               type="button"
@@ -1143,7 +1143,7 @@ export default function ProxyLogs() {
               onClick={() => void handleQuickToggleDebugTrace()}
               disabled={debugPanelSaving}
             >
-              {debugSettings.proxyDebugTraceEnabled ? '关闭调试' : '开启调试'}
+              {debugSettings.proxyDebugTraceEnabled ? tr('关闭调试') : tr('开启调试')}
             </button>
             <button
               type="button"
@@ -1161,7 +1161,7 @@ export default function ProxyLogs() {
               onClick={() => void loadDebugState()}
               disabled={debugPanelLoading}
             >
-              {debugPanelLoading ? '刷新中...' : '刷新追踪'}
+              {debugPanelLoading ? tr('刷新中...') : tr('刷新追踪')}
             </button>
             <button
               type="button"
@@ -1183,19 +1183,19 @@ export default function ProxyLogs() {
           }}
         >
           <CompactSummaryMetric
-            label="状态"
-            value={debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'}
+            label={tr('状态')}
+            value={debugSettings.proxyDebugTraceEnabled ? tr('已开启') : tr('未开启')}
           />
           <CompactSummaryMetric
-            label="最近追踪"
+            label={tr('最近追踪')}
             value={`${debugTraces.length} 条`}
           />
           <CompactSummaryMetric
-            label="最新时间"
+            label={tr('最新时间')}
             value={
               latestDebugTrace
                 ? formatDateTimeLocal(latestDebugTrace.createdAt)
-                : '暂无'
+                : tr('暂无')
             }
           />
         </div>
@@ -1245,8 +1245,8 @@ export default function ProxyLogs() {
               </div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {debugSettings.proxyDebugTraceEnabled
-                  ? '开启中，结果会自动刷新'
-                  : '尚未开启'}
+                  ? tr('开启中，结果会自动刷新')
+                  : tr('尚未开启')}
               </div>
             </div>
 
@@ -1257,9 +1257,7 @@ export default function ProxyLogs() {
                   fontSize: 13,
                   paddingBottom: 12,
                 }}
-              >
-                加载调试追踪中...
-              </div>
+              >{tr('加载调试追踪中...')}</div>
             ) : debugTraces.length === 0 ? (
               <div
                 style={{
@@ -1273,8 +1271,8 @@ export default function ProxyLogs() {
                 }}
               >
                 {debugSettings.proxyDebugTraceEnabled
-                  ? '暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。'
-                  : '调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。'}
+                  ? tr('暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。')
+                  : tr('调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。')}
               </div>
             ) : isMobile ? (
               <div className="mobile-card-list">
@@ -1294,19 +1292,19 @@ export default function ProxyLogs() {
                     }
                   >
                     <MobileField
-                      label="模型"
+                      label={tr('模型')}
                       value={trace.requestedModel || '-'}
                     />
                     <MobileField
-                      label="下游路径"
+                      label={tr('下游路径')}
                       value={trace.downstreamPath || '-'}
                     />
                     <MobileField
-                      label="上游路径"
+                      label={tr('上游路径')}
                       value={trace.finalUpstreamPath || '-'}
                     />
                     <MobileField
-                      label="客户端"
+                      label={tr('客户端')}
                       value={trace.clientKind || '-'}
                     />
                   </MobileCard>
@@ -1465,7 +1463,7 @@ export default function ProxyLogs() {
             setDebugDraftSettings(debugSettings);
           }}
           title={tr('调试设置')}
-          closeLabel="关闭调试设置"
+          closeLabel={tr('关闭调试设置')}
           side="right"
         >
           <div style={{ padding: 16, display: 'grid', gap: 16 }}>
@@ -1493,8 +1491,8 @@ export default function ProxyLogs() {
         <MobileDrawer
           open={showDebugTraceDetailModal}
           onClose={closeDebugTraceDetailModal}
-          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
-          closeLabel="关闭追踪详情"
+          title={selectedDebugTraceListItem?.sessionId || tr('追踪详情')}
+          closeLabel={tr('关闭追踪详情')}
           side="right"
         >
           <div style={{ padding: 16, display: 'grid', gap: 16 }}>
@@ -1509,7 +1507,7 @@ export default function ProxyLogs() {
         <CenteredModal
           open={showDebugTraceDetailModal}
           onClose={closeDebugTraceDetailModal}
-          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
+          title={selectedDebugTraceListItem?.sessionId || tr('追踪详情')}
           maxWidth={920}
           closeOnBackdrop
           closeOnEscape
@@ -1600,7 +1598,7 @@ export default function ProxyLogs() {
                             : 'var(--color-danger)',
                       }}
                     >
-                      {log.status === 'success' ? '成功' : '失败'}
+                      {log.status === 'success' ? tr('成功') : tr('失败')}
                     </span>
                   }
                   footerActions={
@@ -1609,7 +1607,7 @@ export default function ProxyLogs() {
                       className="btn btn-link"
                       onClick={() => handleToggleExpand(log.id)}
                     >
-                      {isExpanded ? '收起详情' : '详情'}
+                      {isExpanded ? tr('收起详情') : tr('详情')}
                     </button>
                   }
                 >
@@ -1682,11 +1680,11 @@ export default function ProxyLogs() {
                   {isExpanded ? (
                     <div className="mobile-card-extra">
                       <MobileField
-                        label="时间"
+                        label={tr('时间')}
                         value={formatDateTimeLocal(log.createdAt)}
                       />
                       <MobileField
-                        label="站点"
+                        label={tr('站点')}
                         value={
                           <SiteBadgeLink
                             siteId={siteIdByName.get(
@@ -1700,37 +1698,37 @@ export default function ProxyLogs() {
                         }
                       />
                       {detailLog.username ? (
-                        <MobileField label="账号" value={detailLog.username} />
+                        <MobileField label={tr('账号')} value={detailLog.username} />
                       ) : null}
                       {detailLog.tokenName ? (
                         <MobileField
-                          label="令牌"
+                          label={tr('令牌')}
                           value={detailLog.tokenGroup
                             ? `${detailLog.tokenName}（${detailLog.tokenGroup}）`
                             : detailLog.tokenName}
                         />
                       ) : null}
                       {streamModeLabel ? (
-                        <MobileField label="模式" value={streamModeLabel} />
+                        <MobileField label={tr('模式')} value={streamModeLabel} />
                       ) : null}
                       <MobileField
-                        label="推理强度"
+                        label={tr('推理强度')}
                         value={detailLog.reasoningEffort
                           ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
                           : '-'}
                       />
                       {firstByteLabel && detailLog.isStream === true ? (
                         <MobileField
-                          label="首字"
+                          label={tr('首字')}
                           value={firstByteLabel.replace(/^首字\s*/, '')}
                         />
                       ) : null}
                       <MobileField
-                        label="重试"
+                        label={tr('重试')}
                         value={log.retryCount > 0 ? log.retryCount : 0}
                       />
                       <MobileField
-                        label="用量来源"
+                        label={tr('用量来源')}
                         value={
                           formatProxyLogUsageSource(
                             detailLog.usageSource ?? pathMeta.usageSource,
@@ -1739,13 +1737,13 @@ export default function ProxyLogs() {
                       />
                       {(detailLog.cacheReadTokens ?? 0) > 0 ? (
                         <MobileField
-                          label="缓存 Tokens"
+                          label={tr('缓存 Tokens')}
                           value={detailLog.cacheReadTokens!.toLocaleString()}
                         />
                       ) : null}
                       {(detailLog.cacheCreationTokens ?? 0) > 0 ? (
                         <MobileField
-                          label="缓存创建 Tokens"
+                          label={tr('缓存创建 Tokens')}
                           value={detailLog.cacheCreationTokens!.toLocaleString()}
                         />
                       ) : null}
@@ -1755,32 +1753,32 @@ export default function ProxyLogs() {
                           are visible on a phone. */}
                       {pathMeta.siteLabel ? (
                         <MobileField
-                          label="上游站点"
+                          label={tr('上游站点')}
                           value={pathMeta.siteLabel}
                         />
                       ) : null}
                       {pathMeta.upstreamStatus ? (
                         <MobileField
-                          label="上游状态码"
+                          label={tr('上游状态码')}
                           value={pathMeta.upstreamStatus}
                         />
                       ) : null}
                       {pathMeta.downstreamPath ? (
                         <MobileField
-                          label="下游路径"
+                          label={tr('下游路径')}
                           stacked
                           value={<code className="mobile-path-code">{pathMeta.downstreamPath}</code>}
                         />
                       ) : null}
                       {pathMeta.upstreamPath ? (
                         <MobileField
-                          label="上游路径"
+                          label={tr('上游路径')}
                           stacked
                           value={<code className="mobile-path-code">{pathMeta.upstreamPath}</code>}
                         />
                       ) : null}
                       {detailState?.loading && (
-                        <div className="mobile-note">加载详情中...</div>
+                        <div className="mobile-note">{tr('加载详情中...')}</div>
                       )}
                       {detailState?.error && (
                         <div className="mobile-note is-error">
@@ -1793,14 +1791,14 @@ export default function ProxyLogs() {
                         </div>
                       )}
                       <MobileField
-                        label="客户端详情"
+                        label={tr('客户端详情')}
                         value={renderProxyLogClientCell(detailLog, {
                           includeGeneric: true,
                         })}
                       />
                       {downstreamKeySummary ? (
                         <MobileField
-                          label="密钥"
+                          label={tr('密钥')}
                           value={downstreamKeySummary.replace(/^密钥:\s*/, '')}
                         />
                       ) : null}
@@ -1813,7 +1811,7 @@ export default function ProxyLogs() {
                                 {line}
                               </span>
                             ))}
-                            <span>仅供参考，以实际扣费为准</span>
+                            <span>{tr('仅供参考，以实际扣费为准')}</span>
                           </div>
                         ) : (
                           <div className="mobile-billing-lines">
@@ -2062,7 +2060,7 @@ export default function ProxyLogs() {
                                   : 'var(--color-success)',
                               }}
                             >
-                              {failed ? '失败' : '成功'}
+                              {failed ? tr('失败') : tr('成功')}
                             </span>
                           );
                         })()}
@@ -2201,7 +2199,7 @@ export default function ProxyLogs() {
                                         detailLog.modelActual !==
                                           detailLog.modelRequested && (
                                           <>
-                                            {' -> '}实际模型:{' '}
+                                            {'→'} {tr('实际模型')}{':'}
                                             <strong
                                               style={{
                                                 color:
@@ -2222,8 +2220,8 @@ export default function ProxyLogs() {
                                         }}
                                       >
                                         {detailLog.status === 'success'
-                                          ? '成功'
-                                          : '失败'}
+                                          ? tr('成功')
+                                          : tr('失败')}
                                       </strong>
                                       {streamModeLabel && (
                                         <>
@@ -2274,7 +2272,7 @@ export default function ProxyLogs() {
                                                 'var(--color-text-primary)',
                                             }}
                                           >
-                                            {detailLog.siteName || '未知站点'}
+                                            {detailLog.siteName || tr('未知站点')}
                                           </strong>
                                           ，账号:{' '}
                                           <strong
@@ -2283,7 +2281,7 @@ export default function ProxyLogs() {
                                                 'var(--color-text-primary)',
                                             }}
                                           >
-                                            {detailLog.username || '未知账号'}
+                                            {detailLog.username || tr('未知账号')}
                                           </strong>
                                           {detailLog.tokenName ? (
                                             <>
@@ -2309,9 +2307,7 @@ export default function ProxyLogs() {
                                         style={{
                                           color: 'var(--color-text-muted)',
                                         }}
-                                      >
-                                        加载详情中...
-                                      </div>
+                                      >{tr('加载详情中...')}</div>
                                     )}
                                     {detailState?.error && (
                                       <div
@@ -2349,25 +2345,25 @@ export default function ProxyLogs() {
                                               color: 'var(--color-text-muted)',
                                             }}
                                           >
-                                            {' 推测'}
+                                            {tr(' 推测')}
                                           </span>
                                         ) : null}
                                       </div>
                                       <div>{tr('推理强度：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {detailLog.reasoningEffort
                                             ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
-                                            : '未指定'}
+                                            : tr('未指定')}
                                         </strong>
                                       </div>
                                       <div>{tr('用量来源：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {formatProxyLogUsageSource(
                                             detailLog.usageSource ??
                                               pathMeta.usageSource,
-                                          ) || '未知'}
+                                          ) || tr('未知')}
                                         </strong>
                                       </div>
                                       <div>{tr('密钥：')}<strong style={{ color: 'var(--color-text-primary)' }}>
-                                          {detailLog.downstreamKeyName || '未记录'}
+                                          {detailLog.downstreamKeyName || tr('未记录')}
                                         </strong>
                                         {detailLog.downstreamKeyGroupName
                                           ? `，主分组: ${detailLog.downstreamKeyGroupName}`
@@ -2391,9 +2387,7 @@ export default function ProxyLogs() {
                                           color: 'var(--color-warning)',
                                           flexShrink: 0,
                                         }}
-                                      >
-                                        缓存 Tokens
-                                      </span>
+                                      >{tr('缓存 Tokens')}</span>
                                       <span>
                                         {detailLog.billingDetails.usage.cacheReadTokens.toLocaleString()}
                                       </span>
@@ -2410,9 +2404,7 @@ export default function ProxyLogs() {
                                           color: 'var(--color-warning)',
                                           flexShrink: 0,
                                         }}
-                                      >
-                                        缓存创建 Tokens
-                                      </span>
+                                      >{tr('缓存创建 Tokens')}</span>
                                       <span>
                                         {detailLog.billingDetails.usage.cacheCreationTokens.toLocaleString()}
                                       </span>
@@ -2452,17 +2444,17 @@ export default function ProxyLogs() {
                                     </div>
                                   ) : (
                                     <span>
-                                      输入{' '}
+                                      {tr('输入')}{' '}
                                       {formatProxyLogTokenValue(
                                         detailLog.promptTokens,
                                       )}{' '}
                                       tokens
-                                      {' + '}输出{' '}
+                                      {' + tr('}输出{') '}
                                       {formatProxyLogTokenValue(
                                         detailLog.completionTokens,
                                       )}{' '}
                                       tokens
-                                      {' = '}总计{' '}
+                                      {'='} {tr('总计')} {': '}
                                       {formatProxyLogTokenValue(
                                         detailLog.totalTokens,
                                       )}{' '}

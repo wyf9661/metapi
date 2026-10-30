@@ -14,18 +14,18 @@ type Props = {
 export default function SiteCreatedModal({
   siteName,
   initialSegment = 'session',
-  sessionLabel = '添加账号（用户名密码登录）',
+  sessionLabel = tr('添加账号（用户名密码登录）'),
   onChoice,
   onClose,
 }: Props) {
   const apiKeyFirst = initialSegment === 'apikey';
   const helperText = apiKeyFirst
-    ? '该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。'
-    : '接下来您可以继续补充登录连接或 API Key。';
+    ? tr('该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。')
+    : tr('接下来您可以继续补充登录连接或 API Key。');
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,
-      label: '添加 API Key（推荐）',
+      label: tr('添加 API Key（推荐）'),
     }
     : {
       choice: 'session' as const,
@@ -38,7 +38,7 @@ export default function SiteCreatedModal({
     }
     : {
       choice: 'apikey' as const,
-      label: '添加 API Key',
+      label: tr('添加 API Key'),
     };
 
   return (
@@ -70,7 +70,7 @@ export default function SiteCreatedModal({
       )}
     >
       <div className="alert alert-success animate-scale-in" style={{ margin: 0 }}>
-        <div className="alert-title">站点已添加成功</div>
+        <div className="alert-title">{tr('站点已添加成功')}</div>
         <div className="site-created-summary">
           {tr('站点')} <strong>"{siteName}"</strong> {tr('已加入列表，您现在可以继续补充连接信息。')}</div>
       </div>
@@ -79,9 +79,7 @@ export default function SiteCreatedModal({
         {helperText}
       </p>
 
-      <p className="site-created-note">
-        提示：您可以随时在"站点管理"页面补充账号或 API Key。
-      </p>
+      <p className="site-created-note">{tr('提示：您可以随时在"站点管理"页面补充账号或 API Key。')}</p>
     </CenteredModal>
   );
 }

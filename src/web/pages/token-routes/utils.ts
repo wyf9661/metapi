@@ -8,6 +8,7 @@ import {
   matchesTokenRouteModelPattern,
   parseTokenRouteRegexPattern,
 } from '../../../shared/tokenRoutePatterns.js';
+import { tr } from '../../i18n.js';
 
 export function isRegexModelPattern(modelPattern: string): boolean {
   return isTokenRouteRegexPattern(modelPattern);
@@ -192,7 +193,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: loadingDecision ? '计算中...' : '实时决策',
+      reasonText: loadingDecision ? tr('计算中...') : tr('实时决策'),
       reasonColor: 'var(--color-text-muted)',
     };
   }
@@ -201,7 +202,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: loadingDecision ? '计算中...' : '无可用通道',
+      reasonText: loadingDecision ? tr('计算中...') : tr('无可用通道'),
       reasonColor: 'var(--color-text-muted)',
     };
   }
@@ -210,7 +211,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: '失败避让',
+      reasonText: tr('失败避让'),
       reasonColor: 'var(--color-warning)',
     };
   }
@@ -222,7 +223,7 @@ export function getChannelDecisionState(
       return {
         probability: 0,
         showBar: true,
-        reasonText: '冷却中',
+        reasonText: tr('冷却中'),
         reasonColor: 'var(--color-danger)',
       };
     }
@@ -230,7 +231,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: candidate.reason || '不可用',
+      reasonText: candidate.reason || tr('不可用'),
       reasonColor: 'var(--color-text-muted)',
     };
   }
@@ -241,7 +242,7 @@ export function getChannelDecisionState(
       return {
         probability: 0,
         showBar: false,
-        reasonText: '近期失败',
+        reasonText: tr('近期失败'),
         reasonColor: 'var(--color-warning)',
       };
     }
@@ -249,7 +250,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: false,
-      reasonText: candidate.reason || '概率为 0%',
+      reasonText: candidate.reason || tr('概率为 0%'),
       reasonColor: 'var(--color-text-muted)',
     };
   }

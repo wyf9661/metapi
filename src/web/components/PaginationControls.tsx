@@ -66,9 +66,7 @@ export default function PaginationControls({
   const firstPageOutsideWindow = pageNumbers.length > 0 && !pageNumbers.includes(1);
 
   const pageSizeControl = typeof pageSize === 'number' && onPageSizeChange ? (
-    <div className="pagination-size">
-      每页条数:
-      <div style={{ minWidth: 86 }}>
+    <div className="pagination-size">{tr('每页条数:')}<div style={{ minWidth: 86 }}>
         <ModernSelect
           size="sm"
           dropDirection="up"

@@ -74,14 +74,10 @@ export default function RouteSelectorModal({
       >
         <div className="modal-header">{tr('勾选模型和群组')}</div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            选择结果会保存到当前下游 API Key：精确模型用于模型白名单，群组用于路由范围限制。
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('选择结果会保存到当前下游 API Key：精确模型用于模型白名单，群组用于路由范围限制。')}</div>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-muted)' }}>
-              <span className="spinner spinner-sm" />
-              加载路由中...
-            </div>
+              <span className="spinner spinner-sm" />{tr('加载路由中...')}</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
               <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10 }}>

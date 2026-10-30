@@ -19,10 +19,10 @@ type NotifyChannelRow = {
 };
 
 const NOTIFY_KIND_OPTIONS = [
-    { value: 'dingtalk', label: '钉钉' },
-    { value: 'feishu', label: '飞书' },
-    { value: 'wecom', label: '企业微信' },
-    { value: 'custom', label: '自定义' },
+    { value: 'dingtalk', label: tr('钉钉') },
+    { value: 'feishu', label: tr('飞书') },
+    { value: 'wecom', label: tr('企业微信') },
+    { value: 'custom', label: tr('自定义') },
 ];
 
 /** Mirrors the server-side host detection so a pasted URL preselects the platform. */
@@ -169,7 +169,7 @@ export default function NotificationSettings() {
             });
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '加载通知设置失败');
+            toast.error(errMessage || tr('加载通知设置失败'));
         } finally {
             setLoading(false);
         }
@@ -240,10 +240,10 @@ export default function NotificationSettings() {
             setServerChanKey('');
             setTelegramBotToken('');
             setSmtpPass('');
-            toast.success('通知设置已保存');
+            toast.success(tr('通知设置已保存'));
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '保存失败');
+            toast.error(errMessage || tr('保存失败'));
         } finally {
             setSavingNotify(false);
         }
@@ -253,10 +253,10 @@ export default function NotificationSettings() {
         setTestingNotify(true);
         try {
             const res = await api.testNotification();
-            toast.success(res?.message || '测试通知已发送');
+            toast.success(res?.message || tr('测试通知已发送'));
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '触发测试通知失败');
+            toast.error(errMessage || tr('触发测试通知失败'));
         } finally {
             setTestingNotify(false);
         }
@@ -278,10 +278,10 @@ export default function NotificationSettings() {
                 <h2 className="page-title">{tr('通知设置')}</h2>
                 <div className="page-actions">
                     <button onClick={testNotify} disabled={testingNotify} className="btn btn-soft-primary">
-                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> {tr('发送中...')}</> : '发送测试通知'}
+                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> {tr('发送中...')}</> : tr('发送测试通知')}
                     </button>
                     <button onClick={saveNotify} disabled={savingNotify} className="btn btn-primary">
-                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存通知设置'}
+                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存通知设置')}
                     </button>
                 </div>
             </div>
@@ -390,7 +390,7 @@ export default function NotificationSettings() {
                                 <input
                                     value={row.secret}
                                     onChange={(e) => updateChannel(row.id, { secret: e.target.value })}
-                                    placeholder={row.secretMasked ? '已保存密钥，留空不改' : '加签密钥（可选）'}
+                                    placeholder={row.secretMasked ? tr('已保存密钥，留空不改') : tr('加签密钥（可选）')}
                                     style={{ ...inputStyle, flex: isMobile ? 1 : '0 0 220px' }}
                                 />
 
@@ -462,7 +462,7 @@ export default function NotificationSettings() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 600, fontSize: 15 }}>Telegram Bot</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>通过 Telegram 机器人推送消息通知</div>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('通过 Telegram 机器人推送消息通知')}</div>
                             </div>
                         </div>
 
@@ -489,9 +489,7 @@ export default function NotificationSettings() {
                                 style={inputStyle}
                                 disabled={!runtime.telegramEnabled}
                             />
-                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                                留空或使用默认值时直连官方 Telegram API；如需国内反代，可填写反代前缀。
-                            </div>
+                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('留空或使用默认值时直连官方 Telegram API；如需国内反代，可填写反代前缀。')}</div>
                         </div>
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Telegram Chat ID</div>
@@ -516,7 +514,7 @@ export default function NotificationSettings() {
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
                                 Telegram Bot Token
-                                {runtime.telegramBotTokenMasked && <span style={{ color: 'var(--color-primary)', marginLeft: 8, fontSize: 12 }}>(当前已设置)</span>}
+                                {runtime.telegramBotTokenMasked && <span style={{ color: 'var(--color-primary)', marginLeft: 8, fontSize: 12 }}>{tr('(当前已设置)')}</span>}
                             </div>
                             <input
                                 type="password"
@@ -557,7 +555,7 @@ export default function NotificationSettings() {
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px 20px', opacity: runtime.smtpEnabled ? 1 : 0.6, transition: 'opacity 0.2s' }}>
                         {/* Host */}
                         <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>SMTP 服务器</div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>{tr('SMTP 服务器')}</div>
                             <input
                                 value={runtime.smtpHost}
                                 onChange={(e) => setRuntime((prev) => ({ ...prev, smtpHost: e.target.value }))}
@@ -585,9 +583,7 @@ export default function NotificationSettings() {
                                     checked={runtime.smtpSecure}
                                     onChange={(e) => setRuntime((prev) => ({ ...prev, smtpSecure: e.target.checked }))}
                                     disabled={!runtime.smtpEnabled}
-                                />
-                                启用 TLS/SSL
-                            </label>
+                                />{tr('启用 TLS/SSL')}</label>
                         </div>
                         {/* User */}
                         <div>
@@ -604,7 +600,7 @@ export default function NotificationSettings() {
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
                                 账号密码
-                                {runtime.smtpPassMasked && <span style={{ color: 'var(--color-primary)', marginLeft: 8, fontSize: 12 }}>(当前已设置)</span>}
+                                {runtime.smtpPassMasked && <span style={{ color: 'var(--color-primary)', marginLeft: 8, fontSize: 12 }}>{tr('(当前已设置)')}</span>}
                             </div>
                             <input
                                 type="password"

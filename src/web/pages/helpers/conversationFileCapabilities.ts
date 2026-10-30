@@ -1,4 +1,5 @@
 import type { PlaygroundProtocol } from './modelTesterSession.js';
+import { tr } from '../../i18n.js';
 import {
   buildConversationAcceptList,
   detectConversationFileKind,
@@ -24,19 +25,19 @@ const isSupportedMode = (mode: ConversationFileTransportMode): boolean => mode !
 function buildSupportedTypeLabel(capability: ConversationFileCapability): string {
   const labels: string[] = [];
   if (isSupportedMode(capability.documentMode)) labels.push('PDF / TXT / Markdown / JSON');
-  if (isSupportedMode(capability.imageMode)) labels.push('图片');
-  if (isSupportedMode(capability.audioMode)) labels.push('音频');
+  if (isSupportedMode(capability.imageMode)) labels.push(tr('图片'));
+  if (isSupportedMode(capability.audioMode)) labels.push(tr('音频'));
   return labels.join(' / ');
 }
 
 function buildTransportNotes(capability: ConversationFileCapability): string[] {
   const notes: string[] = [];
-  if (capability.documentMode === 'inline_only') notes.push('文档会以内联数据注入');
+  if (capability.documentMode === 'inline_only') notes.push(tr('文档会以内联数据注入'));
   if (capability.imageMode === 'native' && capability.documentMode === 'inline_only') {
-    notes.push('图片会按图片部件发送');
+    notes.push(tr('图片会按图片部件发送'));
   }
   if (capability.audioMode === 'native' && capability.documentMode === 'inline_only') {
-    notes.push('音频会按音频部件发送');
+    notes.push(tr('音频会按音频部件发送'));
   }
   return notes;
 }
@@ -60,7 +61,7 @@ export function resolveConversationFileCapability(
       imageMode: 'native',
       audioMode: 'unsupported',
       documentMode: 'inline_only',
-      reason: '当前界面的会话附件会以内联文档方式发送。',
+      reason: tr('当前界面的会话附件会以内联文档方式发送。'),
     };
   }
 
@@ -70,7 +71,7 @@ export function resolveConversationFileCapability(
       imageMode: 'native',
       audioMode: 'native',
       documentMode: 'inline_only',
-      reason: '当前界面的会话附件会以内联文档方式发送。',
+      reason: tr('当前界面的会话附件会以内联文档方式发送。'),
     };
   }
 
@@ -79,7 +80,7 @@ export function resolveConversationFileCapability(
     imageMode: 'unsupported',
     audioMode: 'unsupported',
     documentMode: 'unsupported',
-    reason: '当前协议暂不支持会话附件。',
+    reason: tr('当前协议暂不支持会话附件。'),
   };
 }
 
@@ -93,12 +94,12 @@ export function buildConversationFileAccept(capability: ConversationFileCapabili
 
 export function buildConversationFileHint(capability: ConversationFileCapability): string {
   if (!capability.supported) {
-    return capability.reason || '当前协议暂不支持会话附件。';
+    return capability.reason || tr('当前协议暂不支持会话附件。');
   }
 
   const typeLabel = buildSupportedTypeLabel(capability);
   if (!typeLabel) {
-    return capability.reason || '当前协议暂不支持会话附件。';
+    return capability.reason || tr('当前协议暂不支持会话附件。');
   }
 
   if (

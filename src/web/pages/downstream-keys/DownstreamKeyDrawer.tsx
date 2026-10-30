@@ -63,7 +63,7 @@ export default function DownstreamKeyDrawer({
       })
       .catch((err: any) => {
         if (cancelled) return;
-        toast.error(err?.message || '加载 Key 概览失败');
+        toast.error(err?.message || tr('加载 Key 概览失败'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -93,7 +93,7 @@ export default function DownstreamKeyDrawer({
       })
       .catch((err: any) => {
         if (cancelled) return;
-        toast.error(err?.message || '加载趋势失败');
+        toast.error(err?.message || tr('加载趋势失败'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -131,7 +131,7 @@ export default function DownstreamKeyDrawer({
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
               <span className={`badge ${item?.groupName ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                {item?.groupName ? `主分组 · ${item.groupName}` : '未分组'}
+                {item?.groupName ? `主分组 · ${item.groupName}` : tr('未分组')}
               </span>
               <TagChips tags={item?.tags || []} accent maxVisible={4} />
             </div>
@@ -187,7 +187,7 @@ export default function DownstreamKeyDrawer({
                 </div>
                 <div>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{tr('主分组')}</div>
-                  <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{item?.groupName || '未分组'}</div>
+                  <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{item?.groupName || tr('未分组')}</div>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('标签')}</div>
@@ -226,7 +226,7 @@ export default function DownstreamKeyDrawer({
                 {[
                   { label: '24h', data: overview.usage.last24h },
                   { label: '7d', data: overview.usage.last7d },
-                  { label: '全部', data: overview.usage.all },
+                  { label: tr('全部'), data: overview.usage.all },
                 ].map((section) => (
                   <div key={section.label} style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
                     <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, marginBottom: 8 }}>{section.label}</div>

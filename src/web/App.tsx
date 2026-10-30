@@ -13,13 +13,15 @@ import {
   THEME_MODE_STORAGE_KEY,
   USER_PROFILE_STORAGE_KEY,
 } from './appLocalState.js';
-import { I18nProvider, useI18n } from './i18n.js';
+import { I18nProvider, useI18n, tr } from './i18n.js';
 import { resolveLoginErrorMessage } from './loginError.js';
 import { SITE_DOCS_URL, SITE_GITHUB_URL } from './docsLink.js';
 import { useAnimatedVisibility } from './components/useAnimatedVisibility.js';
 import { useIsMobile } from './components/useIsMobile.js';
 import { MobileDrawer } from './components/MobileDrawer.js';
 import CenteredModal from './components/CenteredModal.js';
+// Stored default profile name: compared against, never translated.
+const DEFAULT_PROFILE_NAME = '管理员';
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const Sites = lazy(() => import('./pages/Sites.js'));
 const SiteDetail = lazy(() => import('./pages/SiteDetail.js'));
@@ -73,19 +75,19 @@ function avatarColorFor(seed: string): string {
 
 function avatarInitialFor(name: string): string {
   const trimmed = (name || '').trim();
-  if (!trimmed) return '管';
+  if (!trimmed) return tr('管');
   return Array.from(trimmed)[0].toUpperCase();
 }
 
 function resolveStoredProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (!raw) return { name: '管理员' };
+    if (!raw) return { name: tr('管理员') };
     const parsed = JSON.parse(raw) as Partial<UserProfile> & { avatar?: string };
     const name = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
-    return { name: name || '管理员' };
+    return { name: name || tr('管理员') };
   } catch {
-    return { name: '管理员' };
+    return { name: tr('管理员') };
   }
 }
 
@@ -357,7 +359,7 @@ function UserProfileModal({
             fontSize: 16,
             fontWeight: 600,
             color: '#fff',
-            background: avatarColorFor(name.trim() || '管理员'),
+            background: avatarColorFor(name.trim() || tr('管理员')),
             border: 'none',
           }}
         >
@@ -476,7 +478,8 @@ function AppShell() {
     ? (systemPrefersDark ? 'dark' : 'light')
     : themeMode;
   const rawDisplayName = (userProfile.name || '').trim();
-  const displayName = rawDisplayName ? (rawDisplayName === '管理员' ? t('管理员') : rawDisplayName) : t('管理员');
+  // '管理员' is the stored default name; translate only for display.
+  const displayName = rawDisplayName ? (rawDisplayName === DEFAULT_PROFILE_NAME ? t('管理员') : rawDisplayName) : t('管理员');
   const resolvedThemeLabel = resolvedTheme === 'dark' ? t('深色') : t('浅色');
   const avatarColor = avatarColorFor(userProfile.name);
   const avatarInitial = avatarInitialFor(userProfile.name);
@@ -572,7 +575,7 @@ function AppShell() {
           .filter((row: any) => (
             (Number(row?.id) || 0) > latestTaskEventIdRef.current
             && row?.relatedType === 'task'
-            && !String(row?.title || '').includes('已开始')
+            && !String(row?.title || '').includes(tr('已开始'))
           ))
           .sort((a: any, b: any) => (a.id || 0) - (b.id || 0))
           .slice(-3);
@@ -694,11 +697,11 @@ function AppShell() {
         <div className="topbar-right">
           <button
             className="topbar-icon-btn"
-            aria-label={language === 'zh' ? 'Switch to English' : '切换到中文'}
+            aria-label={language === 'zh' ? 'Switch to English' : tr('切换到中文')}
             onClick={toggleLanguage}
             style={{ minWidth: 36, fontSize: 12, fontWeight: 700 }}
           >
-            {language === 'zh' ? 'EN' : '中'}
+            {language === 'zh' ? 'EN' : tr('中')}
           </button>
           <button className="topbar-search-trigger" aria-label={t('搜索 (Ctrl+K)')} onClick={() => setShowSearch(true)}>
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>

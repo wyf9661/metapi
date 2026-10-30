@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.js';
 import {
   resolveUpdateReminderCandidate,
   type UpdateHelperRuntimeLike,
@@ -34,9 +35,9 @@ export function buildUpdateReminder(input: {
   ));
   if (!hasGitHubCandidate && !hasDockerCandidate) {
     return {
-      label: '无法检查更新',
+      label: tr('无法检查更新'),
       badgeClassName: 'badge badge-muted',
-      detail: '暂未获取到可比较的版本信息。',
+      detail: tr('暂未获取到可比较的版本信息。'),
       highlight: false,
     };
   }
@@ -49,10 +50,10 @@ export function buildUpdateReminder(input: {
   });
   if (candidate) {
     return {
-      label: candidate.kind === 'new-digest' ? '发现新 digest' : '发现新版本',
+      label: candidate.kind === 'new-digest' ? tr('发现新 digest') : tr('发现新版本'),
       badgeClassName: 'badge badge-success',
       detail: candidate.kind === 'new-digest'
-        ? 'Docker Hub 的 alias tag 已指向新 digest，可按需部署。'
+        ? tr('Docker Hub 的 alias tag 已指向新 digest，可按需部署。')
         : candidate.source === 'github-release'
           ? `GitHub 稳定版 ${normalizeString(input.githubRelease?.displayVersion || input.githubRelease?.normalizedVersion)} 已可部署。`
           : `Docker Hub ${normalizeString(input.dockerHubTag?.displayVersion || input.dockerHubTag?.normalizedVersion)} 已可部署。`,
@@ -61,9 +62,9 @@ export function buildUpdateReminder(input: {
   }
 
   return {
-    label: '已是最新',
+    label: tr('已是最新'),
     badgeClassName: 'badge badge-muted',
-    detail: '当前运行版本与已发现的部署目标没有明显差异。',
+    detail: tr('当前运行版本与已发现的部署目标没有明显差异。'),
     highlight: false,
   };
 }

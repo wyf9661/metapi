@@ -5,6 +5,7 @@ import { formatDateTimeMinuteLocal } from '../pages/helpers/checkinLogTime.js';
 import { buildEventNavigationPath } from '../pages/helpers/navigationFocus.js';
 import { useI18n } from '../i18n.js';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { tr } from '../i18n.js';
 
 const levelColors: Record<string, string> = {
   info: 'var(--color-info)',
@@ -13,12 +14,12 @@ const levelColors: Record<string, string> = {
 };
 
 const typeLabels: Record<string, string> = {
-  checkin: '签到',
-  balance: '余额',
-  token: '令牌',
-  proxy: '代理',
-  status: '状态',
-  site_notice: '站点公告',
+  checkin: tr('签到'),
+  balance: tr('余额'),
+  token: tr('令牌'),
+  proxy: tr('代理'),
+  status: tr('状态'),
+  site_notice: tr('站点公告'),
 };
 
 export default function NotificationPanel({

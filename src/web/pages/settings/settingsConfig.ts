@@ -7,19 +7,20 @@ import type {
   PayloadRuleAction,
   VisualPayloadRuleValueMode,
 } from './payloadRulesVisual.js';
+import { tr } from '../../i18n.js';
 
 export const SECONDS_PER_DAY = 24 * 60 * 60;
 
 export const ROUTE_COOLDOWN_UNIT_OPTIONS = [
-  { value: 'second', label: '秒', multiplierSec: 1 },
-  { value: 'minute', label: '分钟', multiplierSec: 60 },
-  { value: 'hour', label: '小时', multiplierSec: 60 * 60 },
-  { value: 'day', label: '天', multiplierSec: SECONDS_PER_DAY },
+  { value: 'second', label: tr('秒'), multiplierSec: 1 },
+  { value: 'minute', label: tr('分钟'), multiplierSec: 60 },
+  { value: 'hour', label: tr('小时'), multiplierSec: 60 * 60 },
+  { value: 'day', label: tr('天'), multiplierSec: SECONDS_PER_DAY },
 ] as const;
 
 export const CHECKIN_SCHEDULE_MODE_OPTIONS = [
   { value: 'cron', label: 'Cron' },
-  { value: 'interval', label: '间隔签到' },
+  { value: 'interval', label: tr('间隔签到') },
 ] as const;
 
 export const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
@@ -47,7 +48,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'default',
     title: 'default',
-    description: '字段缺失时才注入，适合补默认参数。',
+    description: tr('字段缺失时才注入，适合补默认参数。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -60,7 +61,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'default-raw',
     title: 'default-raw',
-    description: '字段缺失时注入原始 JSON，适合 schema、复杂对象等值。',
+    description: tr('字段缺失时注入原始 JSON，适合 schema、复杂对象等值。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -73,7 +74,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'override',
     title: 'override',
-    description: '无论原请求是否已有该字段，都强制覆盖。',
+    description: tr('无论原请求是否已有该字段，都强制覆盖。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -86,7 +87,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'override-raw',
     title: 'override-raw',
-    description: '无论原请求是否已有该字段，都强制覆盖为原始 JSON。',
+    description: tr('无论原请求是否已有该字段，都强制覆盖为原始 JSON。'),
     placeholder: `[
   {
     "models": [{ "name": "gemini-*", "protocol": "gemini" }],
@@ -99,7 +100,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'filter',
     title: 'filter',
-    description: '删除匹配请求中的字段。',
+    description: tr('删除匹配请求中的字段。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -115,15 +116,15 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
 }>;
 
 export const PAYLOAD_RULE_ACTION_OPTIONS: Array<{ value: PayloadRuleAction; label: string }> = [
-  { value: 'default', label: '默认注入' },
-  { value: 'default-raw', label: '默认注入 JSON' },
-  { value: 'override', label: '强制覆盖' },
-  { value: 'override-raw', label: '强制覆盖 JSON' },
-  { value: 'filter', label: '删除字段' },
+  { value: 'default', label: tr('默认注入') },
+  { value: 'default-raw', label: tr('默认注入 JSON') },
+  { value: 'override', label: tr('强制覆盖') },
+  { value: 'override-raw', label: tr('强制覆盖 JSON') },
+  { value: 'filter', label: tr('删除字段') },
 ];
 
 export const PAYLOAD_RULE_VALUE_MODE_OPTIONS: Array<{ value: VisualPayloadRuleValueMode; label: string }> = [
-  { value: 'text', label: '文本' },
+  { value: 'text', label: tr('文本') },
   { value: 'json', label: 'JSON' },
 ];
 
@@ -171,7 +172,7 @@ export function parsePayloadRulesFromDrafts(
     } catch (error: any) {
       return {
         success: false,
-        message: `Payload 规则 ${section.title} 不是合法 JSON：${error?.message || '解析失败'}`,
+        message: `Payload 规则 ${section.title} 不是合法 JSON：${error?.message || tr('解析失败')}`,
       };
     }
   }

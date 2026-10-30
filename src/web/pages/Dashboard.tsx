@@ -50,11 +50,11 @@ function warmSiteChartChunks(): Promise<void> {
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 6) return '夜深了';
-  if (hour < 11) return '早上好';
-  if (hour < 13) return '中午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
+  if (hour < 6) return tr('夜深了');
+  if (hour < 11) return tr('早上好');
+  if (hour < 13) return tr('中午好');
+  if (hour < 18) return tr('下午好');
+  return tr('晚上好');
 }
 
 function safeNumber(value: unknown): number {
@@ -318,7 +318,7 @@ export default function Dashboard({
         setData(result);
       } catch (err) {
         const errMessage = err instanceof Error ? err.message : String(err);
-        const message = errMessage || '加载仪表盘失败';
+        const message = errMessage || tr('加载仪表盘失败');
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -458,7 +458,7 @@ export default function Dashboard({
       setTunnelError(null);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      setTunnelError(errMessage || '加载隧道状态失败');
+      setTunnelError(errMessage || tr('加载隧道状态失败'));
     }
   }, []);
 
@@ -485,7 +485,7 @@ export default function Dashboard({
 
   const handleToggleTunnel = async () => {
     if (isTunnelClientView) {
-      toast.error('通过公网隧道时不允许关闭/创建隧道，请在本机控制台操作');
+      toast.error(tr('通过公网隧道时不允许关闭/创建隧道，请在本机控制台操作'));
       return;
     }
     setTunnelBusy(true);
@@ -494,22 +494,22 @@ export default function Dashboard({
       if (tunnel?.running || tunnel?.enabled) {
         const res = await api.disableTunnel() as any;
         setTunnel(res?.tunnel || null);
-        toast.success('隧道已关闭');
+        toast.success(tr('隧道已关闭'));
       } else {
-        toast.info('正在创建公网隧道，首次可能需要下载 cloudflared...');
+        toast.info(tr('正在创建公网隧道，首次可能需要下载 cloudflared...'));
         const res = await api.enableTunnel() as any;
         setTunnel(res?.tunnel || null);
         if (res?.tunnel?.publicUrl || res?.tunnel?.tunnelUrl) {
-          toast.success('隧道已启用');
+          toast.success(tr('隧道已启用'));
         } else {
-          toast.info(res?.message || '隧道启动中');
+          toast.info(res?.message || tr('隧道启动中'));
         }
       }
       await refreshTunnel();
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      setTunnelError(errMessage || '隧道操作失败');
-      toast.error(errMessage || '隧道操作失败');
+      setTunnelError(errMessage || tr('隧道操作失败'));
+      toast.error(errMessage || tr('隧道操作失败'));
       await refreshTunnel();
     } finally {
       setTunnelBusy(false);
@@ -825,7 +825,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日调用</div>
+              <div className="stat-label">{tr('今日调用')}</div>
               <div className="stat-value animate-count-up">{Math.round(todayCalls).toLocaleString()}</div>
             </div>
             <StatSparkline values={dailyCallsSeries} color="var(--color-primary)" />
@@ -848,7 +848,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">今日 Tokens</div>
+              <div className="stat-label">{tr('今日 Tokens')}</div>
               <div className="stat-value animate-count-up">{formatCompactTokenMetric(todayModelTokens)}</div>
             </div>
           </div>
@@ -890,7 +890,7 @@ export default function Dashboard({
               </svg>
             </div>
             <div className="dashboard-stat-content">
-              <div className="stat-label">24h 成功率</div>
+              <div className="stat-label">{tr('24h 成功率')}</div>
               <div className="stat-value animate-count-up">
                 {qualitySuccessRate == null ? '—' : `${qualitySuccessRate.toFixed(1)}%`}
               </div>
@@ -923,22 +923,20 @@ export default function Dashboard({
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{tr('首次配置引导')}</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
-            按顺序完成下面几步，即可用下游 Key 调通模型：
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>{tr('按顺序完成下面几步，即可用下游 Key 调通模型：')}</div>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--color-text-primary)' }}>
             <li>
               {sites.length === 0 ? (
                 <><strong>{tr('添加站点')}</strong> → <Link to="/sites">{tr('连接管理 / 站点')}</Link></>
               ) : (
-                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有站点</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>{tr('✓ 已有站点')}</span>
               )}
             </li>
             <li>
               {totalAccounts === 0 ? (
-                <><strong>{tr('添加账号凭证')}</strong>(API Key 或 Session)并验证 → <Link to="/sites">站点连接</Link></>
+                <><strong>{tr('添加账号凭证')}</strong>(API Key {tr('或')} Session){tr('并验证')} → <Link to="/sites">{tr('站点连接')}</Link></>
               ) : (
-                <span style={{ color: 'var(--color-text-muted)' }}>✓ 已有账号</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>{tr('✓ 已有账号')}</span>
               )}
             </li>
             <li>
@@ -946,20 +944,16 @@ export default function Dashboard({
             <li>
               <strong>{tr('生成下游 Key')}</strong> → <Link to="/downstream-keys">{tr('下游密钥')}</Link>
             </li>
-            <li>
-              用 Key 调用 <code>/v1/chat/completions</code> 试打
-            </li>
+            <li>{tr('用 Key 调用')} <code>/v1/chat/completions</code> {tr('试打')}</li>
           </ol>
         </div>
       )}
       <div className="card dashboard-endpoint-card" style={{ padding: 16, marginBottom: 16, border: '1px solid var(--color-border)' }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>{tr('服务地址')}</div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
-          在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{tr('在 Cursor、Codex、Claude Code 或 OpenAI SDK 中配置 Base URL 时使用')}</div>
         <div className="dashboard-endpoint-rows">
           <div className="dashboard-endpoint-row">
-            <span className="dashboard-endpoint-label">本地</span>
+            <span className="dashboard-endpoint-label">{tr('本地')}</span>
             {localAddress ? (
               <code className="dashboard-endpoint-value">{localAddress.baseUrl}</code>
             ) : (
@@ -971,8 +965,8 @@ export default function Dashboard({
                 className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={() => {
                   copyText(localAddress.baseUrl)
-                    .then(() => { toast.success('地址已复制'); })
-                    .catch(() => { toast.error('复制失败'); });
+                    .then(() => { toast.success(tr('地址已复制')); })
+                    .catch(() => { toast.error(tr('复制失败')); });
                 }}
               >
                 {tr('复制')}
@@ -983,7 +977,7 @@ export default function Dashboard({
           <div className="dashboard-endpoint-row">
             <span className={`dashboard-endpoint-label ${
               (tunnel?.running || tunnel?.enabled) ? 'is-active' : ''
-            }`}>隧道</span>
+            }`}>{tr('隧道')}</span>
             {(tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
               <code className="dashboard-endpoint-value">
                 {`${tunnel.publicUrl || tunnel.tunnelUrl}`}
@@ -992,7 +986,7 @@ export default function Dashboard({
               <div className={`dashboard-endpoint-value dashboard-endpoint-status ${tunnel?.lastError || tunnelError ? 'is-error' : ''}`}>
                 {tunnel?.downloading
                   ? `下载 cloudflared${typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}`
-                  : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? '正在检查隧道...' : '未启用')}
+                  : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? tr('正在检查隧道...') : tr('未启用'))}
               </div>
             )}
             {isTunnelClientView && (tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
@@ -1003,9 +997,9 @@ export default function Dashboard({
                   const url = `${tunnel.publicUrl || tunnel.tunnelUrl}`;
                   try {
                     await copyText(url);
-                    toast.success('已复制隧道地址');
+                    toast.success(tr('已复制隧道地址'));
                   } catch {
-                    toast.error('复制失败');
+                    toast.error(tr('复制失败'));
                   }
                 }}
               >
@@ -1018,21 +1012,21 @@ export default function Dashboard({
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
-                {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭' : '创建')}
+                {tunnelBusy ? tr('处理中...') : ((tunnel?.running || tunnel?.enabled) ? tr('关闭') : tr('创建'))}
               </button>
             ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
           {tunnel?.tunnelUrl && tunnel?.publicUrl && tunnel.tunnelUrl !== tunnel.publicUrl ? (
             <div className="dashboard-endpoint-row">
-              <span className="dashboard-endpoint-label">直连</span>
+              <span className="dashboard-endpoint-label">{tr('直连')}</span>
               <code className="dashboard-endpoint-value">{tunnel.tunnelUrl}</code>
               <button
                 type="button"
                 className="btn btn-ghost dashboard-endpoint-copy"
                 onClick={() => {
                   copyText(tunnel.tunnelUrl as string)
-                    .then(() => { toast.success('已复制直连地址'); })
-                    .catch(() => { toast.error('复制失败'); });
+                    .then(() => { toast.success(tr('已复制直连地址')); })
+                    .catch(() => { toast.error(tr('复制失败')); });
                 }}
               >
                 {tr('复制')}
@@ -1069,8 +1063,8 @@ export default function Dashboard({
             </div>
             <div className="site-observability-subtitle">
               {observabilityTab === 'sites'
-                ? '站点分布与今日消耗 · 最近 24 小时可用性'
-                : '模型消耗与调用分布 · 最近 24 小时可用性'}
+                ? tr('站点分布与今日消耗 · 最近 24 小时可用性')
+                : tr('模型消耗与调用分布 · 最近 24 小时可用性')}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1116,8 +1110,8 @@ export default function Dashboard({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {siteChartTab === 'distribution'
-                  ? '站点排行榜'
-                  : '站点趋势'}
+                  ? tr('站点排行榜')
+                  : tr('站点趋势')}
               </div>
               <div className="pill-tabs">
                 <button
@@ -1290,7 +1284,7 @@ export default function Dashboard({
                       : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
-                  <span>{Math.round(site.totalRequests || 0)} 次</span>
+                  <span>{Math.round(site.totalRequests || 0)} {tr('次')}</span>
                 </div>
                 <div className="site-availability-strip-compact">
                   {site.buckets.map((bucket, index) => (
@@ -1306,11 +1300,11 @@ export default function Dashboard({
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
                           `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
-                          `请求：${bucket.totalRequests} 次`,
+                          `${tr('请求：')}${bucket.totalRequests} ${tr('次')}`,
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应：—',
+                            : tr('平均响应：—'),
                         ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
@@ -1319,7 +1313,7 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应 —',
+                            : tr('平均响应 —'),
                         ].join(' | ')}
                         aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />
@@ -1471,7 +1465,7 @@ export default function Dashboard({
                       : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
-                  <span>{Math.round(modelRow.totalRequests || 0)} 次</span>
+                  <span>{Math.round(modelRow.totalRequests || 0)} {tr('次')}</span>
                 </div>
                 <div className="site-availability-strip-compact">
                   {modelRow.buckets.map((bucket, index) => (
@@ -1487,11 +1481,11 @@ export default function Dashboard({
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
                           `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
-                          `请求：${bucket.totalRequests} 次`,
+                          `${tr('请求：')}${bucket.totalRequests} ${tr('次')}`,
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应：—',
+                            : tr('平均响应：—'),
                         ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
@@ -1500,7 +1494,7 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应 —',
+                            : tr('平均响应 —'),
                         ].join(' | ')}
                         aria-label={`${modelRow.model} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />

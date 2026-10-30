@@ -713,8 +713,8 @@ function RouteCardInner({
               onLabel={tr('启用')}
               offLabel={tr('禁用')}
               onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-              tooltipOn="点击禁用此路由"
-              tooltipOff="点击启用此路由"
+              tooltipOn={tr('点击禁用此路由')}
+              tooltipOff={tr('点击启用此路由')}
               style={{ flexShrink: 0, fontSize: 11 }}
             />
           )}
@@ -845,8 +845,8 @@ function RouteCardInner({
                 onLabel={tr('启用')}
                 offLabel={tr('禁用')}
                 onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-                tooltipOn="点击禁用此路由"
-                tooltipOff="点击启用此路由"
+                tooltipOn={tr('点击禁用此路由')}
+                tooltipOff={tr('点击启用此路由')}
                 style={{ fontSize: 11 }}
               />
             )}
@@ -1081,7 +1081,7 @@ function RouteCardInner({
                     type="button"
                     onClick={() => onCreateTokenForMissing(item.accountId, route.modelPattern)}
                     className="badge badge-warning missing-token-group-tag"
-                    data-tooltip={`缺少分组：${item.missingGroups.join('、') || '未知'}${item.availableGroups.length > 0 ? `；已覆盖：${item.availableGroups.join('、')}` : ''}${item.groupCoverageUncertain ? '；当前分组覆盖存在不确定性' : ''}`}
+                    data-tooltip={`${tr('缺少分组')}：${item.missingGroups.join('、') || tr('未知')}${item.availableGroups.length > 0 ? `${tr('；已覆盖：')}${item.availableGroups.join('、')}` : ''}${item.groupCoverageUncertain ? tr('；当前分组覆盖存在不确定性') : ''}`}
                     style={{ fontSize: 10.5, cursor: 'pointer' }}
                   >
                     {item.siteName}

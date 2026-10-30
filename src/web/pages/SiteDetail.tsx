@@ -39,7 +39,7 @@ export default function SiteDetail() {
       const data = await api.getSite(Number(id));
       setSite(data);
     } catch {
-      toast.error('加载站点失败');
+      toast.error(tr('加载站点失败'));
       navigate('/sites');
     } finally {
       setLoading(false);
@@ -74,7 +74,7 @@ export default function SiteDetail() {
             {tr('← 返回')}
           </button>
           <h2 className="page-title" style={{ margin: 0 }}>
-            {site.name}
+            <span data-i18n-skip>{site.name}</span>
           </h2>
           {site.platform && (
             <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>
@@ -85,7 +85,7 @@ export default function SiteDetail() {
             badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'}
             style={{ fontSize: 11 }}
           >
-            {site.status === 'disabled' ? '禁用' : '启用'}
+            {site.status === 'disabled' ? tr('禁用') : tr('启用')}
           </StatusPill>
         </div>
       </div>

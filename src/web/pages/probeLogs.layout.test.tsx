@@ -9,7 +9,8 @@ describe('ProbeLogs layout', () => {
     expect(source).toContain("import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js'");
     expect(source).toContain("import { MobileCard, MobileField } from '../components/MobileCard.js'");
     expect(source).toContain("import PaginationControls from '../components/PaginationControls.js'");
-    expect(source).toContain('className="page-header"');
+    expect(source).toContain("import ListPage from '../components/ListPage.js'");
+    expect(source).toContain('<ListPage');
     expect(source).toContain('className="data-table probe-logs-table"');
     expect(source).toContain('<ResponsiveFilterPanel');
     expect(source).toContain('<PaginationControls');

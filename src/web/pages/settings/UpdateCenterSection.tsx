@@ -150,7 +150,7 @@ export default function UpdateCenterSection() {
 
   const handleOtaRollback = useCallback(async () => {
     if (typeof window !== 'undefined' && typeof window.confirm === 'function'
-      && !window.confirm('确认回滚到更新前版本？更新后一天内有效，回滚会重启服务。')) return;
+      && !window.confirm(tr('确认回滚到更新前版本？更新后一天内有效，回滚会重启服务。'))) return;
     setOtaBusy(true);
     try {
       await api.rollbackUpdateCenterOta();
@@ -257,10 +257,10 @@ export default function UpdateCenterSection() {
       {ota?.supported && ota.mode === 'host' && ota.host && (
         <div style={{ fontSize: 12, marginTop: 8, color: 'var(--color-text-muted)' }}>
           {ota.host.tier === 'direct'
-            ? '宿主机模式：应用目录可写，更新零提权'
+            ? tr('宿主机模式：应用目录可写，更新零提权')
             : ota.host.tier === 'pkexec'
-              ? '宿主机模式：需要提权时将弹出系统授权窗（polkit）'
-              : '宿主机模式：无图形会话，需要提权时给出终端命令'}
+              ? tr('宿主机模式：需要提权时将弹出系统授权窗（polkit）')
+              : tr('宿主机模式：无图形会话，需要提权时给出终端命令')}
         </div>
       )}
       {ota?.supported && ota.state && ota.state.phase && ota.state.phase !== 'idle' && (

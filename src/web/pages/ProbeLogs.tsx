@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
@@ -9,6 +10,7 @@ import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import PaginationControls from '../components/PaginationControls.js';
 import CenteredModal from '../components/CenteredModal.js';
+import ListPage from '../components/ListPage.js';
 import MobileDrawer from '../components/MobileDrawer.js';
 import { tr, useI18n } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
@@ -34,26 +36,20 @@ type ProbeLog = {
   accountUsername?: string;
 };
 
-type ProbeLogStats = {
-  total: number;
-  success: number;
-  failed: number;
-  timeout: number;
-  avgLatencyMs: number;
-  totalTokens: number;
-};
+const EMPTY_LOGS: ProbeLog[] = [];
+const EMPTY_FILTER_OPTIONS = { sites: [], accounts: [], models: [] };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  math: '数学',
-  logic: '逻辑',
-  knowledge: '知识',
-  reasoning: '推理',
+  math: tr('数学'),
+  logic: tr('逻辑'),
+  knowledge: tr('知识'),
+  reasoning: tr('推理'),
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  success: '成功',
-  failed: '失败',
-  timeout: '超时',
+  success: tr('成功'),
+  failed: tr('失败'),
+  timeout: tr('超时'),
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -116,7 +112,7 @@ function ProbeDetailFields({
 
       {log.errorMessage ? (
         <div className="probe-detail-item probe-detail-wide">
-          <div className="probe-detail-label">错误信息</div>
+          <div className="probe-detail-label">{tr('错误信息')}</div>
           <div className="probe-detail-error">{log.errorMessage}</div>
         </div>
       ) : null}
@@ -128,7 +124,7 @@ function ProbeDetailFields({
 
       {log.responseText ? (
         <div className="probe-detail-item probe-detail-wide">
-          <div className="probe-detail-label">回答</div>
+          <div className="probe-detail-label">{tr('回答')}</div>
           <div className="probe-detail-block probe-detail-answer" dangerouslySetInnerHTML={{ __html: renderResponseText(log.responseText) }} />
         </div>
       ) : null}
@@ -142,10 +138,6 @@ export default function ProbeLogs() {
   const { language } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [logs, setLogs] = useState<ProbeLog[]>([]);
-  const [stats, setStats] = useState<ProbeLogStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [selectedLog, setSelectedLog] = useState<ProbeLog | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -159,23 +151,19 @@ export default function ProbeLogs() {
 
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
   const [pageSize, setPageSize] = usePersistedPageSize('probeLogs');
-  // Monotonic request sequence guards: only the newest fetch may apply its result.
-  const logsRequestSeqRef = useRef(0);
-  const statsRequestSeqRef = useRef(0);
-
   // 筛选选项数据
-  const [filterOptions, setFilterOptions] = useState<{
-    sites: { id: number; name: string }[];
-    accounts: { id: number; username: string }[];
-    models: string[];
-  }>({ sites: [], accounts: [], models: [] });
+  const { data: filterOptions = EMPTY_FILTER_OPTIONS } = useQuery({
+    queryKey: ['probe-log-filters'],
+    queryFn: () => api.getProbeLogFilters(),
+    staleTime: Infinity,
+  });
 
   const siteOptions = useMemo(() => {
     const opts = filterOptions.sites.map((s) => ({ value: String(s.id), label: s.name }));
     if (siteId && !opts.some((o) => o.value === siteId)) {
       opts.unshift({ value: siteId, label: `站点 #${siteId}` });
     }
-    return [{ value: '', label: '全部站点' }, ...opts];
+    return [{ value: '', label: tr('全部站点') }, ...opts];
   }, [filterOptions.sites, siteId]);
 
   const accountOptions = useMemo(() => {
@@ -183,7 +171,7 @@ export default function ProbeLogs() {
     if (accountId && !opts.some((o) => o.value === accountId)) {
       opts.unshift({ value: accountId, label: `账号 #${accountId}` });
     }
-    return [{ value: '', label: '全部账号' }, ...opts];
+    return [{ value: '', label: tr('全部账号') }, ...opts];
   }, [filterOptions.accounts, accountId]);
 
   const modelOptions = useMemo(() => {
@@ -191,69 +179,53 @@ export default function ProbeLogs() {
     if (modelName && !opts.some((o) => o.value === modelName)) {
       opts.unshift({ value: modelName, label: modelName });
     }
-    return [{ value: '', label: '全部模型' }, ...opts];
+    return [{ value: '', label: tr('全部模型') }, ...opts];
   }, [filterOptions.models, modelName]);
 
-  const fetchLogs = async () => {
-    // Fast filter/page changes fire overlapping fetches; only the newest
-    // response may land, or a slow earlier answer overwrites the fresh list.
-    const requestSeq = ++logsRequestSeqRef.current;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (siteId) params.set('siteId', siteId);
-      if (accountId) params.set('accountId', accountId);
-      if (modelName) params.set('modelName', modelName);
-      if (status) params.set('status', status);
-      if (startTime) params.set('startTime', new Date(startTime).toISOString());
-      if (endTime) params.set('endTime', new Date(endTime).toISOString());
-      params.set('limit', pageSize.toString());
-      params.set('offset', ((page - 1) * pageSize).toString());
-
-      const data = await api.getProbeLogs(params.toString());
-      if (requestSeq !== logsRequestSeqRef.current) return;
-      setLogs(data.logs);
-      setTotal(data.total);
-    } catch (error) {
-      if (requestSeq !== logsRequestSeqRef.current) return;
-      toast.error('获取测活日志失败');
-    } finally {
-      if (requestSeq === logsRequestSeqRef.current) setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    const requestSeq = ++statsRequestSeqRef.current;
-    try {
-      const params = new URLSearchParams();
-      if (startTime) params.set('startTime', new Date(startTime).toISOString());
-      if (endTime) params.set('endTime', new Date(endTime).toISOString());
-      const data = await api.getProbeLogStats(params.toString());
-      if (requestSeq !== statsRequestSeqRef.current) return;
-      setStats(data);
-    } catch (error) {
-      console.error('获取统计失败', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
+  const logsParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (siteId) params.set('siteId', siteId);
+    if (accountId) params.set('accountId', accountId);
+    if (modelName) params.set('modelName', modelName);
+    if (status) params.set('status', status);
+    if (startTime) params.set('startTime', new Date(startTime).toISOString());
+    if (endTime) params.set('endTime', new Date(endTime).toISOString());
+    params.set('limit', pageSize.toString());
+    params.set('offset', ((page - 1) * pageSize).toString());
+    return params.toString();
   }, [siteId, accountId, modelName, status, startTime, endTime, page, pageSize]);
 
-  // Stats only depend on the time range — paging/site/status flips must not
-  // re-fetch them (they previously shared the list effect's deps).
-  useEffect(() => {
-    fetchStats();
+  const logsQuery = useQuery({
+    queryKey: ['probe-logs', logsParams],
+    queryFn: () => api.getProbeLogs(logsParams),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const statsParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (startTime) params.set('startTime', new Date(startTime).toISOString());
+    if (endTime) params.set('endTime', new Date(endTime).toISOString());
+    return params.toString();
   }, [startTime, endTime]);
 
-  // 初始化加载筛选选项
+  // Stats only depend on the time range — paging/site/status flips must not
+  // re-fetch them.
+  const statsQuery = useQuery({
+    queryKey: ['probe-log-stats', statsParams],
+    queryFn: () => api.getProbeLogStats(statsParams),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const logs = logsQuery.data?.logs ?? EMPTY_LOGS;
+  const total = logsQuery.data?.total ?? 0;
+  const stats = statsQuery.data ?? null;
+  const loading = logsQuery.isFetching;
+
   useEffect(() => {
-    api.getProbeLogFilters().then((data) => {
-      setFilterOptions(data);
-    }).catch(() => {
-      // 静默失败，不影响页面使用
-    });
-  }, []);
+    if (logsQuery.isError) toast.error(tr('获取测活日志失败'));
+  }, [logsQuery.isError, logsQuery.errorUpdatedAt]);
 
   const updateSearchParams = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);
@@ -295,32 +267,35 @@ export default function ProbeLogs() {
     formatDateTimeLocal(value, language === 'zh' ? 'zh-CN' : 'en-US');
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">{tr('测活日志')}</h2>
-          <p className="page-subtitle">记录每次模型可用性探测的结果与耗时。</p>
-        </div>
-        <div className="page-actions">
+    <>
+      <ListPage
+        title={tr('测活日志')}
+        subtitle={tr('记录每次模型可用性探测的结果与耗时。')}
+        actions={
           <button
             type="button"
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
             onClick={() => {
-              fetchLogs();
-              fetchStats();
+              logsQuery.refetch();
+              statsQuery.refetch();
             }}
           >
             {tr('刷新')}
           </button>
-        </div>
-      </div>
+        }
+        loading={loading}
+        isEmpty={logs.length === 0}
+        emptyTitle={tr('暂无测活记录')}
+        emptyDesc={tr('当前筛选条件下没有测活日志。')}
+        beforeList={
+          <>
 
       {/* 统计卡片 */}
       {stats && (
         <div className="probe-stats-grid">
           <div className="probe-stat-card">
-            <div className="probe-stat-label">总数</div>
+            <div className="probe-stat-label">{tr('总数')}</div>
             <div className="probe-stat-value">{stats.total}</div>
           </div>
           <div className="probe-stat-card">
@@ -340,7 +315,7 @@ export default function ProbeLogs() {
             <div className="probe-stat-value">{formatLatency(stats.avgLatencyMs)}</div>
           </div>
           <div className="probe-stat-card">
-            <div className="probe-stat-label">总 Token</div>
+            <div className="probe-stat-label">{tr('总 Token')}</div>
             <div className="probe-stat-value">{stats.totalTokens || 0}</div>
           </div>
         </div>
@@ -351,17 +326,17 @@ export default function ProbeLogs() {
         mobileOpen={showFilters}
         onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
-        mobileTitle="筛选测活日志"
+        mobileTitle={tr('筛选测活日志')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <div className="probe-filter-label" style={{ marginBottom: 6 }}>{tr('状态')}</div>
               <div className="pill-tabs">
                 {[
-                  { key: '', label: '全部' },
-                  { key: 'success', label: '成功' },
-                  { key: 'failed', label: '失败' },
-                  { key: 'timeout', label: '超时' },
+                  { key: '', label: tr('全部') },
+                  { key: 'success', label: tr('成功') },
+                  { key: 'failed', label: tr('失败') },
+                  { key: 'timeout', label: tr('超时') },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -404,14 +379,14 @@ export default function ProbeLogs() {
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
               placeholder={tr('开始时间')}
-              label="开始"
+              label={tr('开始')}
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
               placeholder={tr('结束时间')}
-              label="结束"
+              label={tr('结束')}
             />
             <div className="probe-filter-total">共 {total} 条</div>
           </div>
@@ -420,10 +395,10 @@ export default function ProbeLogs() {
           <div className="toolbar probe-filter-toolbar" style={{ marginBottom: 12 }}>
             <div className="pill-tabs">
               {[
-                { key: '', label: '全部' },
-                { key: 'success', label: '成功' },
-                { key: 'failed', label: '失败' },
-                { key: 'timeout', label: '超时' },
+                { key: '', label: tr('全部') },
+                { key: 'success', label: tr('成功') },
+                { key: 'failed', label: tr('失败') },
+                { key: 'timeout', label: tr('超时') },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -474,14 +449,14 @@ export default function ProbeLogs() {
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
               placeholder={tr('开始时间')}
-              label="开始"
+              label={tr('开始')}
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
               placeholder={tr('结束时间')}
-              label="结束"
+              label={tr('结束')}
             />
             <div style={{ marginLeft: 'auto' }}>
               <button
@@ -490,32 +465,16 @@ export default function ProbeLogs() {
                 style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}
-                title={hasActiveFilters ? '清除全部筛选条件并回到第一页' : '当前没有筛选条件'}
+                title={hasActiveFilters ? tr('清除全部筛选条件并回到第一页') : tr('当前没有筛选条件')}
               >{tr('清除筛选')}</button>
             </div>
           </div>
         )}
       />
-
-      {/* 日志列表 */}
-      <div className="card" style={{ overflowX: 'auto' }}>
-        {loading ? (
-          <div style={{ padding: 20 }}>
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34 }} />
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="empty-state-title">暂无测活记录</div>
-            <div className="empty-state-desc">当前筛选条件下没有测活日志。</div>
-          </div>
-        ) : (
-          <>
-            {isMobile ? (
+          </>
+        }
+      >
+      {isMobile ? (
               <div className="mobile-card-list">
                 {logs.map((log) => (
                   <MobileCard
@@ -523,20 +482,20 @@ export default function ProbeLogs() {
                     title={log.modelName}
                     headerActions={<StatusText badgeClass={STATUS_COLORS[log.status]} style={{ fontSize: 11 }}>{STATUS_LABELS[log.status]}</StatusText>}
                     footerActions={
-                      <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>查看详情</button>
+                      <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>{tr('查看详情')}</button>
                     }
                   >
-                    <MobileField label="时间" value={fmtDateTime(log.createdAt)} />
-                    <MobileField label="站点/账号" value={`${log.siteName || `站点 #${log.siteId}`} · ${log.accountUsername || `账号 #${log.accountId}`}`} />
-                    <MobileField label="分类" value={CATEGORY_LABELS[log.questionCategory] || '-'} />
-                    <MobileField label="延迟" value={formatLatency(log.latencyMs)} />
+                    <MobileField label={tr('时间')} value={fmtDateTime(log.createdAt)} />
+                    <MobileField label={tr('站点/账号')} value={`${log.siteName || `站点 #${log.siteId}`} · ${log.accountUsername || `账号 #${log.accountId}`}`} />
+                    <MobileField label={tr('分类')} value={CATEGORY_LABELS[log.questionCategory] || '-'} />
+                    <MobileField label={tr('延迟')} value={formatLatency(log.latencyMs)} />
                     <MobileField label="Token" value={log.tokensUsed || '-'} />
-                    <MobileField label="问题" value={log.questionText} stacked />
+                    <MobileField label={tr('问题')} value={log.questionText} stacked />
                   </MobileCard>
                 ))}
               </div>
             ) : (
-              <table className="data-table probe-logs-table">
+                      <table className="data-table probe-logs-table">
                 <colgroup>
                   <col style={{ width: 90 }} />
                   <col style={{ width: 160 }} />
@@ -552,7 +511,7 @@ export default function ProbeLogs() {
                     <th>{tr('状态')}</th>
                     <th>{tr('时间')}</th>
                     <th>{tr('模型')}</th>
-                    <th>站点/账号</th>
+                    <th>{tr('站点/账号')}</th>
                     <th>{tr('分类')}</th>
                     <th>{tr('延迟')}</th>
                     <th>Token</th>
@@ -595,10 +554,8 @@ export default function ProbeLogs() {
                   ))}
                 </tbody>
               </table>
-            )}
-          </>
-        )}
-      </div>
+      )}
+      </ListPage>
 
       {total > 0 && (
         <PaginationControls
@@ -631,7 +588,7 @@ export default function ProbeLogs() {
               open={Boolean(selectedLog)}
               onClose={() => setSelectedLog(null)}
               title={tr('测活详情')}
-              closeLabel="关闭测活详情"
+              closeLabel={tr('关闭测活详情')}
               side="right"
             >
               <div className="probe-detail-body">
@@ -652,6 +609,6 @@ export default function ProbeLogs() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }

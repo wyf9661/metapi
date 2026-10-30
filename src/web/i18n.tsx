@@ -278,7 +278,9 @@ const HAS_HAN_RE = /[\u3400-\u9fff]/;
 const HAN_BLOCK_RE = /[\u3400-\u9fff]+/g;
 const LATIN_OR_DIGIT_RE = /[A-Za-z0-9]/;
 const TRANSLATABLE_ATTRS = ['placeholder', 'title', 'aria-label', 'data-tooltip'] as const;
-const SKIP_PARENT_SELECTOR = 'script, style, code, pre, kbd, samp';
+// data-i18n-skip marks user data (site names, announcement bodies) that must
+// never be rewritten by the DOM walker.
+const SKIP_PARENT_SELECTOR = 'script, style, code, pre, kbd, samp, [data-i18n-skip]';
 const zhToEnPhrases = Object.entries(zhToEn).sort((a, b) => b[0].length - a[0].length);
 const textNodeOriginalMap = new WeakMap<Text, string>();
 const elementAttrOriginalMap = new WeakMap<Element, Map<string, string>>();

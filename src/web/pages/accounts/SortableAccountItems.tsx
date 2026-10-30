@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { tr } from '../../i18n.js';
 
 /**
  * 列表拖拽排序：与「站点管理」保持一致的交互 —— 整行/整卡就是拖拽面，没有独立把手。
@@ -41,7 +42,7 @@ export function SortableAccountTableRow({
         // 破坏表格语义。键盘拖拽只需要 listeners + 可聚焦元素。
         {...sortable.listeners}
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的连接行'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的连接行')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         data-testid={dataTestId}
@@ -79,7 +80,7 @@ export function SortableAccountMobileCard({
         ref={sortable.setNodeRef}
         {...sortable.listeners}
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的连接卡片'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的连接卡片')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         className={`${sortable.isDragging ? 'site-sort-dragging' : ''} ${

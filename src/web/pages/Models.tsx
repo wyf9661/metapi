@@ -810,7 +810,7 @@ export default function Models() {
               } : { total: 0, supported: 0, unsupported: 0, inconclusive: 0, skipped: 0, notFound: 0 },
               byAccountId: {},
             };
-            const aggregateReason = String(res?.reason || res?.message || '探测完成');
+            const aggregateReason = String(res?.reason || res?.message || tr('探测完成'));
             const finalRows = Array.isArray(res?.results) ? res.results : [];
             const finalByAccountId: Record<number, AccountProbeResult> = {};
             for (const row of finalRows) {
@@ -918,7 +918,7 @@ export default function Models() {
   const formatConnectivityCheckedAt = (value?: string | null) => {
     if (!value) return '';
     const local = formatDateTimeLocal(value);
-    return local && local !== '—' ? `更新时间: ${local}` : '';
+    return local && local !== '—tr(' ? `更新时间: ${local}` : ')';
   };
 
   const renderConnectivity = (

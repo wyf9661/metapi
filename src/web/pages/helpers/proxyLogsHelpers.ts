@@ -5,6 +5,7 @@ import type {
   ProxyLogUsageSource,
   RuntimeSettingsPayload,
 } from '../../api.js';
+import { tr } from '../../i18n.js';
 
 export type ProxyLogRenderItem = ProxyLogListItem & {
   billingDetails?: ProxyLogBillingDetails;
@@ -253,7 +254,7 @@ export function proxyLogKeyChipColors(key: string): { background: string; border
 
 export function formatStreamModeLabel(isStream: boolean | null | undefined) {
   if (isStream == null) return null;
-  return isStream ? '流式' : '非流';
+  return isStream ? tr('流式') : tr('非流');
 }
 
 export function formatFirstByteLabel(ms: number | null | undefined) {
@@ -280,9 +281,9 @@ export function formatBillingDetailSummary(log: ProxyLogRenderItem) {
 export function formatProxyLogUsageSource(
   source: ProxyLogUsageSource | undefined,
 ): string | null {
-  if (source === 'upstream') return '上游返回';
-  if (source === 'self-log') return '站点日志回填';
-  if (source === 'unknown') return '未知';
+  if (source === 'upstream') return tr('上游返回');
+  if (source === 'self-log') return tr('站点日志回填');
+  if (source === 'unknown') return tr('未知');
   return null;
 }
 
@@ -451,7 +452,7 @@ const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
   codex: 'Codex',
   claude_code: 'Claude Code',
   gemini_cli: 'Gemini CLI',
-  generic: '通用',
+  generic: tr('通用'),
 };
 
 export function formatProxyLogClientFamilyLabel(
@@ -555,10 +556,10 @@ export function buildProxyDebugSettingsPayload(
 }
 
 export function formatProxyDebugCaptureSummary(settings: ProxyDebugSettingsState) {
-  const parts = ['路由决策'];
-  if (settings.proxyDebugCaptureHeaders) parts.push('请求/响应头');
-  if (settings.proxyDebugCaptureBodies) parts.push('请求/响应体');
-  if (settings.proxyDebugCaptureStreamChunks) parts.push('流式分片');
+  const parts = [tr('路由决策')];
+  if (settings.proxyDebugCaptureHeaders) parts.push(tr('请求/响应头'));
+  if (settings.proxyDebugCaptureBodies) parts.push(tr('请求/响应体'));
+  if (settings.proxyDebugCaptureStreamChunks) parts.push(tr('流式分片'));
   return parts.join('、');
 }
 
@@ -574,7 +575,7 @@ export function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState)
       ? `模型 ${settings.proxyDebugTargetModel}`
       : null,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join('，') : '不过滤，记录所有命中的新请求';
+  return parts.length > 0 ? parts.join('，') : tr('不过滤，记录所有命中的新请求');
 }
 
 export function stringifyStoredDebugValue(value: unknown): string | null {
@@ -629,7 +630,7 @@ export function parseStoredDebugPreview(value: unknown): {
         note:
           originalBytes > 0 && storedBytes > 0
             ? `内容已截断展示，原始 ${originalBytes} bytes，当前保留 ${storedBytes} bytes。复制按钮会复制当前数据库里保存的内容。`
-            : '内容已截断展示。复制按钮会复制当前数据库里保存的内容。',
+            : tr('内容已截断展示。复制按钮会复制当前数据库里保存的内容。'),
       };
     }
   } catch {

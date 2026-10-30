@@ -73,7 +73,7 @@ export default function SiteAnnouncements() {
       setServerTimeZone(nextServerTimeZone || undefined);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '加载站点公告失败');
+      toast.error(errorMessage || tr('加载站点公告失败'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -123,10 +123,10 @@ export default function SiteAnnouncements() {
     try {
       await api.clearSiteAnnouncements();
       setRows([]);
-      toast.success('公告已清空');
+      toast.success(tr('公告已清空'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '清空公告失败');
+      toast.error(errorMessage || tr('清空公告失败'));
     } finally {
       setClearing(false);
     }
@@ -140,10 +140,10 @@ export default function SiteAnnouncements() {
         ...row,
         readAt: row.readAt || new Date().toISOString(),
       })));
-      toast.success('已标记全部为已读');
+      toast.success(tr('已标记全部为已读'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '标记失败');
+      toast.error(errorMessage || tr('标记失败'));
     } finally {
       setMarkingAll(false);
     }
@@ -152,10 +152,10 @@ export default function SiteAnnouncements() {
   const triggerSync = async () => {
     try {
       await api.syncSiteAnnouncements();
-      toast.success('公告同步任务已启动');
+      toast.success(tr('公告同步任务已启动'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '启动同步失败');
+      toast.error(errorMessage || tr('启动同步失败'));
     }
   };
 
@@ -170,7 +170,7 @@ export default function SiteAnnouncements() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
+            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button
             onClick={markAllRead}
@@ -178,7 +178,7 @@ export default function SiteAnnouncements() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : '全部已读'}
+            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : tr('全部已读')}
           </button>
           <button
             onClick={triggerSync}
@@ -190,7 +190,7 @@ export default function SiteAnnouncements() {
             disabled={clearing}
             className="btn btn-link btn-link-danger"
           >
-            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空公告'}
+            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : tr('清空公告')}
           </button>
         </div>
       </div>
@@ -222,9 +222,9 @@ export default function SiteAnnouncements() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{tr(row.title)}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span className="badge badge-muted">{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
+                  <span className="badge badge-muted" data-i18n-skip>{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
                   <span className={`badge ${platformBadgeClass(row.platform)}`}>{row.platform}</span>
-                  <span className={`badge ${row.readAt ? 'badge-muted' : 'badge-warning'}`}>{row.readAt ? '已读' : '未读'}</span>
+                  <span className={`badge ${row.readAt ? 'badge-muted' : 'badge-warning'}`}>{row.readAt ? tr('已读') : tr('未读')}</span>
                 </div>
               </div>
               <SiteAnnouncementContent content={row.content} />

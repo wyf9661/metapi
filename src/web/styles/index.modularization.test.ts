@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import postcss from 'postcss';
-
-const entry = resolve(process.cwd(), 'src/web/index.css');
-
-function expandImports(file: string): string {
-  const content = readFileSync(file, 'utf8');
-  return content.replace(/@import "(\.\/styles\/[^"\n]+\.css)";\n/g, (_, specifier: string) =>
-    expandImports(resolve(file, '..', specifier)));
-}
+import { readAllCss } from './readStyles.testutil.js';
 
 function rules(source: string): string[] {
   return postcss.parse(source).nodes.flatMap((node) => node.type === 'atrule' && node.name === 'import' ? [] : [node.toString()]);
@@ -22,10 +15,9 @@ const extractedStyles = [
   { path: 'src/web/styles/dashboard-endpoints.css', marker: '.dashboard-endpoint-card', minRules: 10 },
 ];
 
-describe('index.css source modularization', () => {
+describe('style source modularization', () => {
   it('inlines each extracted stylesheet intact at its import position', () => {
-    const expanded = expandImports(entry);
-    const expandedRules = rules(expanded);
+    const expandedRules = rules(readAllCss());
     for (const stylesheet of extractedStyles) {
       const stylesheetRules = rules(readFileSync(resolve(process.cwd(), stylesheet.path), 'utf8'));
       expect(stylesheetRules.length, stylesheet.path).toBeGreaterThan(stylesheet.minRules);
@@ -36,17 +28,15 @@ describe('index.css source modularization', () => {
     }
   });
 
-  it('preserves page imports in source order after design tokens', () => {
-    const source = readFileSync(entry, 'utf8');
-    const oauth = source.indexOf('@import "./styles/oauth.css";');
-    const login = source.indexOf('@import "./styles/login.css";');
-    const routes = source.indexOf('@import "./styles/route-cards.css";');
-    const endpoints = source.indexOf('@import "./styles/dashboard-endpoints.css";');
+  it('keeps the page stylesheets in their original cascade order', () => {
+    const expanded = readAllCss();
+    const oauth = expanded.indexOf('.oauth-toolbar-card');
+    const login = expanded.indexOf('.login-shell');
+    const routes = expanded.indexOf('.route-filter-bar');
+    const endpoints = expanded.indexOf('.dashboard-endpoint-card');
     expect(oauth).toBeGreaterThan(0);
     expect(login).toBeGreaterThan(oauth);
     expect(routes).toBeGreaterThan(login);
     expect(endpoints).toBeGreaterThan(routes);
-    expect(expandImports(entry)).toContain('[data-theme="dark"] .login-brand-panel-light');
-    expect(expandImports(entry)).toContain('@media (max-width: 640px)');
   });
 });

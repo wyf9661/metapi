@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, create } from 'react-test-renderer';
 import MobileDrawer from './MobileDrawer.js';
+import { readAllCss } from '../styles/readStyles.testutil.js';
 
 vi.mock('react-dom', () => ({
   createPortal: (node: unknown) => node,
@@ -64,7 +65,7 @@ describe('MobileDrawer', () => {
   });
 
   it('defines independent right-side drawer animations in shared css', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8').replace(/\r\n/g, '\n');
+    const css = readAllCss().replace(/\r\n/g, '\n');
 
     expect(css).toContain('@keyframes drawer-slide-in-right');
     expect(css).toContain('@keyframes drawer-slide-out-right');

@@ -7,25 +7,26 @@ import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PaginationControls from '../components/PaginationControls.js';
+import ListPage from '../components/ListPage.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import { tr } from '../i18n.js';
 import type { ProgramEvent } from '../eventsTypes.js';
 import { StatusText } from '../components/StatusText.js';
 
 const TYPE_OPTIONS = [
-  { value: '', label: '全部类型' },
-  { value: 'checkin', label: '签到' },
-  { value: 'balance', label: '余额' },
-  { value: 'token', label: '令牌' },
-  { value: 'proxy', label: '代理' },
-  { value: 'status', label: '状态' },
-  { value: 'site_notice', label: '站点公告' },
+  { value: '', label: tr('全部类型') },
+  { value: 'checkin', label: tr('签到') },
+  { value: 'balance', label: tr('余额') },
+  { value: 'token', label: tr('令牌') },
+  { value: 'proxy', label: tr('代理') },
+  { value: 'status', label: tr('状态') },
+  { value: 'site_notice', label: tr('站点公告') },
 ];
 
 function levelLabel(level: string) {
-  if (level === 'error') return { label: '错误', cls: 'badge-error' };
-  if (level === 'warning') return { label: '警告', cls: 'badge-warning' };
-  return { label: '信息', cls: 'badge-info' };
+  if (level === 'error') return { label: tr('错误'), cls: 'badge-error' };
+  if (level === 'warning') return { label: tr('警告'), cls: 'badge-warning' };
+  return { label: tr('信息'), cls: 'badge-info' };
 }
 
 function eventStatusLabel(row: ProgramEvent) {
@@ -46,33 +47,35 @@ function eventStatusLabel(row: ProgramEvent) {
 
   if (summary.failed !== undefined || summary.success !== undefined || summary.skipped !== undefined) {
     if ((summary.failed ?? 0) > 0) {
-      return { label: '失败', cls: 'badge-error' };
+      return { label: tr('失败'), cls: 'badge-error' };
     }
     if ((summary.success ?? 0) > 0) {
-      return { label: '成功', cls: 'badge-success' };
+      return { label: tr('成功'), cls: 'badge-success' };
     }
     if ((summary.skipped ?? 0) > 0) {
-      return { label: '跳过', cls: 'badge-warning' };
+      return { label: tr('跳过'), cls: 'badge-warning' };
     }
-    return { label: '成功', cls: 'badge-success' };
+    return { label: tr('成功'), cls: 'badge-success' };
   }
 
+  // Match the raw upstream wording (Chinese OR English) — the translated
+  // label must never feed this classifier, so keep the literals untranslated.
   if (text.includes('失败') || text.includes('failed') || text.includes('error')) {
-    return { label: '失败', cls: 'badge-error' };
+    return { label: tr('失败'), cls: 'badge-error' };
   }
   if (text.includes('跳过') || text.includes('skipped')) {
-    return { label: '跳过', cls: 'badge-warning' };
+    return { label: tr('跳过'), cls: 'badge-warning' };
   }
   if (text.includes('进行中') || text.includes('已开始') || text.includes('running') || text.includes('pending')) {
-    return { label: '进行中', cls: 'badge-info' };
+    return { label: tr('进行中'), cls: 'badge-info' };
   }
   if (text.includes('成功') || text.includes('已完成') || text.includes('completed') || text.includes('finished')) {
-    return { label: '成功', cls: 'badge-success' };
+    return { label: tr('成功'), cls: 'badge-success' };
   }
 
-  if (row.level === 'error') return { label: '异常', cls: 'badge-error' };
-  if (row.level === 'warning') return { label: '警告', cls: 'badge-warning' };
-  return { label: '信息', cls: 'badge-info' };
+  if (row.level === 'error') return { label: tr('异常'), cls: 'badge-error' };
+  if (row.level === 'warning') return { label: tr('警告'), cls: 'badge-warning' };
+  return { label: tr('信息'), cls: 'badge-info' };
 }
 
 export default function ProgramLogs() {
@@ -112,7 +115,7 @@ export default function ProgramLogs() {
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '加载程序日志失败');
+      toast.error(eMessage || tr('加载程序日志失败'));
     } finally {
       if (seq === loadSeqRef.current) {
         setLoading(false);
@@ -132,7 +135,7 @@ export default function ProgramLogs() {
     } catch (e) {
       // Previously escaped as an unhandled rejection: the spinner stopped and
       // the row stayed unread with zero user feedback.
-      toast.error(e instanceof Error ? e.message : '操作失败');
+      toast.error(e instanceof Error ? e.message : tr('操作失败'));
     } finally {
       setRowLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -161,10 +164,10 @@ export default function ProgramLogs() {
       } else {
         setEvents((prev) => prev.map((item) => ({ ...item, read: true })));
       }
-      toast.success('已标记全部为已读');
+      toast.success(tr('已标记全部为已读'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '标记失败');
+      toast.error(eMessage || tr('标记失败'));
     } finally {
       setMarkingAll(false);
     }
@@ -177,27 +180,32 @@ export default function ProgramLogs() {
       setEvents([]);
       setPage(1);
       setTotal(0);
-      toast.success('日志已清空');
+      toast.success(tr('日志已清空'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '清空失败');
+      toast.error(eMessage || tr('清空失败'));
     } finally {
       setClearing(false);
     }
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <h2 className="page-title">{tr('程序日志')}</h2>
-        <div className="page-actions">
+    <>
+      <ListPage
+        title={tr('程序日志')}
+        loading={loading}
+        isEmpty={events.length === 0}
+        emptyTitle={tr('暂无日志')}
+        emptyDesc={tr('当前筛选条件下没有程序日志。')}
+        actions={
+          <>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
+            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button
             onClick={markAllRead}
@@ -205,24 +213,24 @@ export default function ProgramLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : '全部已读'}
+            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : tr('全部已读')}
           </button>
           <button
             onClick={clearAll}
             disabled={clearing}
             className="btn btn-link btn-link-danger"
           >
-            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空日志'}
+            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : tr('清空日志')}
           </button>
-        </div>
-      </div>
-
+          </>
+        }
+        beforeList={
       <ResponsiveFilterPanel
         isMobile={isMobile}
         mobileOpen={showFilters}
         onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
-        mobileTitle="筛选程序日志"
+        mobileTitle={tr('筛选程序日志')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <ModernSelect
@@ -250,7 +258,7 @@ export default function ProgramLogs() {
               {tr('仅看未读')}
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {total} 条
+              {tr('共')} {total} {tr('条')}
             </div>
           </div>
         )}
@@ -285,22 +293,16 @@ export default function ProgramLogs() {
             </label>
 
             <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {total} 条
+              {tr('共')} {total} {tr('条')}
             </div>
           </div>
         )}
       />
-
-      <div className="card" style={{ overflowX: 'auto' }}>
-        {loading ? (
-          <div style={{ padding: 20 }}>
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34 }} />
-          </div>
-        ) : isMobile ? (
+        }
+      >
+        {isMobile ? (
           <div className="mobile-card-list">
-            {events.length > 0 ? events.map((row) => {
+            {events.map((row) => {
               const level = levelLabel(row.level || 'info');
               const eventStatus = eventStatusLabel(row);
               return (
@@ -322,29 +324,21 @@ export default function ProgramLogs() {
                         disabled={!!rowLoading[row.id]}
                         className="btn btn-link btn-link-primary"
                       >
-                        {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : '标记已读'}
+                        {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : tr('标记已读')}
                       </button>
                     )
                   )}
                 >
-                  <MobileField label="时间" value={formatDateTimeLocal(row.createdAt)} />
-                  <MobileField label="类型" value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
-                  <MobileField label="级别" value={<StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>{level.label}</StatusText>} />
-                  <MobileField label="状态" value={<StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>{eventStatus.label}</StatusText>} />
-                  <MobileField label="内容" value={row.message || '-'} stacked />
+                  <MobileField label={tr('时间')} value={formatDateTimeLocal(row.createdAt)} />
+                  <MobileField label={tr('类型')} value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
+                  <MobileField label={tr('级别')} value={<StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>{level.label}</StatusText>} />
+                  <MobileField label={tr('状态')} value={<StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>{eventStatus.label}</StatusText>} />
+                  <MobileField label={tr('内容')} value={row.message || '-'} stacked />
                 </MobileCard>
               );
-            }) : (
-              <div className="empty-state">
-                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div className="empty-state-title">{tr('暂无日志')}</div>
-                <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
-              </div>
-            )}
+            })}
           </div>
-        ) : events.length > 0 ? (
+        ) : (
           <table className="data-table program-logs-table">
             <colgroup>
               <col style={{ width: 160 }} />
@@ -409,7 +403,7 @@ export default function ProgramLogs() {
                             disabled={!!rowLoading[row.id]}
                             className="btn btn-link btn-link-primary"
                           >
-                            {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : '标记已读'}
+                            {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : tr('标记已读')}
                           </button>
                         )}
                       </div>
@@ -419,16 +413,8 @@ export default function ProgramLogs() {
               })}
             </tbody>
           </table>
-        ) : (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="empty-state-title">{tr('暂无日志')}</div>
-            <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
-          </div>
         )}
-      </div>
+      </ListPage>
 
       <PaginationControls
         page={page}
@@ -443,6 +429,6 @@ export default function ProgramLogs() {
         }}
       />
 
-    </div>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.js';
 export type SiteCustomHeaderField = {
   key: string;
   value: string;
@@ -386,7 +387,7 @@ export function serializeSiteCustomHeaders(fields: SiteCustomHeaderField[]): {
     const hasAnyInput = key.length > 0 || value.trim().length > 0;
     if (!hasAnyInput) continue;
     if (!key) {
-      return { valid: false, customHeaders: '', error: '请求头名称不能为空' };
+      return { valid: false, customHeaders: '', error: tr('请求头名称不能为空') };
     }
     const normalizedKey = key.toLowerCase();
     if (seen.has(normalizedKey)) {

@@ -1,3 +1,4 @@
+import { tr } from '../i18n.js';
 interface DateTimeInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -19,7 +20,7 @@ export default function DateTimeInput({
   onChange,
   min,
   max,
-  placeholder = '选择日期时间',
+  placeholder = tr('选择日期时间'),
   label,
 }: DateTimeInputProps) {
   return (

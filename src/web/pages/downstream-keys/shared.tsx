@@ -173,7 +173,7 @@ export function RangeToggle({ range, onChange }: { range: Range; onChange: (r: R
 export function StatusBadge({ enabled }: { enabled: boolean }) {
   return (
     <StatusText badgeClass={enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 11 }}>
-      {enabled ? '启用' : '禁用'}
+      {enabled ? tr('启用') : tr('禁用')}
     </StatusText>
   );
 }
