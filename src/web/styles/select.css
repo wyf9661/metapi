@@ -64,10 +64,10 @@
   color: var(--color-primary);
 }
 
+/* keep the trigger still while opening: ring + border carry the state, motion is jitter */
 .modern-select.is-open .modern-select-trigger {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(13,148,136, 0.16);
-  transform: translateY(-1px);
 }
 
 .modern-select.is-disabled .modern-select-trigger {
@@ -84,7 +84,8 @@
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: calc(var(--radius-sm) + 2px);
-  box-shadow: var(--shadow-lg);
+  /* same elevation language as dialogs: hairline ring + near/far shadow layers */
+  box-shadow: 0 0 0 1px var(--color-border-light), 0 4px 12px rgba(0, 0, 0, 0.08), 0 12px 28px rgba(0, 0, 0, 0.12);
   padding: 6px;
   overflow: auto;
   opacity: 0;
@@ -198,14 +199,15 @@
   padding: 6px 8px;
 }
 
+/* no translateX nudge: the row sliding under the cursor reads as jitter on fast sweeps */
 .modern-select-option:hover {
   background: rgba(13,148,136, 0.1);
-  transform: translateX(2px);
 }
 
+/* active was hardcoded Tailwind blue, clashing with the teal brand */
 .modern-select-option.is-active {
   background: rgba(13,148,136, 0.14);
-  color: #1d4ed8;
+  color: var(--color-primary);
 }
 
 .modern-select-option.is-disabled {
@@ -255,5 +257,5 @@
 
 [data-theme="dark"] .modern-select-option.is-active {
   background: rgba(45,212,191, 0.24);
-  color: #c3d9f2;
+  color: #2dd4bf;
 }

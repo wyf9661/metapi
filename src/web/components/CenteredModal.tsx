@@ -96,7 +96,9 @@ export default function CenteredModal({
               onClick={onClose}
               aria-label={tr('关闭弹框')}
             >
-              ×
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           ) : null}
         </div>
