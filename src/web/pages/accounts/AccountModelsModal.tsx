@@ -115,7 +115,7 @@ export default function AccountModelsModal({
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
               {modelModal.newModelPolicy === 'disable'
                 ? tr('刷新发现新模型时自动保持禁用，直到你手动启用')
-                : '刷新发现的新模型立即启用（默认）'}
+                : tr('刷新发现的新模型立即启用（默认）')}
             </span>
           </div>
           {modelModal.models.length === 0 ? (

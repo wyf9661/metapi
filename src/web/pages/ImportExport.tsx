@@ -132,7 +132,7 @@ function parseImportSummary(raw: string): ParsedSummary | null {
   const invalidSummary = (): ParsedSummary => ({
     valid: false,
     version: '-',
-    timestampLabel: '未知',
+    timestampLabel: tr('未知'),
     hasAccounts: false,
     hasPreferences: false,
     hasLegacyData: false,
@@ -734,7 +734,7 @@ export default function ImportExport() {
           <span style={{ fontSize: 15, fontWeight: 700 }}>{tr('WebDAV 同步')}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, fontSize: 12, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
             <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : tr('尚未同步')}</span>
-            <span>最近错误：{webdavState.lastError || '无'}</span>
+            <span>最近错误：{webdavState.lastError || tr('无')}</span>
           </div>
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>{tr('支持手动推送、手动拉取，以及定时自动导出到 WebDAV。')}</div>

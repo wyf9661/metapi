@@ -184,9 +184,9 @@ export default function CheckinLog() {
   };
 
   const statusLabel = (status: 'success' | 'failed' | 'skipped') => {
-    if (status === 'success') return '成功';
-    if (status === 'skipped') return '跳过';
-    return '失败';
+    if (status === 'success') return tr('成功');
+    if (status === 'skipped') return tr('跳过');
+    return tr('失败');
   };
 
   const statusClass = (status: 'success' | 'failed' | 'skipped') => {

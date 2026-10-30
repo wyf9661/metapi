@@ -248,28 +248,28 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
           '候选 endpoint',
           traceDetail.endpointCandidatesJson,
           {
-            copyLabel: '候选 endpoint',
+            copyLabel: tr('候选 endpoint'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
           '原始下游请求头',
           traceDetail.requestHeadersJson,
           {
-            copyLabel: '原始下游请求头',
+            copyLabel: tr('原始下游请求头'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
           '原始下游请求体',
           traceDetail.requestBodyJson,
           {
-            copyLabel: '原始下游请求体',
+            copyLabel: tr('原始下游请求体'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
           '最终响应',
           traceDetail.finalResponseBodyJson,
           {
-            copyLabel: '最终响应',
+            copyLabel: tr('最终响应'),
           }, onCopyStoredDebugValue,
         )}
       </div>

@@ -260,7 +260,7 @@ export default function UpdateCenterSection() {
             ? tr('宿主机模式：应用目录可写，更新零提权')
             : ota.host.tier === 'pkexec'
               ? tr('宿主机模式：需要提权时将弹出系统授权窗（polkit）')
-              : '宿主机模式：无图形会话，需要提权时给出终端命令'}
+              : tr('宿主机模式：无图形会话，需要提权时给出终端命令')}
         </div>
       )}
       {ota?.supported && ota.state && ota.state.phase && ota.state.phase !== 'idle' && (

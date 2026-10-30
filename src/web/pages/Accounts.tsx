@@ -75,21 +75,21 @@ const ACCOUNT_SEGMENTS: Array<{
   {
     value: 'session',
     label: tr('账号管理'),
-    tooltip: '用于签到、余额、状态维护',
+    tooltip: tr('用于签到、余额、状态维护'),
     tooltipSide: 'bottom',
     tooltipAlign: 'start',
   },
   {
     value: 'apikey',
     label: tr('API Key管理'),
-    tooltip: '只有 Base URL + Key 时使用，只负责代理调用',
+    tooltip: tr('只有 Base URL + Key 时使用，只负责代理调用'),
     tooltipSide: 'bottom',
     tooltipAlign: 'center',
   },
   {
     value: 'tokens',
     label: tr('账号令牌管理'),
-    tooltip: '从账号同步或手动维护，供路由实际调用',
+    tooltip: tr('从账号同步或手动维护，供路由实际调用'),
     tooltipSide: 'bottom',
     tooltipAlign: 'end',
   },
@@ -328,7 +328,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     if (username) return username;
     return resolveAccountCredentialMode(account) === 'apikey'
       ? tr('API Key 连接')
-      : '未命名';
+      : tr('未命名');
   };
 
   const sortedAccounts = useMemo(
@@ -506,7 +506,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         }
       } else {
         toast.error(
-          normalizeVerifyFailureMessage(result.message || 'Token 无效'),
+          normalizeVerifyFailureMessage(result.message || tr('Token 无效')),
         );
       }
     } catch (e) {
@@ -724,7 +724,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     await loadModelModalModels(account, {
       resetBeforeLoad: true,
       closeOnError: true,
-      errorMessage: '加载模型列表失败',
+      errorMessage: tr('加载模型列表失败'),
     });
   };
 
@@ -904,7 +904,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         ? tr('账号或站点已禁用')
         : state === 'unhealthy'
           ? tr('最近健康检查失败')
-          : '尚未获取运行健康信息');
+          : tr('尚未获取运行健康信息'));
     return { state, reason, ...cfg };
   };
 
@@ -1130,7 +1130,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         toast.error(tr('当前是 API Key，不是 Session Token'));
       } else {
         toast.error(
-          normalizeVerifyFailureMessage(result.message || 'Token 无效'),
+          normalizeVerifyFailureMessage(result.message || tr('Token 无效')),
         );
       }
     } catch (e) {
@@ -1504,7 +1504,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 ? tr('添加 API Key 连接')
                 : addMode === 'login'
                   ? tr('账号密码登录')
-                  : '添加 Session 连接'
+                  : tr('添加 Session 连接')
             }
             maxWidth={860}
             bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
@@ -1646,7 +1646,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     >
                       {selectedTokenSite
                         ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
-                        : '当前站点'}
+                        : tr('当前站点')}
                     </div>
                     <input
                       placeholder={tr('连接名称（可选）')}
@@ -1826,7 +1826,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               >
                                 {verifyResult.apiToken
                                   ? `已找到 (${verifyResult.apiToken.substring(0, 8)}...)`
-                                  : '未找到'}
+                                  : tr('未找到')}
                               </span>
                             </div>
                           </div>
@@ -1853,7 +1853,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           <div className="alert-title">
                             {normalizeVerifyFailureMessage(
                               verifyResult.message,
-                            ) || 'Token 无效或已过期'}
+                            ) || tr('Token 无效或已过期')}
                           </div>
                           <div
                             style={{
@@ -1862,7 +1862,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               marginTop: 4,
                             }}
                           >
-                            {verifyFailureHint || '请检查 Token 是否正确'}
+                            {verifyFailureHint || tr('请检查 Token 是否正确')}
                           </div>
                         </div>
                       )}
@@ -1943,7 +1943,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     >
                       {selectedTokenSite
                         ? `${selectedTokenSite.name} (${selectedTokenSite.platform})`
-                        : '当前站点'}
+                        : tr('当前站点')}
                     </div>
                     <input
                       placeholder={tr('用户名')}
@@ -2208,7 +2208,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           marginTop: 4,
                         }}
                       >
-                        {verifyFailureHint || '请检查 Token 是否正确'}
+                        {verifyFailureHint || tr('请检查 Token 是否正确')}
                       </div>
                     </div>
                   )}
@@ -2814,16 +2814,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 <div className="empty-state-title">
                   {activeSegment === 'apikey'
                     ? tr('暂无 API Key 连接')
-                    : '暂无 Session 连接'}
+                    : tr('暂无 Session 连接')}
                 </div>
                 <div className="empty-state-desc">
                   {activeSegment === 'apikey'
                     ? sites.length > 0
                       ? tr('请为现有站点补充 API Key 连接')
-                      : '请先添加站点，然后为站点补充 API Key 连接'
+                      : tr('请先添加站点，然后为站点补充 API Key 连接')
                     : sites.length > 0
                       ? tr('请为现有站点添加 Session 连接')
-                      : '请先添加站点，然后添加 Session 连接'}
+                      : tr('请先添加站点，然后添加 Session 连接')}
                 </div>
               </div>
             )}
@@ -2850,8 +2850,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           if (!modelModal.account) return;
           await loadModelModalModels(modelModal.account, {
             refreshUpstream: true,
-            successMessage: '模型列表已刷新',
-            errorMessage: '刷新失败',
+            successMessage: tr('模型列表已刷新'),
+            errorMessage: tr('刷新失败'),
           });
         }}
         onToggleModelDisabled={toggleModelDisabled}

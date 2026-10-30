@@ -1578,6 +1578,15 @@ export const zhToEnSupplemental: Record<string, string> = {
   '未触发': 'Not triggered',
   '发现新版本': 'New version found',
   '已上传': 'Uploaded',
+  '管': 'Manage',
+  '数学': 'Math',
+  '逻辑': 'Logic',
+  '知识': 'Knowledge',
+  '未指定': 'Unspecified',
+  '上游返回': 'Upstream returned',
+  '通用': 'General',
+  '待上传': 'Awaiting upload',
+
 
 
 };

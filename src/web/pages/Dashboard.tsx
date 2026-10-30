@@ -50,11 +50,11 @@ function warmSiteChartChunks(): Promise<void> {
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 6) return '夜深了';
-  if (hour < 11) return '早上好';
-  if (hour < 13) return '中午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
+  if (hour < 6) return tr('夜深了');
+  if (hour < 11) return tr('早上好');
+  if (hour < 13) return tr('中午好');
+  if (hour < 18) return tr('下午好');
+  return tr('晚上好');
 }
 
 function safeNumber(value: unknown): number {
@@ -318,7 +318,7 @@ export default function Dashboard({
         setData(result);
       } catch (err) {
         const errMessage = err instanceof Error ? err.message : String(err);
-        const message = errMessage || '加载仪表盘失败';
+        const message = errMessage || tr('加载仪表盘失败');
         setError(message);
         if (silent) toast.error(message);
       } finally {
@@ -458,7 +458,7 @@ export default function Dashboard({
       setTunnelError(null);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      setTunnelError(errMessage || '加载隧道状态失败');
+      setTunnelError(errMessage || tr('加载隧道状态失败'));
     }
   }, []);
 
@@ -508,7 +508,7 @@ export default function Dashboard({
       await refreshTunnel();
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      setTunnelError(errMessage || '隧道操作失败');
+      setTunnelError(errMessage || tr('隧道操作失败'));
       toast.error(errMessage || tr('隧道操作失败'));
       await refreshTunnel();
     } finally {
@@ -1064,7 +1064,7 @@ export default function Dashboard({
             <div className="site-observability-subtitle">
               {observabilityTab === 'sites'
                 ? tr('站点分布与今日消耗 · 最近 24 小时可用性')
-                : '模型消耗与调用分布 · 最近 24 小时可用性'}
+                : tr('模型消耗与调用分布 · 最近 24 小时可用性')}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1111,7 +1111,7 @@ export default function Dashboard({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {siteChartTab === 'distribution'
                   ? tr('站点排行榜')
-                  : '站点趋势'}
+                  : tr('站点趋势')}
               </div>
               <div className="pill-tabs">
                 <button
@@ -1304,7 +1304,7 @@ export default function Dashboard({
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应：—',
+                            : tr('平均响应：—'),
                         ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
@@ -1313,7 +1313,7 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应 —',
+                            : tr('平均响应 —'),
                         ].join(' | ')}
                         aria-label={`${site.siteName} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />
@@ -1485,7 +1485,7 @@ export default function Dashboard({
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应：—',
+                            : tr('平均响应：—'),
                         ].join(' · ')}
                         data-tooltip-align="start"
                         title={[
@@ -1494,7 +1494,7 @@ export default function Dashboard({
                           `${bucket.successCount} 成功 / ${bucket.failedCount} 失败`,
                           bucket.averageLatencyMs != null
                             ? `平均响应 ${formatDashboardLatency(bucket.averageLatencyMs)}`
-                            : '平均响应 —',
+                            : tr('平均响应 —'),
                         ].join(' | ')}
                         aria-label={`${modelRow.model} ${formatAvailabilityBucketLabel(bucket)} 使用日志`}
                       />

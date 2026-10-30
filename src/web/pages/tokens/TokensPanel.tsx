@@ -129,7 +129,7 @@ const resolveAccountLabel = (result: AccountTokenSyncResult | null | undefined) 
   if (username) return username;
   const accountId = result?.accountId ?? result?.account?.id;
   if (accountId) return `#${accountId}`;
-  return '未知账号';
+  return tr('未知账号');
 };
 
 export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId: filterSiteId }: TokensPanelProps) {
@@ -664,7 +664,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         const coverageText = coverage?.refreshed
           ? (Number.isFinite(modelCount)
             ? `；模型已刷新 ${modelCount} 个${preview ? `（${preview}${modelCount > 4 ? '…' : ''}）` : ''}`
-            : '；模型已刷新')
+            : tr('；模型已刷新'))
           : (coverage?.errorMessage ? `；模型刷新失败：${coverage.errorMessage}` : '');
         toast.success(`同步完成：新增 ${res.created || 0}，更新 ${res.updated || 0}${groupText}${coverageText}`);
       }

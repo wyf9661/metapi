@@ -127,7 +127,7 @@ export function SiteConnectionStats(props: {
     ? `禁用模型（按 key）：${disabled.keys
       .map((entry) => `${entry.username || `账号 ${entry.accountId}`} ${entry.count} 个`)
       .join('；')}`
-    : '禁用模型';
+    : tr('禁用模型');
   const markers = [
     { key: 'sessions', label: tr('Session 账号'), count: stats?.sessions || 0, Icon: UserIcon },
     { key: 'apiKeys', label: 'API Key', count: stats?.apiKeys || 0, Icon: KeyIcon },
@@ -159,8 +159,8 @@ export function formatUsd(value?: number | null): string {
 
 export function resolveSiteCreatedSessionLabel(platform?: string | null): string {
   const normalized = String(platform || '').trim().toLowerCase();
-  if (normalized === 'codex' || normalized === 'gemini-cli' || normalized === 'antigravity') return '添加 Session 凭据';
-  return '添加账号（用户名密码登录）';
+  if (normalized === 'codex' || normalized === 'gemini-cli' || normalized === 'antigravity') return tr('添加 Session 凭据');
+  return tr('添加账号（用户名密码登录）');
 }
 
 /**
@@ -192,7 +192,7 @@ export function formatRemainingDuration(value?: string | null): string | null {
   const targetMs = Date.parse(value);
   if (!Number.isFinite(targetMs)) return null;
   const deltaMs = targetMs - Date.now();
-  if (deltaMs <= 0) return '已到期';
+  if (deltaMs <= 0) return tr('已到期');
 
   const minuteMs = 60 * 1000;
   const hourMs = 60 * minuteMs;

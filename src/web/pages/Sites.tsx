@@ -725,7 +725,7 @@ export default function Sites() {
                 ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : tr('✗ 不可用'))
               : d.status === 'skipped' ? tr('— 已跳过')
               : d.status === 'inconclusive' ? tr('? 未得出结论')
-              : '✗ 不可用';
+              : tr('✗ 不可用');
             const lat = d.latencyMs != null && d.status !== 'skipped' ? ` (${d.latencyMs}ms)` : '';
             const c = d.status === 'supported' ? 'var(--color-success)'
               : d.status === 'skipped' || d.status === 'inconclusive' ? 'var(--color-text-muted)'
@@ -733,12 +733,12 @@ export default function Sites() {
             const reasonText = (() => {
               if (!d.reason || d.status === 'supported' || d.status === 'skipped') return '';
               const r = d.reason;
-              if (/timeout/i.test(r)) return '超时';
-              if (/missing credential|no.*token/i.test(r)) return '无 Token';
-              if (/no compatible.*endpoint|no.*endpoint candidate/i.test(r)) return '无可用端点';
-              if (/no such model|unknown model/i.test(r)) return '模型不存在';
-              if (/not found/i.test(r)) return '未找到';
-              if (/access denied|forbidden|permission/i.test(r)) return '无权限';
+              if (/timeout/i.test(r)) return tr('超时');
+              if (/missing credential|no.*token/i.test(r)) return tr('无 Token');
+              if (/no compatible.*endpoint|no.*endpoint candidate/i.test(r)) return tr('无可用端点');
+              if (/no such model|unknown model/i.test(r)) return tr('模型不存在');
+              if (/not found/i.test(r)) return tr('未找到');
+              if (/access denied|forbidden|permission/i.test(r)) return tr('无权限');
               if (/rate.?limit|too many request/i.test(r)) return tr('触发频率限制');
               if (/响应延迟/.test(r)) return r;
               return r.length > 60 ? r.slice(0, 57) + '…' : r;
@@ -775,7 +775,7 @@ export default function Sites() {
               })
               .finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
-            addLog(d.message || '探测失败', 'var(--color-danger)');
+            addLog(d.message || tr('探测失败'), 'var(--color-danger)');
             toast.error(d.message || tr('探测失败'));
             // Refresh model state even on error
             api.getSiteAvailableModels(siteId)
@@ -814,7 +814,7 @@ export default function Sites() {
         setProbeLog((prev) => [...prev, { id: probeLogSeqRef.current++, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: tr('已手动停止'), color: 'var(--color-text-muted)' }]);
         return;
       }
-      addLog(eMessage || '探测失败', 'var(--color-danger)');
+      addLog(eMessage || tr('探测失败'), 'var(--color-danger)');
       toast.error(eMessage || tr('探测失败'));
     } finally {
       setProbing(false);
@@ -1568,7 +1568,7 @@ export default function Sites() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
             {selectedOauthProvider
               ? tr('该平台使用 OAuth 授权，官方连接地址已自动配置。')
-              : '主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。'}
+              : tr('主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。')}
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
             <div className="alert alert-info animate-scale-in">
@@ -2111,7 +2111,7 @@ export default function Sites() {
                                 ? tr('降级')
                                 : site.healthState?.state === 'disabled'
                                   ? tr('禁用')
-                                  : '未检测'}
+                                  : tr('未检测')}
                         </StatusPill>
                       )}
                     />
@@ -2310,7 +2310,7 @@ export default function Sites() {
                               ? tr('降级')
                               : site.healthState?.state === 'disabled'
                                 ? tr('禁用')
-                                : '未检测'}
+                                : tr('未检测')}
                       </StatusPill>
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>

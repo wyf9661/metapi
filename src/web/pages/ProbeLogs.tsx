@@ -40,16 +40,16 @@ const EMPTY_LOGS: ProbeLog[] = [];
 const EMPTY_FILTER_OPTIONS = { sites: [], accounts: [], models: [] };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  math: '数学',
-  logic: '逻辑',
-  knowledge: '知识',
-  reasoning: '推理',
+  math: tr('数学'),
+  logic: tr('逻辑'),
+  knowledge: tr('知识'),
+  reasoning: tr('推理'),
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  success: '成功',
-  failed: '失败',
-  timeout: '超时',
+  success: tr('成功'),
+  failed: tr('失败'),
+  timeout: tr('超时'),
 };
 
 const STATUS_COLORS: Record<string, string> = {

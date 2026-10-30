@@ -170,14 +170,14 @@ export default function SiteDistributionChart({ data, loading, active = true }: 
         },
       },
       {
-        key: '占比',
+        key: tr('占比'),
         value: (datum: unknown) => {
           const item = coerceDatumRecord(datum);
           return `${safeNumber(item.pct).toFixed(1)}%`;
         },
       },
       {
-        key: '账户数',
+        key: tr('账户数'),
         value: (datum: unknown) => {
           const item = coerceDatumRecord(datum);
           return String(item.accountCount || 0);

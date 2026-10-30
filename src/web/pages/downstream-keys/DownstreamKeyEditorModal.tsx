@@ -221,7 +221,7 @@ export function TagInput({
               onChange(tags.slice(0, -1));
             }
           }}
-          placeholder={placeholder || '输入标签后按回车或逗号'}
+          placeholder={placeholder || tr('输入标签后按回车或逗号')}
           style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', color: 'var(--color-text-primary)', padding: 0, fontSize: 13, lineHeight: 1.45 }}
         />
       </div>

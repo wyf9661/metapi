@@ -73,19 +73,19 @@ function avatarColorFor(seed: string): string {
 
 function avatarInitialFor(name: string): string {
   const trimmed = (name || '').trim();
-  if (!trimmed) return '管';
+  if (!trimmed) return tr('管');
   return Array.from(trimmed)[0].toUpperCase();
 }
 
 function resolveStoredProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (!raw) return { name: '管理员' };
+    if (!raw) return { name: tr('管理员') };
     const parsed = JSON.parse(raw) as Partial<UserProfile> & { avatar?: string };
     const name = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
-    return { name: name || '管理员' };
+    return { name: name || tr('管理员') };
   } catch {
-    return { name: '管理员' };
+    return { name: tr('管理员') };
   }
 }
 
@@ -357,7 +357,7 @@ function UserProfileModal({
             fontSize: 16,
             fontWeight: 600,
             color: '#fff',
-            background: avatarColorFor(name.trim() || '管理员'),
+            background: avatarColorFor(name.trim() || tr('管理员')),
             border: 'none',
           }}
         >

@@ -2113,7 +2113,7 @@ export default function Settings() {
                 已保存待生效：
                 {runtimeDatabaseState.saved
                   ? ` ${runtimeDatabaseState.saved.dialect}（${runtimeDatabaseState.saved.connection}）${runtimeDatabaseState.saved.ssl ? ' [SSL]' : ''}`
-                  : ' 未保存'}
+                  : tr(' 未保存')}
               </div>
               {runtimeDatabaseState.restartRequired && (
                 <div style={{ color: 'var(--color-warning)' }}>{tr('检测到待生效数据库配置，请重启容器使其生效。')}</div>
@@ -2138,7 +2138,7 @@ export default function Settings() {
           <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>{tr('公网隧道控制台访问开关已移到本页顶部「公网隧道访问」，仪表盘隧道卡片也可直接切换。')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('当前识别到的管理端 IP（由服务端判定）：')}</div>
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 10 }}>
-            {runtime.currentAdminIp || '未知'}
+            {runtime.currentAdminIp || tr('未知')}
           </code>
           <textarea
             value={adminIpAllowlistText}

@@ -21,7 +21,7 @@ export default function SiteCreatedModal({
   const apiKeyFirst = initialSegment === 'apikey';
   const helperText = apiKeyFirst
     ? tr('该平台更适合直接通过 Base URL + API Key 接入，后续再补模型初始化。')
-    : '接下来您可以继续补充登录连接或 API Key。';
+    : tr('接下来您可以继续补充登录连接或 API Key。');
   const primaryAction = apiKeyFirst
     ? {
       choice: 'apikey' as const,

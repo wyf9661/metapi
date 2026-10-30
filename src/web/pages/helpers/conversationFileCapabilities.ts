@@ -94,12 +94,12 @@ export function buildConversationFileAccept(capability: ConversationFileCapabili
 
 export function buildConversationFileHint(capability: ConversationFileCapability): string {
   if (!capability.supported) {
-    return capability.reason || '当前协议暂不支持会话附件。';
+    return capability.reason || tr('当前协议暂不支持会话附件。');
   }
 
   const typeLabel = buildSupportedTypeLabel(capability);
   if (!typeLabel) {
-    return capability.reason || '当前协议暂不支持会话附件。';
+    return capability.reason || tr('当前协议暂不支持会话附件。');
   }
 
   if (

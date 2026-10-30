@@ -57,7 +57,7 @@ function buildDirectBindingPresentation(
   if (connectionMode === 'oauth') {
     return {
       isFollowingAccountDefault: false,
-      bindingModeLabel: 'OAuth授权',
+      bindingModeLabel: tr('OAuth授权'),
       badgeTone: 'warning',
       effectiveTokenName: accountName,
       helperText: `当前直接使用连接「${accountName}」的 OAuth 授权，不依赖账号令牌。`,
@@ -68,7 +68,7 @@ function buildDirectBindingPresentation(
 
   return {
     isFollowingAccountDefault: false,
-    bindingModeLabel: 'API令牌',
+    bindingModeLabel: tr('API令牌'),
     badgeTone: 'warning',
     effectiveTokenName: accountName,
     helperText: `当前直接使用连接「${accountName}」保存的 API Key，不依赖账号令牌。`,
@@ -111,7 +111,7 @@ export function describeTokenBinding(
     ? options.find((option) => option.id === activeTokenId) || null
     : null;
   const connectionMode = context.connectionMode || 'session';
-  const accountName = String(context.accountName || '').trim() || '当前连接';
+  const accountName = String(context.accountName || '').trim() || tr('当前连接');
 
   if (!activeTokenId) {
     if (connectionMode === 'apikey' || connectionMode === 'oauth') {
@@ -121,23 +121,23 @@ export function describeTokenBinding(
     const effectiveTokenName = defaultToken?.name || fallbackTokenName || tr('未设置默认令牌');
     return {
       isFollowingAccountDefault: true,
-      bindingModeLabel: '跟随账号默认',
+      bindingModeLabel: tr('跟随账号默认'),
       badgeTone: 'info',
       effectiveTokenName,
       helperText: defaultToken
         ? `跟随账号默认。当前生效的是「${defaultToken.name}」，以后账号默认变化时会自动切换。`
-        : '跟随账号默认。当前账号还没有默认令牌。',
-      followOptionLabel: '跟随账号默认',
+        : tr('跟随账号默认。当前账号还没有默认令牌。'),
+      followOptionLabel: tr('跟随账号默认'),
       followOptionDescription: defaultToken
         ? `当前生效：${defaultToken.name}；以后账号默认变化时会自动切换`
-        : '以后账号默认变化时会自动切换',
+        : tr('以后账号默认变化时会自动切换'),
     };
   }
 
   const effectiveTokenName = selectedToken?.name || fallbackTokenName || `token-${activeTokenId}`;
   return {
     isFollowingAccountDefault: false,
-    bindingModeLabel: '固定令牌',
+    bindingModeLabel: tr('固定令牌'),
     badgeTone: 'warning',
     effectiveTokenName,
     helperText: selectedToken?.isDefault
@@ -152,7 +152,7 @@ export function describeTokenBinding(
           ? `直接使用连接「${accountName}」保存的 API Key`
           : (defaultToken
               ? `当前生效：${defaultToken.name}；以后账号默认变化时会自动切换`
-              : '以后账号默认变化时会自动切换')),
+              : tr('以后账号默认变化时会自动切换'))),
   };
 }
 
@@ -176,5 +176,5 @@ export function buildFixedTokenOptionLabel(
 export function buildFixedTokenOptionDescription(token: TokenBindingOption): string {
   return token.isDefault
     ? tr('固定到这条令牌；它目前也是账号默认，但以后不会自动跟随')
-    : '固定到这条令牌；不随账号默认变化';
+    : tr('固定到这条令牌；不随账号默认变化');
 }

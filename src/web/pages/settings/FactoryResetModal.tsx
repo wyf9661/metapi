@@ -31,7 +31,7 @@ export default function FactoryResetModal({
     ? tr('重新初始化中...')
     : (factoryResetSecondsLeft > 0
       ? `确认重新初始化系统（${factoryResetSecondsLeft}s）`
-      : '确认重新初始化系统');
+      : tr('确认重新初始化系统'));
 
   const modal = (
     <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>

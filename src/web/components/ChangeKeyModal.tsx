@@ -50,11 +50,11 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
         setNewToken('');
         setConfirmToken('');
       } else {
-        setError(res.message || '更新失败');
+        setError(res.message || tr('更新失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      setError(eMessage || '更新失败');
+      setError(eMessage || tr('更新失败'));
     } finally {
       setSaving(false);
     }

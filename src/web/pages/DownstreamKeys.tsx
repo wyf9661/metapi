@@ -340,13 +340,13 @@ function buildEditorForm(
 }
 
 function summarizeModelLimit(models: string[]): string {
-  if (!Array.isArray(models) || models.length === 0) return '全部模型';
+  if (!Array.isArray(models) || models.length === 0) return tr('全部模型');
   if (models.length === 1) return models[0];
   return `${models[0]} +${models.length - 1}`;
 }
 
 function summarizeRouteLimit(routeIds: number[], routeMap: Map<number, RouteSelectorItem>): string {
-  if (!Array.isArray(routeIds) || routeIds.length === 0) return '全部群组';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) return tr('全部群组');
   const names = routeIds
     .map((id) => routeMap.get(id))
     .filter(Boolean)
@@ -358,13 +358,13 @@ function summarizeRouteLimit(routeIds: number[], routeMap: Map<number, RouteSele
 
 function summarizeSiteWeightMultipliers(weights: Record<number, number> | undefined): string {
   const entries = Object.entries(weights || {});
-  if (entries.length === 0) return '默认倍率';
+  if (entries.length === 0) return tr('默认倍率');
   if (entries.length === 1) return `${entries[0][0]} => ${entries[0][1]}`;
   return `${entries[0][0]} => ${entries[0][1]} +${entries.length - 1}`;
 }
 
 function summarizeTags(tags: string[]): string {
-  if (!Array.isArray(tags) || tags.length === 0) return '无标签';
+  if (!Array.isArray(tags) || tags.length === 0) return tr('无标签');
   if (tags.length === 1) return tags[0];
   return `${tags[0]} +${tags.length - 1}`;
 }
@@ -503,7 +503,7 @@ export default function DownstreamKeys() {
       setLoadError(null);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      setLoadError(errMessage || '加载下游密钥列表失败');
+      setLoadError(errMessage || tr('加载下游密钥列表失败'));
       toast.error(errMessage || tr('加载下游密钥列表失败'));
     } finally {
       setLoading(false);
@@ -1176,7 +1176,7 @@ export default function DownstreamKeys() {
                     stacked
                   />
                   {row.description ? <MobileField label={tr('备注')} value={row.description} stacked /> : null}
-                  <MobileField label={tr('主分组')} value={row.groupName || '未分组'} />
+                  <MobileField label={tr('主分组')} value={row.groupName || tr('未分组')} />
                   <MobileField label={tr('标签')} value={summarizeTags(row.tags || [])} stacked />
                   <MobileField label={tr('模型')} value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label={tr('群组')} value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />

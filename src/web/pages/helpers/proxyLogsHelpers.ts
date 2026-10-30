@@ -281,9 +281,9 @@ export function formatBillingDetailSummary(log: ProxyLogRenderItem) {
 export function formatProxyLogUsageSource(
   source: ProxyLogUsageSource | undefined,
 ): string | null {
-  if (source === 'upstream') return '上游返回';
-  if (source === 'self-log') return '站点日志回填';
-  if (source === 'unknown') return '未知';
+  if (source === 'upstream') return tr('上游返回');
+  if (source === 'self-log') return tr('站点日志回填');
+  if (source === 'unknown') return tr('未知');
   return null;
 }
 
@@ -452,7 +452,7 @@ const PROXY_LOG_CLIENT_FAMILY_LABELS: Record<string, string> = {
   codex: 'Codex',
   claude_code: 'Claude Code',
   gemini_cli: 'Gemini CLI',
-  generic: '通用',
+  generic: tr('通用'),
 };
 
 export function formatProxyLogClientFamilyLabel(
@@ -630,7 +630,7 @@ export function parseStoredDebugPreview(value: unknown): {
         note:
           originalBytes > 0 && storedBytes > 0
             ? `内容已截断展示，原始 ${originalBytes} bytes，当前保留 ${storedBytes} bytes。复制按钮会复制当前数据库里保存的内容。`
-            : '内容已截断展示。复制按钮会复制当前数据库里保存的内容。',
+            : tr('内容已截断展示。复制按钮会复制当前数据库里保存的内容。'),
       };
     }
   } catch {

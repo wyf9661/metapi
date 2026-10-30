@@ -289,7 +289,7 @@ export default function ProxyLogs() {
   }, [downstreamKeyOptions]);
 
   const activeSiteLabel = useMemo(() => {
-    if (!siteFilter) return '全部站点';
+    if (!siteFilter) return tr('全部站点');
     return (
       siteOptions.find((option) => option.value === String(siteFilter))
         ?.label || `站点 #${siteFilter}`
@@ -490,7 +490,7 @@ export default function ProxyLogs() {
         }));
       } catch (e) {
         const eMessage = e instanceof Error ? e.message : String(e);
-        const message = eMessage || '加载日志详情失败';
+        const message = eMessage || tr('加载日志详情失败');
         setDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -544,7 +544,7 @@ export default function ProxyLogs() {
         }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const message = errorMessage || '加载调试追踪详情失败';
+        const message = errorMessage || tr('加载调试追踪详情失败');
         setDebugDetailById((current) => ({
           ...current,
           [id]: { loading: false, error: message },
@@ -712,7 +712,7 @@ export default function ProxyLogs() {
 
   const handleSaveDebugSettings = useCallback(async () => {
     await persistDebugSettings(debugDraftSettings, {
-      successMessage: '代理调试设置已保存',
+      successMessage: tr('代理调试设置已保存'),
       closeAfterSave: true,
     });
   }, [debugDraftSettings, persistDebugSettings]);
@@ -726,7 +726,7 @@ export default function ProxyLogs() {
       {
         successMessage: debugSettings.proxyDebugTraceEnabled
           ? tr('代理调试追踪已关闭')
-          : '代理调试追踪已开启',
+          : tr('代理调试追踪已开启'),
       },
     );
   }, [debugSettings, persistDebugSettings]);
@@ -1195,7 +1195,7 @@ export default function ProxyLogs() {
             value={
               latestDebugTrace
                 ? formatDateTimeLocal(latestDebugTrace.createdAt)
-                : '暂无'
+                : tr('暂无')
             }
           />
         </div>
@@ -1246,7 +1246,7 @@ export default function ProxyLogs() {
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {debugSettings.proxyDebugTraceEnabled
                   ? tr('开启中，结果会自动刷新')
-                  : '尚未开启'}
+                  : tr('尚未开启')}
               </div>
             </div>
 
@@ -1272,7 +1272,7 @@ export default function ProxyLogs() {
               >
                 {debugSettings.proxyDebugTraceEnabled
                   ? tr('暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。')
-                  : '调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。'}
+                  : tr('调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。')}
               </div>
             ) : isMobile ? (
               <div className="mobile-card-list">
@@ -2221,7 +2221,7 @@ export default function ProxyLogs() {
                                       >
                                         {detailLog.status === 'success'
                                           ? tr('成功')
-                                          : '失败'}
+                                          : tr('失败')}
                                       </strong>
                                       {streamModeLabel && (
                                         <>
@@ -2272,7 +2272,7 @@ export default function ProxyLogs() {
                                                 'var(--color-text-primary)',
                                             }}
                                           >
-                                            {detailLog.siteName || '未知站点'}
+                                            {detailLog.siteName || tr('未知站点')}
                                           </strong>
                                           ，账号:{' '}
                                           <strong
@@ -2281,7 +2281,7 @@ export default function ProxyLogs() {
                                                 'var(--color-text-primary)',
                                             }}
                                           >
-                                            {detailLog.username || '未知账号'}
+                                            {detailLog.username || tr('未知账号')}
                                           </strong>
                                           {detailLog.tokenName ? (
                                             <>
@@ -2352,18 +2352,18 @@ export default function ProxyLogs() {
                                       <div>{tr('推理强度：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {detailLog.reasoningEffort
                                             ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
-                                            : '未指定'}
+                                            : tr('未指定')}
                                         </strong>
                                       </div>
                                       <div>{tr('用量来源：')}<strong style={{ color: 'var(--color-text-primary)' }}>
                                           {formatProxyLogUsageSource(
                                             detailLog.usageSource ??
                                               pathMeta.usageSource,
-                                          ) || '未知'}
+                                          ) || tr('未知')}
                                         </strong>
                                       </div>
                                       <div>{tr('密钥：')}<strong style={{ color: 'var(--color-text-primary)' }}>
-                                          {detailLog.downstreamKeyName || '未记录'}
+                                          {detailLog.downstreamKeyName || tr('未记录')}
                                         </strong>
                                         {detailLog.downstreamKeyGroupName
                                           ? `，主分组: ${detailLog.downstreamKeyGroupName}`

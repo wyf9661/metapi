@@ -380,14 +380,14 @@ export default function TokenRoutes() {
           if (status === 'succeeded') {
             toastRef.current.success('路由选择概率已刷新');
           } else {
-            toastRef.current.error(String(task.message || task.error || '刷新路由选择概率失败'));
+            toastRef.current.error(String(task.message || task.error || tr('刷新路由选择概率失败')));
           }
           return;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (!mountedRef.current || decisionRefreshWatchSeqRef.current !== watchSeq) return;
           setLoadingDecision(false);
-          toastRef.current.error(errorMessage || '刷新路由选择概率失败');
+          toastRef.current.error(errorMessage || tr('刷新路由选择概率失败'));
           return;
         }
       }
@@ -1097,9 +1097,9 @@ export default function TokenRoutes() {
           <>{tr('移除的通道会在定时模型刷新时被自动重建恢复，但')}<strong>{tr('它的累计统计（成功/失败、成本、冷却）会丢失')}</strong>{tr('， 重建出来的是全新的一条。')}<br />{tr('想恢复系统默认配置、又保留统计，请用')}<strong>{tr('「恢复默认」')}</strong>{tr('；只是临时停用则用')}<strong>{tr('禁用开关')}</strong>。
           </>
         ),
-        confirmText: '确认移除',
+        confirmText: tr('确认移除'),
         tone: 'danger',
-        dismissLabel: '以后不再提示',
+        dismissLabel: tr('以后不再提示'),
       });
       if (!result.confirmed) return;
       if (result.dismissChecked) localStorage.setItem(dismissedKey, 'true');
@@ -1124,7 +1124,7 @@ export default function TokenRoutes() {
         <>{tr('将清除该通道的手动配置（优先级、权重、启用状态、来源模型、绑定令牌、请求改写规则）， 交回系统按当前账号与模型重新派生。')}<br />
           <strong>{tr('累计统计（成功/失败、成本、延迟、冷却）会保留')}</strong>{tr('，通道也不会被移除。')}</>
       ),
-      confirmText: '恢复默认',
+      confirmText: tr('恢复默认'),
       tone: 'warning',
     });
     if (!confirmed.confirmed) return;
@@ -1272,7 +1272,7 @@ export default function TokenRoutes() {
       toast.error(tr('该通道没有精确模型名，无法屏蔽（通配符路由请在账号的模型列表里手动禁用）'));
       return;
     }
-    const siteName = channel.site.name || '未知站点';
+    const siteName = channel.site.name || tr('未知站点');
     const accountId = channel.accountId;
     const accountLabel = channel.account?.username || `account-${accountId}`;
     const result = await requestConfirmation({
@@ -1280,7 +1280,7 @@ export default function TokenRoutes() {
       description: (
         <>{tr('将模型「')}<strong>{modelName}</strong>{tr('」加入账号「')}<strong>{accountLabel}</strong>」（站点 {siteName}）的禁用列表。<br />{tr('执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。')}</>
       ),
-      confirmText: '确认屏蔽',
+      confirmText: tr('确认屏蔽'),
       tone: 'warning',
     });
     if (!result.confirmed) return;
@@ -2227,7 +2227,7 @@ export default function TokenRoutes() {
             <div className="empty-state-desc">
               {routeSummaries.length === 0
                 ? tr('点击"自动重建"可按当前模型可用性生成路由。')
-                : '请调整品牌筛选、搜索词或排序条件。'}
+                : tr('请调整品牌筛选、搜索词或排序条件。')}
             </div>
           </div>
         </div>
