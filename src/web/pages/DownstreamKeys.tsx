@@ -7,6 +7,7 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js';
 import PaginationControls from '../components/PaginationControls.js';
+import ListPage from '../components/ListPage.js';
 import { resolveClientPagination } from '../components/clientPagination.js';
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
@@ -1034,21 +1035,29 @@ export default function DownstreamKeys() {
   const empty = !loading && !loadError && visibleItems.length === 0;
 
   return (
-    <div className="animate-fade-in" style={{ padding: 16, paddingBottom: (selectedIds.length > 0 && isMobile) ? 92 : 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="page-header" style={{ marginBottom: 0 }}>
-        <div>
-          <h2 className="page-title">{tr('下游密钥')}</h2>
-          <div className="page-subtitle">{tr('统一管理分发给下游项目的密钥、主分组、标签、额度、模型白名单、群组范围与历史用量。')}</div>
-        </div>
-        <div className="page-actions">
+    <>
+    <ListPage
+      className="downstream-keys-page"
+      style={{ padding: 16, paddingBottom: (selectedIds.length > 0 && isMobile) ? 92 : 16, display: 'flex', flexDirection: 'column', gap: 12 }}
+      title={tr('下游密钥')}
+      subtitle={tr('统一管理分发给下游项目的密钥、主分组、标签、额度、模型白名单、群组范围与历史用量。')}
+      actions={
+        <>
           <RangeToggle range={range} onChange={setRange} />
           <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void load()} disabled={loading}>
             {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>{tr('+ 新增下游密钥')}</button>
-        </div>
-      </div>
-
+        </>
+      }
+      loading={loading && visibleItems.length === 0 && !loadError}
+      isEmpty={empty || !!loadError}
+      emptyTitle={loadError ? tr('加载下游密钥失败') : tr('暂无下游密钥')}
+      emptyDesc={loadError
+        ? <>{loadError}<div style={{ marginTop: 12 }}><button type="button" className="btn btn-primary" onClick={() => void load()}>{tr('重试')}</button></div></>
+        : tr('可以先新增一条密钥，或调整筛选条件查看已有数据。')}
+      beforeList={
+        <>
       <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
@@ -1120,21 +1129,11 @@ export default function DownstreamKeys() {
             desktopContent={filterControls}
           />
         </div>
-
-        {loading && visibleItems.length === 0 ? (
-          <div className="skeleton" style={{ width: '100%', height: 280, borderRadius: 'var(--radius-sm)' }} />
-        ) : loadError ? (
-          <div className="empty-state" style={{ padding: 40 }}>
-            <div className="empty-state-title">{tr('加载下游密钥失败')}</div>
-            <div className="empty-state-desc">{loadError}</div>
-            <button type="button" className="btn btn-primary" onClick={() => void load()}>{tr('重试')}</button>
-          </div>
-        ) : empty ? (
-          <div className="empty-state" style={{ padding: 40 }}>
-            <div className="empty-state-title">{tr('暂无下游密钥')}</div>
-            <div className="empty-state-desc">{tr('可以先新增一条密钥，或调整筛选条件查看已有数据。')}</div>
-          </div>
-        ) : isMobile ? (
+      </div>
+        </>
+      }
+    >
+        {isMobile ? (
           <div className="mobile-card-list">
             {pagedItems.map((row) => {
               const loadingToggle = !!rowLoading[`toggle-${row.id}`];
@@ -1284,7 +1283,7 @@ export default function DownstreamKeys() {
           onPageChange={setPage}
           visible={!loading && !loadError && visibleItems.length > 0}
         />
-      </div>
+    </ListPage>
 
       <DownstreamKeyEditorModal
         open={editorOpen}
@@ -1381,6 +1380,6 @@ export default function DownstreamKeys() {
         item={selectedItem}
         initialRange={range}
       />
-    </div>
+    </>
   );
 }
