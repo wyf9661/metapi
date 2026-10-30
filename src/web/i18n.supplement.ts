@@ -1601,6 +1601,10 @@ export const zhToEnSupplemental: Record<string, string> = {
   '⚠ 上游返回了疑似二进制/压缩数据': '⚠ Upstream returned what looks like binary/compressed data',
   '个），可能未正常解码。': '), possibly not decoded correctly.',
   '查看原始数据': 'View raw data',
+  '日请求': 'Daily requests',
+  '；已覆盖：': '; covered: ',
+  '并验证': ' and verify',
+  '已加入该 key 的禁用列表': 'added to this key\'s disabled list',
 
 
 

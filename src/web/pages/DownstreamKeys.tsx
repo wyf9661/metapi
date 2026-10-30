@@ -1182,8 +1182,8 @@ export default function DownstreamKeys() {
                   <MobileField label={tr('模型')} value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label={tr('群组')} value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
                   <MobileField label={tr('倍率')} value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
-                  <MobileField label={tr('额度')} value={[row.maxRequests == null ? tr('不限') : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `日请求 ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? tr('成本不限') : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
-                  <MobileField label={tr('用量')} value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
+                  <MobileField label={tr('额度')} value={[row.maxRequests == null ? tr('不限') : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `${tr('日请求')} ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? tr('成本不限') : `${tr('成本')} ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
+                  <MobileField label={tr('用量')} value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} ${tr('请求')} · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
                   <MobileField label={tr('最近使用')} value={formatIso(row.lastUsedAt)} stacked />
                 </MobileCard>
               );
@@ -1253,7 +1253,7 @@ export default function DownstreamKeys() {
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>
                         <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{row.maxRequests == null ? tr('不限') : row.maxRequests.toLocaleString()}</div>
                         {row.maxRpm != null && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{row.maxRpm} RPM</div>}
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? tr('成本不限') : `成本 ${formatMoney(row.maxCost)}`}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? tr('成本不限') : `${tr('成本')} ${formatMoney(row.maxCost)}`}</div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.expiresAt ? `${tr('到期')} ${formatIso(row.expiresAt)}` : tr('永久有效')}</div>
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>

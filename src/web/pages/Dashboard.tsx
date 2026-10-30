@@ -934,7 +934,7 @@ export default function Dashboard({
             </li>
             <li>
               {totalAccounts === 0 ? (
-                <><strong>{tr('添加账号凭证')}</strong>(API Key 或 Session)并验证 → <Link to="/sites">{tr('站点连接')}</Link></>
+                <><strong>{tr('添加账号凭证')}</strong>(API Key {tr('或')} Session){tr('并验证')} → <Link to="/sites">{tr('站点连接')}</Link></>
               ) : (
                 <span style={{ color: 'var(--color-text-muted)' }}>{tr('✓ 已有账号')}</span>
               )}

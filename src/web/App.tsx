@@ -20,6 +20,8 @@ import { useAnimatedVisibility } from './components/useAnimatedVisibility.js';
 import { useIsMobile } from './components/useIsMobile.js';
 import { MobileDrawer } from './components/MobileDrawer.js';
 import CenteredModal from './components/CenteredModal.js';
+// Stored default profile name: compared against, never translated.
+const DEFAULT_PROFILE_NAME = '管理员';
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const Sites = lazy(() => import('./pages/Sites.js'));
 const SiteDetail = lazy(() => import('./pages/SiteDetail.js'));
@@ -476,7 +478,8 @@ function AppShell() {
     ? (systemPrefersDark ? 'dark' : 'light')
     : themeMode;
   const rawDisplayName = (userProfile.name || '').trim();
-  const displayName = rawDisplayName ? (rawDisplayName === '管理员' ? t('管理员') : rawDisplayName) : t('管理员');
+  // '管理员' is the stored default name; translate only for display.
+  const displayName = rawDisplayName ? (rawDisplayName === DEFAULT_PROFILE_NAME ? t('管理员') : rawDisplayName) : t('管理员');
   const resolvedThemeLabel = resolvedTheme === 'dark' ? t('深色') : t('浅色');
   const avatarColor = avatarColorFor(userProfile.name);
   const avatarInitial = avatarInitialFor(userProfile.name);

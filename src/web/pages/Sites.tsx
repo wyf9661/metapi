@@ -749,7 +749,7 @@ export default function Sites() {
             addLog(`${s}${lat}  ${d.modelName}${reasonText ? `  —  ${reasonText}` : ''}`, c);
             setTimeout(() => probeLogEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (type === 'action') {
-            if (d.action === 'disabled') addLog(`  ↳ 已加入该 key 的禁用列表: ${d.modelName}`, 'var(--color-text-muted)');
+            if (d.action === 'disabled') addLog(`  ↳ ${tr('已加入该 key 的禁用列表')}: ${d.modelName}`, 'var(--color-text-muted)');
           } else if (type === 'complete') {
             const inconclusiveCount = Number(d.inconclusive || 0);
             if (d.unsupported > 0) {
