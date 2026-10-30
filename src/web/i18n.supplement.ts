@@ -1593,6 +1593,14 @@ export const zhToEnSupplemental: Record<string, string> = {
   '附件': 'Attachments',
   '到期': 'Expires',
   '永久有效': 'Never expires',
+  '替换字符': 'replacement characters',
+  '个，控制字符': ', control characters',
+  '可读片段：': 'Readable snippet: ',
+  '字符': 'characters',
+  '实际模型': 'Actual model',
+  '⚠ 上游返回了疑似二进制/压缩数据': '⚠ Upstream returned what looks like binary/compressed data',
+  '个），可能未正常解码。': '), possibly not decoded correctly.',
+  '查看原始数据': 'View raw data',
 
 
 

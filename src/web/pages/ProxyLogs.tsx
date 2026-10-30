@@ -2199,7 +2199,7 @@ export default function ProxyLogs() {
                                         detailLog.modelActual !==
                                           detailLog.modelRequested && (
                                           <>
-                                            {' -> tr('}实际模型:{') '}
+                                            {'→'} {tr('实际模型')}{':'}
                                             <strong
                                               style={{
                                                 color:
@@ -2444,7 +2444,7 @@ export default function ProxyLogs() {
                                     </div>
                                   ) : (
                                     <span>
-                                      输入{' '}
+                                      {tr('输入')}{' '}
                                       {formatProxyLogTokenValue(
                                         detailLog.promptTokens,
                                       )}{' '}

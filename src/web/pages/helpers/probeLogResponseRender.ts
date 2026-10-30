@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import katex from 'katex';
 import { sanitizeRichHtml } from './siteAnnouncementPresentation.js';
+import { tr } from '../../i18n.js';
 
 // LaTeX 公式占位符前缀，用于在 marked 渲染前后安全传递。
 const KATEX_DISPLAY = '%%KATEX_DISPLAY_';
@@ -111,9 +112,9 @@ export function renderProbeResponseText(raw: string | null | undefined): string 
     const escapedSnippet = readableSnippets.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return (
       '<div class="probe-binary-notice">'
-      + `<div class="probe-binary-hint">⚠ 上游返回了疑似二进制/压缩数据（替换字符 ${replacementCharCount} 个，控制字符 ${controlCharCount} 个），可能未正常解码。</div>`
-      + (readableSnippets ? `<div class="probe-binary-snippet">可读片段：${escapedSnippet}</div>` : '')
-      + `<details class="probe-binary-details"><summary>查看原始数据（${text.length} 字符）</summary><pre class="probe-binary-raw">${escapedRaw}</pre></details>`
+      + `<div class="probe-binary-hint">${tr('⚠ 上游返回了疑似二进制/压缩数据')}（${tr('替换字符')} ${replacementCharCount} ${tr('个，控制字符')} ${controlCharCount} ${tr('个），可能未正常解码。')}</div>`
+      + (readableSnippets ? `<div class="probe-binary-snippet">${tr('可读片段：')}${escapedSnippet}</div>` : '')
+      + `<details class="probe-binary-details"><summary>${tr('查看原始数据')}（${text.length} ${tr('字符')}）</summary><pre class="probe-binary-raw">${escapedRaw}</pre></details>`
       + '</div>'
     );
   }
