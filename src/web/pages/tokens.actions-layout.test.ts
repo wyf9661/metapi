@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readAllCss } from '../styles/readStyles.js';
 
 function cssRule(css: string, selector: string): string {
   const marker = `${selector} {`;
@@ -12,7 +13,7 @@ function cssRule(css: string, selector: string): string {
 }
 
 describe('Inventory table actions layout', () => {
-  const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+  const css = readAllCss();
   const sites = readFileSync(resolve(process.cwd(), 'src/web/pages/Sites.tsx'), 'utf8');
   const tokens = readFileSync(resolve(process.cwd(), 'src/web/pages/tokens/TokensPanel.tsx'), 'utf8');
   const accounts = readFileSync(resolve(process.cwd(), 'src/web/pages/Accounts.tsx'), 'utf8');

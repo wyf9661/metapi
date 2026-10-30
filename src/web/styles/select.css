@@ -1,0 +1,259 @@
+/* ===== Modern Select ===== */
+.modern-select {
+  position: relative;
+  width: 100%;
+}
+
+.modern-select-trigger {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-inset);
+  color: var(--color-text-primary);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.modern-select.is-sm .modern-select-trigger {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.modern-select-trigger:hover {
+  border-color: rgba(13,148,136, 0.45);
+}
+
+.modern-select-value {
+  font-size: 13px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modern-select-value-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.modern-select-value.is-placeholder {
+  color: var(--color-text-muted);
+}
+
+.modern-select.is-sm .modern-select-value {
+  font-size: 12px;
+}
+
+.modern-select-chevron {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), color 0.2s ease;
+}
+
+.modern-select.is-open .modern-select-chevron {
+  transform: rotate(180deg);
+  color: var(--color-primary);
+}
+
+.modern-select.is-open .modern-select-trigger {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(13,148,136, 0.16);
+  transform: translateY(-1px);
+}
+
+.modern-select.is-disabled .modern-select-trigger {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modern-select-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 160;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-sm) + 2px);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  overflow: auto;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  display: none;
+}
+
+.modern-select.is-open .modern-select-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+  display: block;
+}
+
+/* Drop-up variant: panel opens above the trigger. Used where the select sits
+   near the bottom of the viewport (e.g. the pagination page-size picker), so
+   opening it does not push the page taller. */
+.modern-select.drop-up .modern-select-panel {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateY(6px) scale(0.98);
+}
+
+.modern-select.drop-up.is-open .modern-select-panel {
+  transform: translateY(0) scale(1);
+}
+
+.modern-select.drop-up.is-open .modern-select-chevron {
+  transform: rotate(180deg);
+}
+
+.modern-select-search-shell {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  padding: 0 0 6px;
+  margin: -6px -6px 6px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.modern-select-search-input {
+  width: calc(100% - 12px);
+  margin: 6px;
+  min-height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-inset);
+  color: var(--color-text-primary);
+  padding: 0 10px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modern-select-search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(13,148,136, 0.12);
+}
+
+.modern-select-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.modern-select-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.modern-select-option-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.modern-select-option-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.modern-select-option-icon-text {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.modern-select.is-sm .modern-select-option {
+  padding: 6px 8px;
+}
+
+.modern-select-option:hover {
+  background: rgba(13,148,136, 0.1);
+  transform: translateX(2px);
+}
+
+.modern-select-option.is-active {
+  background: rgba(13,148,136, 0.14);
+  color: #1d4ed8;
+}
+
+.modern-select-option.is-disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.modern-select-option.is-disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+.modern-select-option-label {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.modern-select.is-sm .modern-select-option-label {
+  font-size: 12px;
+}
+
+.modern-select-option-desc {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.modern-select-empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 10px 8px;
+}
+
+[data-theme="dark"] .modern-select-trigger:hover {
+  border-color: rgba(45,212,191, 0.55);
+}
+
+[data-theme="dark"] .modern-select.is-open .modern-select-trigger {
+  box-shadow: 0 0 0 3px rgba(45,212,191, 0.2);
+}
+
+[data-theme="dark"] .modern-select-option:hover {
+  background: rgba(45,212,191, 0.18);
+}
+
+[data-theme="dark"] .modern-select-option.is-active {
+  background: rgba(45,212,191, 0.24);
+  color: #c3d9f2;
+}

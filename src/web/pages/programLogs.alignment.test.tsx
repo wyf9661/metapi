@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readAllCss } from '../styles/readStyles.js';
 
 describe('Program logs table alignment', () => {
   it('aligns the program logs table cells left like the rest of the data tables', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+    const css = readAllCss();
 
     // The program-logs-table may tune spacing (row height), but it must not
     // override the global data-table left alignment for header or body cells.

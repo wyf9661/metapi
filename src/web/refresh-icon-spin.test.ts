@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readAllCss } from './styles/readStyles.js';
 
 // The refresh icons render mirrored: scaleX(-1) is baked into every
 // spin-mirrored keyframe so mirror+rotation stay on ONE transform channel
@@ -11,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 // regression). Applies to the Dashboard / ProxyLogs refresh icons.
 describe('refresh icon spin direction', () => {
   it('spin-mirrored sweeps negative angles so the mirrored icon spins clockwise', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+    const css = readAllCss();
     const start = css.indexOf('@keyframes spin-mirrored');
     expect(start).toBeGreaterThan(-1);
     const end = css.indexOf('@keyframes', start + '@keyframes spin-mirrored'.length);

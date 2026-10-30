@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readAllCss } from '../styles/readStyles.js';
 
 function findRuleValue(source: string, selector: string, property: string): number | null {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -17,7 +18,7 @@ function findRuleValue(source: string, selector: string, property: string): numb
 
 describe('Mobile actions bar styles', () => {
   it('keeps overlay layers above the mobile batch bar', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+    const css = readAllCss();
     const batchBarZIndex = findRuleValue(css, '.mobile-actions-bar', 'z-index');
     const modalBackdropZIndex = findRuleValue(css, '.modal-backdrop', 'z-index');
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readAllCss } from '../styles/readStyles.js';
 
 describe('CenteredModal width', () => {
   it('applies the maxWidth prop through inline width instead of being capped by the global 500px rule', () => {
@@ -11,7 +12,7 @@ describe('CenteredModal width', () => {
   });
 
   it('keeps the responsive mobile override intact in the stylesheet', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+    const css = readAllCss();
     expect(css).toMatch(/\.modal-content\s*\{[^}]*width:\s*min\(90vw,\s*500px\)/s);
   });
 });
