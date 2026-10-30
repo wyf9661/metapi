@@ -102,7 +102,7 @@ export function SortableChannelRow({
               marginTop: 2,
               ...dragHandleStyle,
             }}
-            data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
+            data-tooltip={suppressTooltips ? undefined : (managementLocked ? tr('该路由当前不可编辑优先级') : tr('拖拽调整优先级桶'))}
             aria-label={tr('拖拽调整优先级桶')}
           >
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
@@ -179,7 +179,7 @@ export function SortableChannelRow({
                     color: 'var(--color-text-primary)',
                     fontWeight: 600,
                   }}
-                  data-tooltip={suppressTooltips ? undefined : '该通道连续失败多次，已被暂时冷却。冷却结束后会自动恢复。可点击"清除路由冷却"提前解除。'}
+                  data-tooltip={suppressTooltips ? undefined : tr('该通道连续失败多次，已被暂时冷却。冷却结束后会自动恢复。可点击"清除路由冷却"提前解除。')}
                 >
                   冷却中
                   {' '}
@@ -200,7 +200,7 @@ export function SortableChannelRow({
               {channel.manualOverride ? (
                 <StatusPill tone="warning"
                   style={{ fontSize: 10 }}
-                  data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
+                  data-tooltip={suppressTooltips ? undefined : tr('该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）')}
                 >{tr('手动配置')}</StatusPill>
               ) : null}
 
@@ -253,7 +253,7 @@ export function SortableChannelRow({
                   onClick={() => setMobileDetailsOpen((current) => !current)}
                   style={{ marginLeft: 'auto' }}
                 >
-                  {mobileDetailsOpen ? '收起配置' : '配置通道'}
+                  {mobileDetailsOpen ? tr('收起配置') : tr('配置通道')}
                 </button>
               )}
             </div>
@@ -291,14 +291,14 @@ export function SortableChannelRow({
                     disabled={isUpdatingToken}
                     className="btn btn-link btn-link-info"
                   >
-                    {isUpdatingToken ? <span className="spinner spinner-sm" /> : '保存'}
+                    {isUpdatingToken ? <span className="spinner spinner-sm" /> : tr('保存')}
                   </button>
 
                   <button
                     onClick={() => onToggleEnabled(channel.enabled === false)}
                     className={`btn btn-link ${channel.enabled === false ? 'btn-link-info' : 'btn-link-warning'}`}
                   >
-                    {channel.enabled === false ? '启用' : '禁用'}
+                    {channel.enabled === false ? tr('启用') : tr('禁用')}
                   </button>
 
                   {onSiteBlockModel && channel.accountId ? (
@@ -314,7 +314,7 @@ export function SortableChannelRow({
                     <button
                       onClick={onResetChannel}
                       className="btn btn-link"
-                      data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
+                      data-tooltip={suppressTooltips ? undefined : tr('清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留')}
                     >{tr('恢复默认')}</button>
                   ) : null}
 
@@ -341,7 +341,7 @@ export function SortableChannelRow({
           disabled={isSavingPriority || managementLocked}
           className="btn btn-ghost"
           style={dragHandleStyle}
-          data-tooltip={suppressTooltips ? undefined : (managementLocked ? '该路由当前不可编辑优先级' : '拖拽调整优先级桶')}
+          data-tooltip={suppressTooltips ? undefined : (managementLocked ? tr('该路由当前不可编辑优先级') : tr('拖拽调整优先级桶'))}
           aria-label={tr('拖拽调整优先级桶')}
         >
           <svg width="12" height="12" fill="currentColor" viewBox="0 0 12 12" aria-hidden>
@@ -421,7 +421,7 @@ export function SortableChannelRow({
         {channel.manualOverride ? (
           <StatusPill tone="warning"
             style={{ fontSize: 10 }}
-            data-tooltip={suppressTooltips ? undefined : '该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）'}
+            data-tooltip={suppressTooltips ? undefined : tr('该通道已被手动配置，系统不会自动重建覆盖；可点击「恢复默认」清除手动配置（统计保留）')}
           >{tr('手动配置')}</StatusPill>
         ) : null}
 
@@ -510,16 +510,16 @@ export function SortableChannelRow({
               disabled={isUpdatingToken}
               className="btn btn-link btn-link-info"
             >
-              {isUpdatingToken ? <span className="spinner spinner-sm" /> : '保存'}
+              {isUpdatingToken ? <span className="spinner spinner-sm" /> : tr('保存')}
             </button>
           </div>
 
           <button
             onClick={() => onToggleEnabled(channel.enabled === false)}
             className={`btn btn-link ${channel.enabled === false ? 'btn-link-info' : 'btn-link-warning'}`}
-            data-tooltip={suppressTooltips ? undefined : (channel.enabled === false ? '启用此通道' : '禁用此通道')}
+            data-tooltip={suppressTooltips ? undefined : (channel.enabled === false ? tr('启用此通道') : tr('禁用此通道'))}
           >
-            {channel.enabled === false ? '启用' : '禁用'}
+            {channel.enabled === false ? tr('启用') : tr('禁用')}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -527,7 +527,7 @@ export function SortableChannelRow({
               <button
                 onClick={onResetChannel}
                 className="btn btn-link"
-                data-tooltip={suppressTooltips ? undefined : '清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留'}
+                data-tooltip={suppressTooltips ? undefined : tr('清除该通道的手动配置，恢复为系统派生的默认状态；累计统计会保留')}
               >{tr('恢复默认')}</button>
             ) : null}
 
@@ -535,7 +535,7 @@ export function SortableChannelRow({
               <button
                 onClick={onSiteBlockModel}
                 className="btn btn-link btn-link-warning"
-                data-tooltip={suppressTooltips ? undefined : `将此模型加入该账号（站点「${channel.site?.name || '未知'}」）的禁用列表，rebuild 后该账号的此模型通道将不再生成，同站点其他账号不受影响`}
+                data-tooltip={suppressTooltips ? undefined : `将此模型加入该账号（站点「${channel.site?.name || tr('未知')}」）的禁用列表，rebuild 后该账号的此模型通道将不再生成，同站点其他账号不受影响`}
               >
                 {tr('屏蔽模型')}
               </button>

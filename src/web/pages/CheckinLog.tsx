@@ -233,7 +233,7 @@ export default function CheckinLog() {
         className="btn btn-ghost proxy-logs-filter-reset"
         onClick={clearTimeRange}
         disabled={!hasActiveTimeRange}
-        title={hasActiveTimeRange ? '清空时间筛选' : '当前没有筛选条件'}
+        title={hasActiveTimeRange ? tr('清空时间筛选') : tr('当前没有筛选条件')}
       >
         {tr('清空筛选')}
       </button>
@@ -349,7 +349,7 @@ export default function CheckinLog() {
               return (
                 <MobileCard
                   key={logId}
-                  title={log.accounts?.username || '未知'}
+                  title={log.accounts?.username || tr('未知')}
                   headerActions={
                     <StatusText
                       badgeClass={statusClass(status)}
@@ -366,7 +366,7 @@ export default function CheckinLog() {
                         setExpandedLogId(isExpanded ? null : logId)
                       }
                     >
-                      {isExpanded ? '收起' : '详情'}
+                      {isExpanded ? tr('收起') : tr('详情')}
                     </button>
                   }
                 >
@@ -468,7 +468,7 @@ export default function CheckinLog() {
                         color: 'var(--color-text-primary)',
                       }}
                     >
-                      {log.accounts?.username || '未知'}
+                      {log.accounts?.username || tr('未知')}
                     </td>
                     <td>
                       {log.sites?.url ? (

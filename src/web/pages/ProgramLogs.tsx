@@ -203,7 +203,7 @@ export default function ProgramLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
+            {refreshing ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button
             onClick={markAllRead}
@@ -211,14 +211,14 @@ export default function ProgramLogs() {
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : '全部已读'}
+            {markingAll ? <><span className="spinner spinner-sm" /> {tr('标记中...')}</> : tr('全部已读')}
           </button>
           <button
             onClick={clearAll}
             disabled={clearing}
             className="btn btn-link btn-link-danger"
           >
-            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空日志'}
+            {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : tr('清空日志')}
           </button>
           </>
         }
@@ -322,7 +322,7 @@ export default function ProgramLogs() {
                         disabled={!!rowLoading[row.id]}
                         className="btn btn-link btn-link-primary"
                       >
-                        {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : '标记已读'}
+                        {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : tr('标记已读')}
                       </button>
                     )
                   )}
@@ -401,7 +401,7 @@ export default function ProgramLogs() {
                             disabled={!!rowLoading[row.id]}
                             className="btn btn-link btn-link-primary"
                           >
-                            {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : '标记已读'}
+                            {rowLoading[row.id] ? <span className="spinner spinner-sm" /> : tr('标记已读')}
                           </button>
                         )}
                       </div>

@@ -327,7 +327,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       typeof account?.username === 'string' ? account.username.trim() : '';
     if (username) return username;
     return resolveAccountCredentialMode(account) === 'apikey'
-      ? 'API Key 连接'
+      ? tr('API Key 连接')
       : '未命名';
   };
 
@@ -501,7 +501,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           );
         } else {
           toast.success(
-            `Session 验证成功: ${result.userInfo?.username || '未知用户'}`,
+            `Session 验证成功: ${result.userInfo?.username || tr('未知用户')}`,
           );
         }
       } else {
@@ -565,7 +565,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           ? result.items.filter((item: any) => item?.status === 'failed')
           : [];
         if (failedItems.length > 0) {
-          const firstMessage = failedItems[0]?.message || '创建失败';
+          const firstMessage = failedItems[0]?.message || tr('创建失败');
           toast.error(`失败 ${failedItems.length} 条：${firstMessage}`);
         }
         load(true);
@@ -886,7 +886,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       return {
         ...runtimeHealthMap.unhealthy,
         label: tr('已过期'),
-        reason: account.runtimeHealth?.reason || '连接凭证已过期，请更新凭证',
+        reason: account.runtimeHealth?.reason || tr('连接凭证已过期，请更新凭证'),
       };
     }
     const capabilities = resolveAccountCapabilities(account);
@@ -901,9 +901,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     const reason =
       account.runtimeHealth?.reason ||
       (state === 'disabled'
-        ? '账号或站点已禁用'
+        ? tr('账号或站点已禁用')
         : state === 'unhealthy'
-          ? '最近健康检查失败'
+          ? tr('最近健康检查失败')
           : '尚未获取运行健康信息');
     return { state, reason, ...cfg };
   };
@@ -952,7 +952,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     try {
       await api.updateAccount(account.id, { checkinEnabled: nextEnabled });
       toast.success(
-        nextEnabled ? '已开启签到' : '已关闭签到（全部签到会忽略此账号）',
+        nextEnabled ? tr('已开启签到') : tr('已关闭签到（全部签到会忽略此账号）'),
       );
       load(true);
     } catch (e) {
@@ -1501,9 +1501,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             onClose={closeAddPanel}
             title={
               activeSegment === 'apikey'
-                ? '添加 API Key 连接'
+                ? tr('添加 API Key 连接')
                 : addMode === 'login'
-                  ? '账号密码登录'
+                  ? tr('账号密码登录')
                   : '添加 Session 连接'
             }
             maxWidth={860}
@@ -1800,7 +1800,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <div>
                               用户名:{' '}
                               <strong>
-                                {verifyResult.userInfo?.username || '未知'}
+                                {verifyResult.userInfo?.username || tr('未知')}
                               </strong>
                             </div>
                             {verifyResult.balance && (
@@ -2111,7 +2111,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   >
                     已识别 {parsedApiKeys.length} 个 API Key
                     {isBatchApiKeyInput
-                      ? '，添加时会逐条创建同站点连接并参与轮询'
+                      ? tr('，添加时会逐条创建同站点连接并参与轮询')
                       : ''}
                   </div>
                 )}
@@ -2265,7 +2265,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     style={{ fontSize: 12, color: 'var(--color-text-muted)' }}
                   >
                     {isBatchApiKeyInput
-                      ? '批量模式下无需先点验证，提交后会逐条校验并创建。'
+                      ? tr('批量模式下无需先点验证，提交后会逐条校验并创建。')
                       : addAccountPrereqHint}
                   </div>
                 )}
@@ -2319,7 +2319,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     const isExpanded = expandedAccountIds.includes(a.id);
                     const hintMessage =
                       a.status === 'expired' && !capabilities.proxyOnly
-                        ? '账号已过期，请重新绑定'
+                        ? tr('账号已过期，请重新绑定')
                         : health.reason || '-';
                     return (
                       <SortableAccountMobileCard
@@ -2338,7 +2338,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               onClick={() => toggleAccountDetails(a.id)}
                               className="btn btn-link"
                             >
-                              {isExpanded ? '收起' : '详情'}
+                              {isExpanded ? tr('收起') : tr('详情')}
                             </button>
                             <button
                               onClick={() => openEditPanel(a)}
@@ -2444,7 +2444,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               label={tr('账号状态')}
                               value={
                                 a.status === 'expired'
-                                  ? '已过期'
+                                  ? tr('已过期')
                                   : a.status || '-'
                               }
                             />
@@ -2813,16 +2813,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 </svg>
                 <div className="empty-state-title">
                   {activeSegment === 'apikey'
-                    ? '暂无 API Key 连接'
+                    ? tr('暂无 API Key 连接')
                     : '暂无 Session 连接'}
                 </div>
                 <div className="empty-state-desc">
                   {activeSegment === 'apikey'
                     ? sites.length > 0
-                      ? '请为现有站点补充 API Key 连接'
+                      ? tr('请为现有站点补充 API Key 连接')
                       : '请先添加站点，然后为站点补充 API Key 连接'
                     : sites.length > 0
-                      ? '请为现有站点添加 Session 连接'
+                      ? tr('请为现有站点添加 Session 连接')
                       : '请先添加站点，然后添加 Session 连接'}
                 </div>
               </div>

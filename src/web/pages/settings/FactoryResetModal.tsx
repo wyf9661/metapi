@@ -28,7 +28,7 @@ export default function FactoryResetModal({
   }
 
   const confirmLabel = factoryResetting
-    ? '重新初始化中...'
+    ? tr('重新初始化中...')
     : (factoryResetSecondsLeft > 0
       ? `确认重新初始化系统（${factoryResetSecondsLeft}s）`
       : '确认重新初始化系统');

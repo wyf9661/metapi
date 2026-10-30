@@ -355,7 +355,7 @@ export default function DownstreamKeyEditorModal({
     <CenteredModal
       open={open}
       onClose={onClose}
-      title={editingItem ? '编辑下游密钥' : '新增下游密钥'}
+      title={editingItem ? tr('编辑下游密钥') : tr('新增下游密钥')}
       maxWidth={860}
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       footer={(
@@ -364,7 +364,7 @@ export default function DownstreamKeyEditorModal({
           <button onClick={onSave} className="btn btn-primary" disabled={saving}>
             {saving
               ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</>
-              : (editingItem ? '保存修改' : '创建密钥')}
+              : (editingItem ? tr('保存修改') : tr('创建密钥'))}
           </button>
         </>
       )}
@@ -483,7 +483,7 @@ export default function DownstreamKeyEditorModal({
       <div className="downstream-key-advanced">
         <button type="button" className={`downstream-key-advanced-toggle ${advancedOpen ? 'is-open' : ''}`.trim()} onClick={() => setAdvancedOpen((value) => !value)}>
           <span>{tr('高级配置')}</span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{advancedOpen ? '收起' : '展开'}</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{advancedOpen ? tr('收起') : tr('展开')}</span>
         </button>
         {advancedOpen ? (
           <div className="downstream-key-advanced-content">

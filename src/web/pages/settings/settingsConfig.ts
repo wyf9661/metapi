@@ -172,7 +172,7 @@ export function parsePayloadRulesFromDrafts(
     } catch (error: any) {
       return {
         success: false,
-        message: `Payload 规则 ${section.title} 不是合法 JSON：${error?.message || '解析失败'}`,
+        message: `Payload 规则 ${section.title} 不是合法 JSON：${error?.message || tr('解析失败')}`,
       };
     }
   }

@@ -425,7 +425,7 @@ export default function ManualRoutePanel({
             {tr('保存中...')}
           </>
         ) : (
-          tr(editingRouteId ? '保存群组' : '创建群组')
+          tr(editingRouteId ? tr('保存群组') : tr('创建群组'))
         )}
       </button>
     </>

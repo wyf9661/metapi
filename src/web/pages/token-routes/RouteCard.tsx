@@ -1081,7 +1081,7 @@ function RouteCardInner({
                     type="button"
                     onClick={() => onCreateTokenForMissing(item.accountId, route.modelPattern)}
                     className="badge badge-warning missing-token-group-tag"
-                    data-tooltip={`缺少分组：${item.missingGroups.join('、') || '未知'}${item.availableGroups.length > 0 ? `；已覆盖：${item.availableGroups.join('、')}` : ''}${item.groupCoverageUncertain ? '；当前分组覆盖存在不确定性' : ''}`}
+                    data-tooltip={`缺少分组：${item.missingGroups.join('、') || tr('未知')}${item.availableGroups.length > 0 ? `；已覆盖：${item.availableGroups.join('、')}` : ''}${item.groupCoverageUncertain ? tr('；当前分组覆盖存在不确定性') : ''}`}
                     style={{ fontSize: 10.5, cursor: 'pointer' }}
                   >
                     {item.siteName}

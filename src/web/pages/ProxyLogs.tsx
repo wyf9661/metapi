@@ -400,7 +400,7 @@ export default function ProxyLogs() {
         )
           .map((site: any) => ({
             id: Number(site?.id || 0),
-            name: String(site?.name || '').trim() || `站点 #${site?.id ?? ''}`,
+            name: String(site?.name || 'tr(').trim() || `站点 #${site?.id ?? ')'}`,
             status: typeof site?.status === 'string' ? site.status : null,
           }))
           .filter((site: ProxyLogSiteFilterOption) => site.id > 0)
@@ -725,7 +725,7 @@ export default function ProxyLogs() {
       },
       {
         successMessage: debugSettings.proxyDebugTraceEnabled
-          ? '代理调试追踪已关闭'
+          ? tr('代理调试追踪已关闭')
           : '代理调试追踪已开启',
       },
     );
@@ -923,7 +923,7 @@ export default function ProxyLogs() {
           setPage(1);
         }}
         disabled={!hasActiveFilters}
-        title={hasActiveFilters ? '清空全部筛选条件' : '当前没有筛选条件'}
+        title={hasActiveFilters ? tr('清空全部筛选条件') : tr('当前没有筛选条件')}
       >
         {tr('清空筛选')}
       </button>
@@ -972,7 +972,7 @@ export default function ProxyLogs() {
               border: '1px solid var(--color-border)',
               padding: '6px 14px',
             }}
-            title={autoRefresh ? '关闭自动刷新' : '开启自动刷新'}
+            title={autoRefresh ? tr('关闭自动刷新') : tr('开启自动刷新')}
           >
             <svg
               width="14"
@@ -992,7 +992,7 @@ export default function ProxyLogs() {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {autoRefresh ? '自动刷新中' : '自动刷新'}
+            {autoRefresh ? tr('自动刷新中') : tr('自动刷新')}
           </button>
           <button
             onClick={() => {
@@ -1024,7 +1024,7 @@ export default function ProxyLogs() {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {loading ? '加载中...' : '刷新'}
+            {loading ? tr('加载中...') : tr('刷新')}
           </button>
         </div>
       </div>
@@ -1130,7 +1130,7 @@ export default function ProxyLogs() {
                   d="M19 9l-7 7-7-7"
                 />
               </svg>
-              {debugTracePanelExpanded ? '收起追踪面板' : '展开追踪面板'}
+              {debugTracePanelExpanded ? tr('收起追踪面板') : tr('展开追踪面板')}
             </button>
             <button
               type="button"
@@ -1143,7 +1143,7 @@ export default function ProxyLogs() {
               onClick={() => void handleQuickToggleDebugTrace()}
               disabled={debugPanelSaving}
             >
-              {debugSettings.proxyDebugTraceEnabled ? '关闭调试' : '开启调试'}
+              {debugSettings.proxyDebugTraceEnabled ? tr('关闭调试') : tr('开启调试')}
             </button>
             <button
               type="button"
@@ -1161,7 +1161,7 @@ export default function ProxyLogs() {
               onClick={() => void loadDebugState()}
               disabled={debugPanelLoading}
             >
-              {debugPanelLoading ? '刷新中...' : '刷新追踪'}
+              {debugPanelLoading ? tr('刷新中...') : tr('刷新追踪')}
             </button>
             <button
               type="button"
@@ -1184,7 +1184,7 @@ export default function ProxyLogs() {
         >
           <CompactSummaryMetric
             label={tr('状态')}
-            value={debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'}
+            value={debugSettings.proxyDebugTraceEnabled ? tr('已开启') : tr('未开启')}
           />
           <CompactSummaryMetric
             label={tr('最近追踪')}
@@ -1245,7 +1245,7 @@ export default function ProxyLogs() {
               </div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                 {debugSettings.proxyDebugTraceEnabled
-                  ? '开启中，结果会自动刷新'
+                  ? tr('开启中，结果会自动刷新')
                   : '尚未开启'}
               </div>
             </div>
@@ -1271,7 +1271,7 @@ export default function ProxyLogs() {
                 }}
               >
                 {debugSettings.proxyDebugTraceEnabled
-                  ? '暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。'
+                  ? tr('暂时还没有新追踪。这里只显示开启后产生的新请求，等下一次代理请求进入就会出现在这里。')
                   : '调试追踪尚未开启。点击上方“开启调试”或“调试设置”后，新的代理请求会出现在这里。'}
               </div>
             ) : isMobile ? (
@@ -1491,7 +1491,7 @@ export default function ProxyLogs() {
         <MobileDrawer
           open={showDebugTraceDetailModal}
           onClose={closeDebugTraceDetailModal}
-          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
+          title={selectedDebugTraceListItem?.sessionId || tr('追踪详情')}
           closeLabel={tr('关闭追踪详情')}
           side="right"
         >
@@ -1507,7 +1507,7 @@ export default function ProxyLogs() {
         <CenteredModal
           open={showDebugTraceDetailModal}
           onClose={closeDebugTraceDetailModal}
-          title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
+          title={selectedDebugTraceListItem?.sessionId || tr('追踪详情')}
           maxWidth={920}
           closeOnBackdrop
           closeOnEscape
@@ -1598,7 +1598,7 @@ export default function ProxyLogs() {
                             : 'var(--color-danger)',
                       }}
                     >
-                      {log.status === 'success' ? '成功' : '失败'}
+                      {log.status === 'success' ? tr('成功') : tr('失败')}
                     </span>
                   }
                   footerActions={
@@ -1607,7 +1607,7 @@ export default function ProxyLogs() {
                       className="btn btn-link"
                       onClick={() => handleToggleExpand(log.id)}
                     >
-                      {isExpanded ? '收起详情' : '详情'}
+                      {isExpanded ? tr('收起详情') : tr('详情')}
                     </button>
                   }
                 >
@@ -2060,7 +2060,7 @@ export default function ProxyLogs() {
                                   : 'var(--color-success)',
                               }}
                             >
-                              {failed ? '失败' : '成功'}
+                              {failed ? tr('失败') : tr('成功')}
                             </span>
                           );
                         })()}
@@ -2220,7 +2220,7 @@ export default function ProxyLogs() {
                                         }}
                                       >
                                         {detailLog.status === 'success'
-                                          ? '成功'
+                                          ? tr('成功')
                                           : '失败'}
                                       </strong>
                                       {streamModeLabel && (

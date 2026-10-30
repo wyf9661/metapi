@@ -27,6 +27,7 @@ import type {
 import type {
   BackupImportPayload,
 } from '../server/contracts/settingsRoutePayloads.js';
+import { tr } from './i18n.js';
 
 type BufferLike = {
   from(data: ArrayBuffer): { toString(encoding: 'base64'): string };
@@ -1285,7 +1286,7 @@ export const api = {
                 const data = JSON.parse(line.slice(6));
                 if (currentEvent === 'result') callbacks.onResult?.(data);
                 else if (currentEvent === 'done') callbacks.onDone?.(data);
-                else if (currentEvent === 'error') callbacks.onError?.(new Error(data?.message || '探测失败'));
+                else if (currentEvent === 'error') callbacks.onError?.(new Error(data?.message || tr('探测失败')));
               } catch {}
             } else if (line === '') {
               currentEvent = '';

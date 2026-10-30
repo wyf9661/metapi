@@ -990,7 +990,7 @@ export default function DownstreamKeys() {
           style={{ border: '1px solid var(--color-border)' }}
           onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}
           disabled={!hasActiveDownstreamKeyFilters}
-          title={hasActiveDownstreamKeyFilters ? '重置全部筛选条件' : '当前没有筛选条件'}
+          title={hasActiveDownstreamKeyFilters ? tr('重置全部筛选条件') : tr('当前没有筛选条件')}
         >{tr('重置筛选')}</button>
       </div>
 
@@ -1042,7 +1042,7 @@ export default function DownstreamKeys() {
         <div className="page-actions">
           <RangeToggle range={range} onChange={setRange} />
           <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void load()} disabled={loading}>
-            {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : '刷新'}
+            {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>{tr('+ 新增下游密钥')}</button>
         </div>
@@ -1057,7 +1057,7 @@ export default function DownstreamKeys() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span className="kpi-chip">{tr('当前范围')}</span>
             <span className="kpi-chip kpi-chip-success">
-              {range === '24h' ? '最近 24 小时' : range === '7d' ? '最近 7 天' : '全部历史'}
+              {range === '24h' ? tr('最近 24 小时') : range === '7d' ? tr('最近 7 天') : tr('全部历史')}
             </span>
             <span className="kpi-chip kpi-chip-warning">
               Tokens {formatCompactTokens(totals.tokens)}
@@ -1070,7 +1070,7 @@ export default function DownstreamKeys() {
           <SummaryMetric label={tr('已选中')} value={String(selectedIds.length)} />
           <SummaryMetric label={tr('请求数')} value={totals.requests.toLocaleString()} />
           <SummaryMetric label={tr('累计成本')} value={formatMoney(totals.cost)} />
-          <SummaryMetric label={tr('筛选状态')} value={statusOptions.find((item) => item.value === status)?.label || '全部状态'} />
+          <SummaryMetric label={tr('筛选状态')} value={statusOptions.find((item) => item.value === status)?.label || tr('全部状态')} />
         </div>
       </div>
 
@@ -1080,11 +1080,11 @@ export default function DownstreamKeys() {
           info={`已选 ${selectedIds.length} 个密钥`}
           infoStyle={{ color: 'var(--color-text-primary)' }}
         >
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? '归类/标签' : '批量归类/标签'}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量启用', selectedIds)} disabled={batchActionLoading}>{isMobile ? '启用' : '批量启用'}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量禁用', selectedIds)} disabled={batchActionLoading}>{isMobile ? '禁用' : '批量禁用'}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('批量清零用量', selectedIds)} disabled={batchActionLoading}>{isMobile ? '清零' : '批量清零用量'}</button>
-          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>{isMobile ? '删除' : '批量删除'}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? tr('归类/标签') : tr('批量归类/标签')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量启用'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('启用') : tr('批量启用')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量禁用'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('禁用') : tr('批量禁用')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量清零用量'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('清零') : tr('批量清零用量')}</button>
+          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>{isMobile ? tr('删除') : tr('批量删除')}</button>
         </ResponsiveBatchActionBar>
       ) : null}
 
@@ -1105,7 +1105,7 @@ export default function DownstreamKeys() {
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={() => toggleSelectAllVisible(!allVisibleSelected)}
                 >
-                  {allVisibleSelected ? '取消全选' : '全选可见'}
+                  {allVisibleSelected ? tr('取消全选') : tr('全选可见')}
                 </button>
               </div>
             )}
@@ -1159,9 +1159,9 @@ export default function DownstreamKeys() {
                     <>
                       <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>{tr('查看')}</button>
                       <button className="btn btn-link" onClick={() => openEdit(row)}>{tr('编辑')}</button>
-                      <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
-                      <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? '处理中...' : '清零用量'}</button>
-                      <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? '处理中...' : '删除'}</button>
+                      <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? tr('处理中...') : (row.enabled ? tr('禁用') : tr('启用'))}</button>
+                      <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? tr('处理中...') : tr('清零用量')}</button>
+                      <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? tr('处理中...') : tr('删除')}</button>
                     </>
                   )}
                 >
@@ -1181,7 +1181,7 @@ export default function DownstreamKeys() {
                   <MobileField label={tr('模型')} value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label={tr('群组')} value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
                   <MobileField label={tr('倍率')} value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
-                  <MobileField label={tr('额度')} value={[row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `日请求 ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
+                  <MobileField label={tr('额度')} value={[row.maxRequests == null ? tr('不限') : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `日请求 ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? tr('成本不限') : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
                   <MobileField label={tr('用量')} value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
                   <MobileField label={tr('最近使用')} value={formatIso(row.lastUsedAt)} stacked />
                 </MobileCard>
@@ -1235,7 +1235,7 @@ export default function DownstreamKeys() {
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)' }}>{row.keyMasked}</span>
                           <DownstreamKeyCopyIconButton fullKey={row.key} />
                           <span className={`badge ${row.groupName ? 'badge-info' : 'badge-muted'}`} style={{ fontSize: 11 }}>
-                            {row.groupName ? `主分组 · ${row.groupName}` : '未分组'}
+                            {row.groupName ? `主分组 · ${row.groupName}` : tr('未分组')}
                           </span>
                           <TagChips tags={row.tags || []} maxVisible={3} />
                         </div>
@@ -1250,10 +1250,10 @@ export default function DownstreamKeys() {
                         </div>
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString()}</div>
+                        <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{row.maxRequests == null ? tr('不限') : row.maxRequests.toLocaleString()}</div>
                         {row.maxRpm != null && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{row.maxRpm} RPM</div>}
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`}</div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.expiresAt ? `到期 ${formatIso(row.expiresAt)}` : '永久有效'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? tr('成本不限') : `成本 ${formatMoney(row.maxCost)}`}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)tr(', marginTop: 4 }}>{row.expiresAt ? `到期 ${formatIso(row.expiresAt)}` : ')永久有效'}</div>
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>
                         <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{formatCompactTokens(row.rangeUsage?.totalTokens || 0)}</div>
@@ -1265,9 +1265,9 @@ export default function DownstreamKeys() {
                         <div className="accounts-row-actions">
                           <button className="btn btn-link" onClick={() => { setSelectedId(row.id); setDrawerOpen(true); }}>{tr('查看')}</button>
                           <button className="btn btn-link" onClick={() => openEdit(row)}>{tr('编辑')}</button>
-                          <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? '处理中...' : (row.enabled ? '禁用' : '启用')}</button>
-                          <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? '处理中...' : '清零用量'}</button>
-                          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? '处理中...' : '删除'}</button>
+                          <button className="btn btn-link" onClick={() => void toggleEnabled(row)} disabled={loadingToggle}>{loadingToggle ? tr('处理中...') : (row.enabled ? tr('禁用') : tr('启用'))}</button>
+                          <button className="btn btn-link" onClick={() => void resetUsage(row)} disabled={loadingReset}>{loadingReset ? tr('处理中...') : tr('清零用量')}</button>
+                          <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'single', item: row })} disabled={loadingDelete}>{loadingDelete ? tr('处理中...') : tr('删除')}</button>
                         </div>
                       </td>
                     </tr>
@@ -1311,7 +1311,7 @@ export default function DownstreamKeys() {
           <>
             <button className="btn btn-ghost" onClick={() => { setBatchMetadataOpen(false); resetBatchMetadataForm(); }} disabled={batchActionLoading}>{tr('取消')}</button>
             <button className="btn btn-primary" onClick={() => void runBatchMetadata()} disabled={batchActionLoading}>
-              {batchActionLoading ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '应用到所选密钥'}
+              {batchActionLoading ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('应用到所选密钥')}
             </button>
           </>
         )}

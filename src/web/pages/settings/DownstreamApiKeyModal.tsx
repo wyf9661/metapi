@@ -53,7 +53,7 @@ export default function DownstreamApiKeyModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          {editingDownstreamId ? '编辑下游 API Key' : '新增下游 API Key'}
+          {editingDownstreamId ? tr('编辑下游 API Key') : tr('新增下游 API Key')}
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
@@ -128,7 +128,7 @@ export default function DownstreamApiKeyModal({
           <button onClick={() => void onSave()} disabled={downstreamSaving} className="btn btn-primary">
             {downstreamSaving
               ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</>
-              : (editingDownstreamId ? '更新 API Key' : '新增 API Key')}
+              : (editingDownstreamId ? tr('更新 API Key') : tr('新增 API Key'))}
           </button>
         </div>
       </div>

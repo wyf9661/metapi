@@ -50,10 +50,10 @@ export function buildUpdateReminder(input: {
   });
   if (candidate) {
     return {
-      label: candidate.kind === 'new-digest' ? '发现新 digest' : '发现新版本',
+      label: candidate.kind === 'new-digest' ? tr('发现新 digest') : tr('发现新版本'),
       badgeClassName: 'badge badge-success',
       detail: candidate.kind === 'new-digest'
-        ? 'Docker Hub 的 alias tag 已指向新 digest，可按需部署。'
+        ? tr('Docker Hub 的 alias tag 已指向新 digest，可按需部署。')
         : candidate.source === 'github-release'
           ? `GitHub 稳定版 ${normalizeString(input.githubRelease?.displayVersion || input.githubRelease?.normalizedVersion)} 已可部署。`
           : `Docker Hub ${normalizeString(input.dockerHubTag?.displayVersion || input.dockerHubTag?.normalizedVersion)} 已可部署。`,

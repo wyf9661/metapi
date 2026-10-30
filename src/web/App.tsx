@@ -572,7 +572,7 @@ function AppShell() {
           .filter((row: any) => (
             (Number(row?.id) || 0) > latestTaskEventIdRef.current
             && row?.relatedType === 'task'
-            && !String(row?.title || '').includes('已开始')
+            && !String(row?.title || '').includes(tr('已开始'))
           ))
           .sort((a: any, b: any) => (a.id || 0) - (b.id || 0))
           .slice(-3);
@@ -694,11 +694,11 @@ function AppShell() {
         <div className="topbar-right">
           <button
             className="topbar-icon-btn"
-            aria-label={language === 'zh' ? 'Switch to English' : '切换到中文'}
+            aria-label={language === 'zh' ? 'Switch to English' : tr('切换到中文')}
             onClick={toggleLanguage}
             style={{ minWidth: 36, fontSize: 12, fontWeight: 700 }}
           >
-            {language === 'zh' ? 'EN' : '中'}
+            {language === 'zh' ? 'EN' : tr('中')}
           </button>
           <button className="topbar-search-trigger" aria-label={t('搜索 (Ctrl+K)')} onClick={() => setShowSearch(true)}>
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>

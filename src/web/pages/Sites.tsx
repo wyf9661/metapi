@@ -216,7 +216,7 @@ function SortableSiteTableRow({
         // focusable element, so those are set explicitly.
         {...sortable.listeners}
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的站点行'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的站点行')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         data-testid={`site-row-${id}`}
@@ -265,7 +265,7 @@ function SortableSiteMobileItem({
         // Same reasoning as the table row: no role="button" on a container that
         // already holds buttons and links inside it.
         tabIndex={disabled ? undefined : 0}
-        aria-roledescription={disabled ? undefined : '可拖拽排序的站点卡片'}
+        aria-roledescription={disabled ? undefined : tr('可拖拽排序的站点卡片')}
         aria-describedby={sortable.attributes['aria-describedby']}
         aria-label={disabled || !label ? undefined : `拖拽调整「${label}」的顺序`}
         className={`${sortable.isDragging ? 'site-sort-dragging' : ''} ${dropPosition ? `site-sort-drop-${dropPosition}` : ''} ${!disabled ? 'site-card-draggable' : ''}`.trim()}
@@ -373,7 +373,7 @@ export default function Sites() {
   // 让「不填=跟随主站」的后果直接出现在决策点上（保存语义不变：空行不存，运行时回退）。
   const apiEndpointGhostPlaceholder = useMemo(() => {
     const primary = String(form.url ?? '').trim();
-    return primary ? `留空则跟随主站：${primary}` : 'API 请求地址（如 https://api.nih.cc）';
+    return primary ? `留空则跟随主站：${primary}` : tr('API 请求地址（如 https://api.nih.cc）');
   }, [form.url]);
   const latestPrimarySiteUrlRef = useRef(form.url);
   const latestProxyUrlRef = useRef(form.proxyUrl);
@@ -418,7 +418,7 @@ export default function Sites() {
     const groups = new Map<string, string[]>();
     for (const model of allModels) {
       const brand = getBrand(model);
-      const brandName = brand?.name || '其他';
+      const brandName = brand?.name || tr('其他');
       if (!groups.has(brandName)) groups.set(brandName, []);
       groups.get(brandName)!.push(model);
     }
@@ -718,13 +718,13 @@ export default function Sites() {
         try {
           const d = JSON.parse(rawData);
           if (type === 'start') {
-            addLog(`开始探测，范围：${d.scope === 'all' ? '全部模型' : '指定模型'}，共 ${d.modelsCount} 个`);
+            addLog(`开始探测，范围：${d.scope === 'all' ? tr('全部模型') : tr('指定模型')}，共 ${d.modelsCount} 个`);
           } else if (type === 'model') {
-            const s = d.status === 'supported' ? '✓ 可用'
+            const s = d.status === 'supported' ? tr('✓ 可用')
               : d.status === 'unsupported'
-                ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : '✗ 不可用')
-              : d.status === 'skipped' ? '— 已跳过'
-              : d.status === 'inconclusive' ? '? 未得出结论'
+                ? (d.latencyExceeded ? `✗ 延迟超限 (${d.latencyMs}ms)` : tr('✗ 不可用'))
+              : d.status === 'skipped' ? tr('— 已跳过')
+              : d.status === 'inconclusive' ? tr('? 未得出结论')
               : '✗ 不可用';
             const lat = d.latencyMs != null && d.status !== 'skipped' ? ` (${d.latencyMs}ms)` : '';
             const c = d.status === 'supported' ? 'var(--color-success)'
@@ -739,7 +739,7 @@ export default function Sites() {
               if (/no such model|unknown model/i.test(r)) return '模型不存在';
               if (/not found/i.test(r)) return '未找到';
               if (/access denied|forbidden|permission/i.test(r)) return '无权限';
-              if (/rate.?limit|too many request/i.test(r)) return '触发频率限制';
+              if (/rate.?limit|too many request/i.test(r)) return tr('触发频率限制');
               if (/响应延迟/.test(r)) return r;
               return r.length > 60 ? r.slice(0, 57) + '…' : r;
             })();
@@ -1403,7 +1403,7 @@ export default function Sites() {
             {tr('同步全部账号')}
           </button>
           <button onClick={openAdd} className="btn btn-primary">
-            {isAdding ? '取消' : '+ 添加站点'}
+            {isAdding ? tr('取消') : tr('+ 添加站点')}
           </button>
         </div>
       </div>
@@ -1466,7 +1466,7 @@ export default function Sites() {
           onClose={closeEditor}
           title={(
             <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {isEditing ? '编辑站点' : '添加站点'}
+              {isEditing ? tr('编辑站点') : tr('添加站点')}
             </div>
           )}
           maxWidth={920}
@@ -1487,7 +1487,7 @@ export default function Sites() {
                 disabled={saving || !String(form.name ?? '').trim() || !String(form.url ?? '').trim()}
                 className="btn btn-primary"
               >
-                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : (isEditing ? '保存修改' : '保存站点')}
+                {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : (isEditing ? tr('保存修改') : tr('保存站点'))}
               </button>
             </>
           )}
@@ -1521,7 +1521,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ padding: '10px 14px', minWidth: 96, border: '1px solid var(--color-border)' }}
                 >
-                  {detecting ? <><span className="spinner spinner-sm" /> {tr('检测中')}</> : '自动检测'}
+                  {detecting ? <><span className="spinner spinner-sm" /> {tr('检测中')}</> : tr('自动检测')}
                 </button>
               </div>
             )}
@@ -1567,7 +1567,7 @@ export default function Sites() {
           </ResponsiveFormGrid>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
             {selectedOauthProvider
-              ? '该平台使用 OAuth 授权，官方连接地址已自动配置。'
+              ? tr('该平台使用 OAuth 授权，官方连接地址已自动配置。')
               : '主站点/面板/登录地址，用于登录、签到、面板接口和系统访问令牌管理；不要把 OpenAI/Gemini 请求路径填到这里，API 请求地址不同时请填到下方 API 请求地址池。'}
           </div>
           {primarySiteUrlAnalysis.action === 'auto_strip_known_api_suffix' && primarySiteUrlAnalysis.persistedUrl ? (
@@ -1859,7 +1859,7 @@ export default function Sites() {
                   className="btn btn-ghost"
                   style={{ fontSize: 12, padding: '6px 16px', border: '1px solid var(--color-border)' }}
                 >
-                  {probeSaving ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : '保存探测设置'}
+                  {probeSaving ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : tr('保存探测设置')}
                 </button>
                 <button
                   onClick={() => void handleProbeNow()}
@@ -1867,7 +1867,7 @@ export default function Sites() {
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '6px 16px' }}
                 >
-                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('探测中...')}</> : '立即探测'}
+                  {probing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('探测中...')}</> : tr('立即探测')}
                 </button>
                 {probing && (
                   <button
@@ -1877,7 +1877,7 @@ export default function Sites() {
                   >{tr('停止')}</button>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  {probeEnabled ? '实际探测超时复用「模型探测超时」设置' : '当前已关闭'}
+                  {probeEnabled ? tr('实际探测超时复用「模型探测超时」设置') : tr('当前已关闭')}
                 </span>
               </div>
               {probeLog.length > 0 && (
@@ -2041,7 +2041,7 @@ export default function Sites() {
                           onClick={() => toggleSiteDetails(site.id)}
                           className="btn btn-link"
                         >
-                          {isExpanded ? '收起' : '展开'}
+                          {isExpanded ? tr('收起') : tr('展开')}
                         </button>
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
@@ -2056,7 +2056,7 @@ export default function Sites() {
                           disabled={togglingSiteId === site.id}
                           className={`btn btn-link ${site.status === 'disabled' ? 'btn-link-primary' : 'btn-link-warning'}`}
                         >
-                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? '启用' : '禁用')}
+                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? tr('启用') : tr('禁用'))}
                         </button>
                       </>
                     )}
@@ -2065,7 +2065,7 @@ export default function Sites() {
                       label={tr('状态')}
                       value={(
                         <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
-                          {site.status === 'disabled' ? '禁用' : '启用'}
+                          {site.status === 'disabled' ? tr('禁用') : tr('启用')}
                         </StatusPill>
                       )}
                     />
@@ -2100,17 +2100,17 @@ export default function Sites() {
                               : site.healthState?.state === 'degraded'
                                 ? 'badge-warning'
                                 : 'badge-muted'}
-                          title={site.healthState?.reason || '尚未检测'}
+                          title={site.healthState?.reason || tr('尚未检测')}
                           style={{ fontSize: 11 }}
                         >
                           {site.healthState?.state === 'healthy'
-                            ? '正常'
+                            ? tr('正常')
                             : site.healthState?.state === 'unhealthy'
-                              ? '异常'
+                              ? tr('异常')
                               : site.healthState?.state === 'degraded'
-                                ? '降级'
+                                ? tr('降级')
                                 : site.healthState?.state === 'disabled'
-                                  ? '禁用'
+                                  ? tr('禁用')
                                   : '未检测'}
                         </StatusPill>
                       )}
@@ -2167,7 +2167,7 @@ export default function Sites() {
                                     }}
                                   >
                                     {endpoint.url}
-                                    {endpoint.enabled === false ? '（已禁用）' : ''}
+                                    {endpoint.enabled === false ? tr('（已禁用）') : ''}
                                   </span>
                                 ))}
                               </div>
@@ -2184,7 +2184,7 @@ export default function Sites() {
                             disabled={pinningSiteId === site.id}
                             className={`btn btn-link ${site.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                           >
-                            {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? '取消置顶' : '置顶')}
+                            {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? tr('取消置顶') : tr('置顶'))}
                           </button>
                           <button
                             onClick={() => handleDelete(site)}
@@ -2288,10 +2288,10 @@ export default function Sites() {
                     </td>
                     <td>
                       <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
-                        {site.status === 'disabled' ? '禁用' : '启用'}
+                        {site.status === 'disabled' ? tr('禁用') : tr('启用')}
                       </StatusPill>
                     </td>
-                    <td title={site.healthState?.reason || '尚未检测'}>
+                    <td title={site.healthState?.reason || tr('尚未检测')}>
                       <StatusPill
                         badgeClass={site.healthState?.state === 'healthy'
                           ? 'badge-success'
@@ -2303,13 +2303,13 @@ export default function Sites() {
                         style={{ fontSize: 11 }}
                       >
                         {site.healthState?.state === 'healthy'
-                          ? '正常'
+                          ? tr('正常')
                           : site.healthState?.state === 'unhealthy'
-                            ? '异常'
+                            ? tr('异常')
                             : site.healthState?.state === 'degraded'
-                              ? '降级'
+                              ? tr('降级')
                               : site.healthState?.state === 'disabled'
-                                ? '禁用'
+                                ? tr('禁用')
                                 : '未检测'}
                       </StatusPill>
                     </td>
@@ -2347,7 +2347,7 @@ export default function Sites() {
                           disabled={pinningSiteId === site.id}
                           className={`btn btn-link ${site.isPinned ? 'btn-link-warning' : 'btn-link-primary'}`}
                         >
-                          {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? '取消置顶' : '置顶')}
+                          {pinningSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.isPinned ? tr('取消置顶') : tr('置顶'))}
                         </button>
                         <button
                           onClick={() => handleOpenSiteApiKey(site)}
@@ -2362,7 +2362,7 @@ export default function Sites() {
                           disabled={togglingSiteId === site.id}
                           className={`btn btn-link ${site.status === 'disabled' ? 'btn-link-primary' : 'btn-link-warning'}`}
                         >
-                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? '启用' : '禁用')}
+                          {togglingSiteId === site.id ? <span className="spinner spinner-sm" /> : (site.status === 'disabled' ? tr('启用') : tr('禁用'))}
                         </button>
                         <button
                           onClick={() => handleDelete(site)}

@@ -5,6 +5,7 @@ import type {
   ProxyLogUsageSource,
   RuntimeSettingsPayload,
 } from '../../api.js';
+import { tr } from '../../i18n.js';
 
 export type ProxyLogRenderItem = ProxyLogListItem & {
   billingDetails?: ProxyLogBillingDetails;
@@ -253,7 +254,7 @@ export function proxyLogKeyChipColors(key: string): { background: string; border
 
 export function formatStreamModeLabel(isStream: boolean | null | undefined) {
   if (isStream == null) return null;
-  return isStream ? '流式' : '非流';
+  return isStream ? tr('流式') : tr('非流');
 }
 
 export function formatFirstByteLabel(ms: number | null | undefined) {
@@ -574,7 +575,7 @@ export function formatProxyDebugTargetSummary(settings: ProxyDebugSettingsState)
       ? `模型 ${settings.proxyDebugTargetModel}`
       : null,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join('，') : '不过滤，记录所有命中的新请求';
+  return parts.length > 0 ? parts.join('，') : tr('不过滤，记录所有命中的新请求');
 }
 
 export function stringifyStoredDebugValue(value: unknown): string | null {

@@ -30,7 +30,7 @@ export function renderTraceStatusBadge(trace: ProxyDebugTraceListItemLike) {
         color: failed ? 'var(--color-danger)' : 'var(--color-success)',
       }}
     >
-      {failed ? '失败' : '成功'}
+      {failed ? tr('失败') : tr('成功')}
     </span>
   );
 }
@@ -137,13 +137,13 @@ export function ProxyDebugAttemptDetail({ attempt }: { attempt: ProxyDebugTraceA
           <div style={detailInfoItemStyle}>
             <div style={detailInfoLabelStyle}>{tr('恢复逻辑')}</div>
             <div style={detailInfoValueStyle}>
-              {attempt.recoverApplied ? '已应用' : '未应用'}
+              {attempt.recoverApplied ? tr('已应用') : tr('未应用')}
             </div>
           </div>
           <div style={detailInfoItemStyle}>
             <div style={detailInfoLabelStyle}>{tr('降级决策')}</div>
             <div style={detailInfoValueStyle}>
-              {attempt.downgradeDecision ? '已触发' : '未触发'}
+              {attempt.downgradeDecision ? tr('已触发') : tr('未触发')}
             </div>
           </div>
         </div>

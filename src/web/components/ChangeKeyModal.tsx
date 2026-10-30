@@ -115,7 +115,7 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : '确认修改'}
+            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : tr('确认修改')}
           </button>
         </div>
       </div>

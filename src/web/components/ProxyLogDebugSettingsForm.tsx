@@ -246,7 +246,7 @@ export function ProxyLogDebugSettingsFooter({
           onClick={() => onSave()}
           disabled={saving}
         >
-          {saving ? '保存中...' : '保存调试设置'}
+          {saving ? tr('保存中...') : tr('保存调试设置')}
         </button>
       </div>
   

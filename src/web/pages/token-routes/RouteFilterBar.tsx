@@ -77,7 +77,7 @@ function ActiveFilterSummary({
   if (enabledFilter === 'enabled') tags.push('状态=启用');
   else if (enabledFilter === 'disabled') tags.push('状态=禁用');
   else if (enabledFilter === 'cooling') tags.push('状态=冷却中');
-  if (activeBrand) tags.push(`品牌=${activeBrand === '__other__' ? '其他' : activeBrand}`);
+  if (activeBrand) tags.push(`品牌=${activeBrand === '__other__' ? tr('其他') : activeBrand}`);
   if (activeSite) tags.push(`站点=${activeSite}`);
   if (activeGroupFilter === '__all__') tags.push('群组=全部');
   else if (typeof activeGroupFilter === 'number') tags.push(`群组=#${activeGroupFilter}`);

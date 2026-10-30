@@ -481,7 +481,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     editingTokenIdRef.current = token.id;
     setEditingTokenPendingMessage(
       isMaskedPendingToken(token)
-        ? '请粘贴完整明文 token；当前本地仅保存了上游返回的脱敏占位值。'
+        ? tr('请粘贴完整明文 token；当前本地仅保存了上游返回的脱敏占位值。')
         : '',
     );
     setEditForm({
@@ -858,7 +858,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
+            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步站点令牌')}
           </button>
         </>
       ) : (
@@ -883,7 +883,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
+            {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步站点令牌')}
           </button>
           <button
             onClick={handleSyncAll}
@@ -891,7 +891,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             className="btn btn-ghost"
             style={{ border: '1px solid var(--color-border)', padding: '8px 14px' }}
           >
-            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步全部账号'}
+            {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步全部账号')}
           </button>
         </>
       )}
@@ -899,7 +899,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         onClick={handleToggleAdd}
         className="btn btn-primary"
       >
-        {showAdd ? '取消' : '+ 新增令牌'}
+        {showAdd ? tr('取消') : tr('+ 新增令牌')}
       </button>
     </div>
   ), [activeAccountSelectOptions, activeAccounts.length, embedded, handleSync, handleSyncAll, handleSyncSite, handleToggleAdd, isMobile, showAdd, syncing, syncingAccountId, syncingAll]);
@@ -948,7 +948,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步站点令牌'}
+              {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步站点令牌')}
             </button>
             <button
               onClick={handleSyncAll}
@@ -956,7 +956,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : '同步全部账号'}
+              {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步全部账号')}
             </button>
           </div>
         )}
@@ -984,7 +984,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
           <>
             <button onClick={closeEditPanel} className="btn btn-ghost">{tr('取消')}</button>
             <button onClick={saveEditPanel} disabled={savingEdit || editingTokenValueLoading} className="btn btn-primary">
-              {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存修改'}
+              {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存修改')}
             </button>
           </>
         )}
@@ -1038,14 +1038,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                       value: group,
                       label: group,
                     }))}
-                    placeholder={editGroupLoading ? '分组加载中...' : '选择分组'}
+                    placeholder={editGroupLoading ? tr('分组加载中...') : tr('选择分组')}
                     disabled={editGroupLoading}
                   />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('令牌值')}</div>
                   <textarea
-                    placeholder={editingTokenValueLoading ? '令牌加载中...' : '令牌值'}
+                    placeholder={editingTokenValueLoading ? tr('令牌加载中...') : tr('令牌值')}
                     value={editForm.token}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, token: e.target.value }))}
                     style={{
@@ -1152,7 +1152,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                 value: group,
                 label: group,
               }))}
-              placeholder={groupLoading ? '分组加载中...' : '选择分组'}
+              placeholder={groupLoading ? tr('分组加载中...') : tr('选择分组')}
               disabled={!form.accountId || groupLoading}
             />
           </div>
@@ -1200,7 +1200,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             disabled={saving || !form.accountId}
             className="btn btn-primary"
           >
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('创建中...')}</> : '创建并同步令牌'}
+            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('创建中...')}</> : tr('创建并同步令牌')}
           </button>
         </div>
       </CenteredModal>
@@ -1230,7 +1230,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                           onClick={() => toggleTokenDetails(token.id)}
                           className="btn btn-link"
                         >
-                          {isExpanded ? '收起' : '详情'}
+                          {isExpanded ? tr('收起') : tr('详情')}
                         </button>
                         {!isPending ? (
                           <button
@@ -1239,14 +1239,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             className="btn btn-link btn-link-primary"
                             data-testid={`token-copy-${token.id}`}
                           >
-                            {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : '复制'}
+                            {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : tr('复制')}
                           </button>
                         ) : null}
                         <button
                           onClick={() => openEditPanel(token)}
                           className="btn btn-link btn-link-info"
                         >
-                          {isPending ? '编辑补全' : '编辑'}
+                          {isPending ? tr('编辑补全') : tr('编辑')}
                         </button>
                       </>
                     )}
@@ -1257,7 +1257,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                       label={tr('状态')}
                       value={(
                         <StatusText badgeClass={isPending ? 'badge-warning' : (token.enabled ? 'badge-success' : 'badge-muted')} style={{ fontSize: 11 }}>
-                          {isPending ? '待补全' : (token.enabled ? '启用' : '禁用')}
+                          {isPending ? tr('待补全') : (token.enabled ? tr('启用') : tr('禁用'))}
                         </StatusText>
                       )}
                     />
@@ -1303,7 +1303,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                               disabled={!!rowLoading[`${loadingPrefix}-default`]}
                               className="btn btn-link btn-link-info"
                             >
-                              {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : '设默认'}
+                              {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : tr('设默认')}
                             </button>
                           )}
                           {!isPending ? (
@@ -1316,7 +1316,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                               disabled={!!rowLoading[`${loadingPrefix}-toggle`]}
                               className={`btn btn-link ${token.enabled ? 'btn-link-warning' : 'btn-link-primary'}`}
                             >
-                              {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? '禁用' : '启用')}
+                              {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? tr('禁用') : tr('启用'))}
                             </button>
                           ) : null}
                           <button
@@ -1324,7 +1324,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             disabled={!!rowLoading[`${loadingPrefix}-delete`]}
                             className="btn btn-link btn-link-danger"
                           >
-                            {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : '删除'}
+                            {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : tr('删除')}
                           </button>
                         </div>
                       </div>
@@ -1395,7 +1395,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                         <StatusPill tone="warning" style={{ fontSize: 11 }}>{tr('待补全')}</StatusPill>
                       ) : (
                         <StatusText badgeClass={token.enabled ? 'badge-success' : 'badge-muted'} style={{ fontSize: 11 }}>
-                          {token.enabled ? '启用' : '禁用'}
+                          {token.enabled ? tr('启用') : tr('禁用')}
                         </StatusText>
                       )}
                     </td>
@@ -1413,7 +1413,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             disabled={!!rowLoading[`${loadingPrefix}-default`]}
                             className="btn btn-link btn-link-info token-table-action-btn"
                           >
-                            {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : '设默认'}
+                            {rowLoading[`${loadingPrefix}-default`] ? <span className="spinner spinner-sm" /> : tr('设默认')}
                           </button>
                         )}
                         {!isPending ? (
@@ -1423,14 +1423,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             className="btn btn-link btn-link-primary token-table-action-btn"
                             data-testid={`token-copy-${token.id}`}
                           >
-                            {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : '复制'}
+                            {rowLoading[`${loadingPrefix}-copy`] ? <span className="spinner spinner-sm" /> : tr('复制')}
                           </button>
                         ) : null}
                         <button
                           onClick={() => openEditPanel(token)}
                           className="btn btn-link btn-link-info token-table-action-btn"
                         >
-                          {isPending ? '编辑补全' : '编辑'}
+                          {isPending ? tr('编辑补全') : tr('编辑')}
                         </button>
                         {!isPending ? (
                           <button
@@ -1442,7 +1442,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             disabled={!!rowLoading[`${loadingPrefix}-toggle`]}
                             className={`btn btn-link ${token.enabled ? 'btn-link-warning' : 'btn-link-primary'} token-table-action-btn`}
                           >
-                            {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? '禁用' : '启用')}
+                            {rowLoading[`${loadingPrefix}-toggle`] ? <span className="spinner spinner-sm" /> : (token.enabled ? tr('禁用') : tr('启用'))}
                           </button>
                         ) : null}
                         <button
@@ -1450,7 +1450,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                           disabled={!!rowLoading[`${loadingPrefix}-delete`]}
                           className="btn btn-link btn-link-danger token-table-action-btn"
                         >
-                          {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : '删除'}
+                          {rowLoading[`${loadingPrefix}-delete`] ? <span className="spinner spinner-sm" /> : tr('删除')}
                         </button>
                       </div>
                     </td>

@@ -255,7 +255,7 @@ export function DetailDisclosureCard({
     <div style={detailExpandableCardStyle}>
       <button
         type="button"
-        aria-label={`${open ? '收起' : '展开'}${title}`}
+        aria-label={`${open ? tr('收起') : tr('展开')}${title}`}
         style={{
           ...detailExpandableSummaryStyle,
           border: 'none',
@@ -271,7 +271,7 @@ export function DetailDisclosureCard({
             flexShrink: 0,
           }}
         >
-          {open ? '收起' : '展开'}
+          {open ? tr('收起') : tr('展开')}
         </span>
       </button>
       {open ? children : null}

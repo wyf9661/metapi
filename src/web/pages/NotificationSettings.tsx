@@ -278,10 +278,10 @@ export default function NotificationSettings() {
                 <h2 className="page-title">{tr('通知设置')}</h2>
                 <div className="page-actions">
                     <button onClick={testNotify} disabled={testingNotify} className="btn btn-soft-primary">
-                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> {tr('发送中...')}</> : '发送测试通知'}
+                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'var(--color-primary)', borderColor: 'color-mix(in srgb, var(--color-primary) 30%, transparent)' }} /> {tr('发送中...')}</> : tr('发送测试通知')}
                     </button>
                     <button onClick={saveNotify} disabled={savingNotify} className="btn btn-primary">
-                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存通知设置'}
+                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存通知设置')}
                     </button>
                 </div>
             </div>
@@ -390,7 +390,7 @@ export default function NotificationSettings() {
                                 <input
                                     value={row.secret}
                                     onChange={(e) => updateChannel(row.id, { secret: e.target.value })}
-                                    placeholder={row.secretMasked ? '已保存密钥，留空不改' : '加签密钥（可选）'}
+                                    placeholder={row.secretMasked ? tr('已保存密钥，留空不改') : tr('加签密钥（可选）')}
                                     style={{ ...inputStyle, flex: isMobile ? 1 : '0 0 220px' }}
                                 />
 

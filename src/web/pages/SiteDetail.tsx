@@ -85,7 +85,7 @@ export default function SiteDetail() {
             badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'}
             style={{ fontSize: 11 }}
           >
-            {site.status === 'disabled' ? '禁用' : '启用'}
+            {site.status === 'disabled' ? tr('禁用') : tr('启用')}
           </StatusPill>
         </div>
       </div>

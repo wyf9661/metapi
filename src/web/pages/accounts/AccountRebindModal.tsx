@@ -167,7 +167,7 @@ export default function AccountRebindModal({
                         <div className="alert-title">{tr('Session Token 有效')}</div>
                         <div style={{ fontSize: 12, marginTop: 4 }}>
                           用户:{' '}
-                          {rebindVerifyResult.userInfo?.username || '未知'}
+                          {rebindVerifyResult.userInfo?.username || tr('未知')}
                           {rebindVerifyResult.apiToken
                             ? `，已识别 API Key (${String(rebindVerifyResult.apiToken).slice(0, 8)}...)`
                             : ''}

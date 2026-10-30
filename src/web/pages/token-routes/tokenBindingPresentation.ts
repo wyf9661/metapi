@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.js';
 export type TokenBindingOption = {
   id: number;
   name: string;
@@ -117,7 +118,7 @@ export function describeTokenBinding(
       return buildDirectBindingPresentation(connectionMode, accountName);
     }
 
-    const effectiveTokenName = defaultToken?.name || fallbackTokenName || '未设置默认令牌';
+    const effectiveTokenName = defaultToken?.name || fallbackTokenName || tr('未设置默认令牌');
     return {
       isFollowingAccountDefault: true,
       bindingModeLabel: '跟随账号默认',
@@ -143,8 +144,8 @@ export function describeTokenBinding(
       ? `已固定到「${effectiveTokenName}」。它目前也是账号默认，但以后账号默认变化时，这个通道不会跟着变。`
       : `已固定到「${effectiveTokenName}」，不会随账号默认变化。`,
     followOptionLabel: connectionMode === 'oauth'
-      ? 'OAuth授权'
-      : (connectionMode === 'apikey' ? 'API 设置' : '跟随账号默认'),
+      ? tr('OAuth授权')
+      : (connectionMode === 'apikey' ? tr('API 设置') : tr('跟随账号默认')),
     followOptionDescription: connectionMode === 'oauth'
       ? `直接使用连接「${accountName}」的 OAuth 授权`
       : (connectionMode === 'apikey'
@@ -174,6 +175,6 @@ export function buildFixedTokenOptionLabel(
 
 export function buildFixedTokenOptionDescription(token: TokenBindingOption): string {
   return token.isDefault
-    ? '固定到这条令牌；它目前也是账号默认，但以后不会自动跟随'
+    ? tr('固定到这条令牌；它目前也是账号默认，但以后不会自动跟随')
     : '固定到这条令牌；不随账号默认变化';
 }

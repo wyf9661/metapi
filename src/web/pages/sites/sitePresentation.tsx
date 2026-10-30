@@ -85,7 +85,7 @@ export function SiteOutboundFlags(props: {
       ) : null}
       {headerCount > 0 ? (
         <span className="sites-name-flag">
-          <HoverPopover content={`已配置自定义请求头 ${headerCount} 项${customHeadersOverrideRequestHeaders ? '，覆盖上游同名请求头' : ''}`}>
+          <HoverPopover content={`已配置自定义请求头 ${headerCount} 项${customHeadersOverrideRequestHeaders ? tr('，覆盖上游同名请求头') : ''}`}>
             <SlidersIcon size={12} />
           </HoverPopover>
         </span>

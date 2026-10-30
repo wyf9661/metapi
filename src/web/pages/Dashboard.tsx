@@ -986,7 +986,7 @@ export default function Dashboard({
               <div className={`dashboard-endpoint-value dashboard-endpoint-status ${tunnel?.lastError || tunnelError ? 'is-error' : ''}`}>
                 {tunnel?.downloading
                   ? `下载 cloudflared${typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}`
-                  : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? '正在检查隧道...' : '未启用')}
+                  : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? tr('正在检查隧道...') : tr('未启用'))}
               </div>
             )}
             {isTunnelClientView && (tunnel?.publicUrl || tunnel?.tunnelUrl) ? (
@@ -1012,7 +1012,7 @@ export default function Dashboard({
                 disabled={tunnelBusy}
                 onClick={() => { void handleToggleTunnel(); }}
               >
-                {tunnelBusy ? '处理中...' : ((tunnel?.running || tunnel?.enabled) ? '关闭' : '创建')}
+                {tunnelBusy ? tr('处理中...') : ((tunnel?.running || tunnel?.enabled) ? tr('关闭') : tr('创建'))}
               </button>
             ) : <span className="dashboard-endpoint-copy-placeholder" aria-hidden />}
           </div>
@@ -1063,7 +1063,7 @@ export default function Dashboard({
             </div>
             <div className="site-observability-subtitle">
               {observabilityTab === 'sites'
-                ? '站点分布与今日消耗 · 最近 24 小时可用性'
+                ? tr('站点分布与今日消耗 · 最近 24 小时可用性')
                 : '模型消耗与调用分布 · 最近 24 小时可用性'}
             </div>
           </div>
@@ -1110,7 +1110,7 @@ export default function Dashboard({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 {siteChartTab === 'distribution'
-                  ? '站点排行榜'
+                  ? tr('站点排行榜')
                   : '站点趋势'}
               </div>
               <div className="pill-tabs">

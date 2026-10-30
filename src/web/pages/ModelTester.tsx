@@ -271,7 +271,7 @@ export default function ModelTester() {
               disabled={!canList}
               style={{ flex: '1 1 140px' }}
             >
-              {listing ? '拉取中…' : '拉取模型列表'}
+              {listing ? tr('拉取中…') : tr('拉取模型列表')}
             </button>
             <button
               type="button"
@@ -310,7 +310,7 @@ export default function ModelTester() {
               setProbeError('');
             }}
             options={modelOptions}
-            placeholder={models.length === 0 ? '暂无模型，请先拉取列表' : '选择模型'}
+            placeholder={models.length === 0 ? tr('暂无模型，请先拉取列表') : tr('选择模型')}
             disabled={models.length === 0}
             emptyLabel={tr('无匹配模型')}
             menuMaxHeight={280}
@@ -330,7 +330,7 @@ export default function ModelTester() {
             onClick={() => { void probeModel(); }}
             disabled={!canProbe}
           >
-            {probing ? '检测中…' : '检测模型'}
+            {probing ? tr('检测中…') : tr('检测模型')}
           </button>
         </div>
 
@@ -338,7 +338,7 @@ export default function ModelTester() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <h3 style={{ margin: 0, fontSize: 15 }}>{tr('结果')}</h3>
             <div style={{ fontSize: 14, fontWeight: 700, color: statusColor(probeOk, probing) }}>
-              {probing ? '检测中' : probeOk === true ? '可用' : probeOk === false ? '不可用' : '未检测'}
+              {probing ? tr('检测中') : probeOk === true ? tr('可用') : probeOk === false ? tr('不可用') : tr('未检测')}
             </div>
           </div>
 
@@ -350,7 +350,7 @@ export default function ModelTester() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, lineHeight: 1.5 }}>
                 <div>{tr('状态：')}<strong style={{ color: statusColor(probeOk, false), marginLeft: 6 }}>
-                    {probeOk ? '可用' : '不可用'}
+                    {probeOk ? tr('可用') : tr('不可用')}
                   </strong>
                 </div>
                 {probeResult ? (

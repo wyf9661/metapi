@@ -8,6 +8,7 @@ import {
   matchesTokenRouteModelPattern,
   parseTokenRouteRegexPattern,
 } from '../../../shared/tokenRoutePatterns.js';
+import { tr } from '../../i18n.js';
 
 export function isRegexModelPattern(modelPattern: string): boolean {
   return isTokenRouteRegexPattern(modelPattern);
@@ -192,7 +193,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: loadingDecision ? '计算中...' : '实时决策',
+      reasonText: loadingDecision ? tr('计算中...') : tr('实时决策'),
       reasonColor: 'var(--color-text-muted)',
     };
   }
@@ -201,7 +202,7 @@ export function getChannelDecisionState(
     return {
       probability: 0,
       showBar: true,
-      reasonText: loadingDecision ? '计算中...' : '无可用通道',
+      reasonText: loadingDecision ? tr('计算中...') : tr('无可用通道'),
       reasonColor: 'var(--color-text-muted)',
     };
   }

@@ -186,7 +186,7 @@ function normalizeValueForRule(rule: VisualPayloadRule): { success: true; value:
     try {
       JSON.parse(trimmed);
     } catch (error: any) {
-      return { success: false, message: `原始 JSON 无效：${error?.message || '解析失败'}` };
+      return { success: false, message: `原始 JSON 无效：${error?.message || tr('解析失败')}` };
     }
     return { success: true, value: trimmed };
   }
@@ -199,7 +199,7 @@ function normalizeValueForRule(rule: VisualPayloadRule): { success: true; value:
     try {
       return { success: true, value: JSON.parse(trimmed) };
     } catch (error: any) {
-      return { success: false, message: `JSON 值无效：${error?.message || '解析失败'}` };
+      return { success: false, message: `JSON 值无效：${error?.message || tr('解析失败')}` };
     }
   }
 

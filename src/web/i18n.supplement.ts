@@ -1567,5 +1567,17 @@ export const zhToEnSupplemental: Record<string, string> = {
   '备份/恢复': 'Backup/Restore',
   '已是最新': 'Up to date',
   '聚合面板，多渠道统一管理': 'Aggregated panel for unified multi-channel management',
+  '创建': 'Create',
+  '? 未得出结论': '? Inconclusive',
+  '触发频率限制': 'Rate limit triggered',
+  '立即探测': 'Probe now',
+  '最近选路': 'Last routing',
+  '已应用': 'Applied',
+  '未应用': 'Not applied',
+  '已触发': 'Triggered',
+  '未触发': 'Not triggered',
+  '发现新版本': 'New version found',
+  '已上传': 'Uploaded',
+
 
 };

@@ -388,7 +388,7 @@ export default function Settings() {
     };
   };
 
-  const proxyTransportModeLabel = runtime.codexUpstreamWebsocketEnabled ? '上游 WebSocket 已启用' : 'HTTP 优先';
+  const proxyTransportModeLabel = runtime.codexUpstreamWebsocketEnabled ? tr('上游 WebSocket 已启用') : tr('HTTP 优先');
   const proxyTransportQueueLabel = `会话池 ${runtime.proxySessionChannelConcurrencyLimit} 并发 / ${runtime.proxySessionChannelQueueWaitMs}ms`;
 
   const syncPayloadRuleDraftsFromObject = (value: unknown) => {
@@ -997,13 +997,13 @@ export default function Settings() {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>{tr('重置操作')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>{tr('重新拉取站点模型列表并重建路由通道，不影响账号、令牌数据。')}</div>
           <button onClick={handleClearCache} disabled={clearingCache} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>
-            {clearingCache ? <><span className="spinner spinner-sm" /> {tr('清理中...')}</> : '清除缓存并重建路由'}
+            {clearingCache ? <><span className="spinner spinner-sm" /> {tr('清理中...')}</> : tr('清除缓存并重建路由')}
           </button>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, margin: '14px 0 12px' }}>{tr('清空全部数据库内容并切回默认 SQLite；管理员 Token 保留，完成后自动刷新。')}</div>
           <button
             onClick={() => setFactoryResetOpen(true)}
             disabled={isTunnelClientView}
-            title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+            title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1026,7 +1026,7 @@ export default function Settings() {
           <code style={{ display: 'block', padding: '10px 14px', background: 'var(--color-bg-inset)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-light)', marginBottom: 12 }}>
             {maskedToken || '****'}
           </code>
-          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? '公网隧道访问时不可修改' : undefined}>{tr('修改登录令牌')}</button>
+          <button onClick={() => setShowChangeKey(true)} className="btn btn-primary" disabled={isTunnelClientView} title={isTunnelClientView ? tr('公网隧道访问时不可修改') : undefined}>{tr('修改登录令牌')}</button>
           <ChangeKeyModal
             open={showChangeKey}
             onClose={() => {
@@ -1040,7 +1040,7 @@ export default function Settings() {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('公网隧道访问')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
             对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
-            {isTunnelClientView ? ' 当前为公网隧道访问，此开关已锁定。' : ''}
+            {isTunnelClientView ? tr(' 当前为公网隧道访问，此开关已锁定。') : ''}
           </div>
           <label style={{
             display: 'flex',
@@ -1092,7 +1092,7 @@ export default function Settings() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)', whiteSpace: 'nowrap', flexShrink: 0 }}
             >
-              {testingCheckin ? '触发中...' : '测试一次签到'}
+              {testingCheckin ? tr('触发中...') : tr('测试一次签到')}
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(140px, 180px) minmax(140px, 180px)', gap: 12, marginBottom: 12 }}>
@@ -1180,7 +1180,7 @@ export default function Settings() {
                   type="password"
                   value={turnstileSolverApiKeyDraft}
                   onChange={(e) => setTurnstileSolverApiKeyDraft(e.target.value)}
-                  placeholder={runtime.turnstileSolverApiKeyMasked || (runtime.turnstileSolverEnabled ? '自建求解器可留空' : '')}
+                  placeholder={runtime.turnstileSolverApiKeyMasked || (runtime.turnstileSolverEnabled ? tr('自建求解器可留空') : '')}
                   autoComplete="off"
                   style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
                   disabled={!runtime.turnstileSolverEnabled}
@@ -1259,7 +1259,7 @@ export default function Settings() {
           </div>
           <div style={{ marginTop: 12 }}>
             <button onClick={saveSchedule} disabled={savingSchedule} className="btn btn-primary">
-              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存定时任务'}
+              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存定时任务')}
             </button>
           </div>
         </div>
@@ -1289,7 +1289,7 @@ export default function Settings() {
           </label>
           <div>
             <button onClick={saveProxyFailureRules} disabled={savingProxyFailureRules} className="btn btn-primary">
-              {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存失败规则'}
+              {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存失败规则')}
             </button>
           </div>
         </div>
@@ -1308,10 +1308,10 @@ export default function Settings() {
             </div>
             <div style={settingsModernPillRowStyle}>
               <span style={getSettingsPillStyle(configuredPayloadRuleCount > 0 ? 'primary' : 'neutral')}>
-                {configuredPayloadRuleCount > 0 ? `已配置 ${configuredPayloadRuleCount} 条` : '未配置'}
+                {configuredPayloadRuleCount > 0 ? `已配置 ${configuredPayloadRuleCount} 条` : tr('未配置')}
               </span>
               <span style={getSettingsPillStyle(payloadAdvancedDirty ? 'warning' : 'neutral')}>
-                {payloadAdvancedDirty ? '高级 JSON 待同步/保存' : '保存后立即生效'}
+                {payloadAdvancedDirty ? tr('高级 JSON 待同步/保存') : tr('保存后立即生效')}
               </span>
             </div>
           </div>
@@ -1340,7 +1340,7 @@ export default function Settings() {
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={() => setShowPayloadRulesEditor((prev) => !prev)}
                 >
-                  {showPayloadRulesEditor ? '收起高级 JSON 编辑' : '展开高级 JSON 编辑'}
+                  {showPayloadRulesEditor ? tr('收起高级 JSON 编辑') : tr('展开高级 JSON 编辑')}
                 </button>
               </div>
             </div>
@@ -1437,8 +1437,8 @@ export default function Settings() {
                       <div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
                           {rule.action === 'default-raw' || rule.action === 'override-raw'
-                            ? '原始 JSON 值'
-                            : (rule.valueMode === 'json' ? 'JSON 值' : '文本值')}
+                            ? tr('原始 JSON 值')
+                            : (rule.valueMode === 'json' ? tr('JSON 值') : tr('文本值'))}
                         </div>
                         {(rule.action === 'default-raw' || rule.action === 'override-raw' || rule.valueMode === 'json') ? (
                           <textarea
@@ -1523,7 +1523,7 @@ export default function Settings() {
           </div>
           <div style={settingsModernActionsStyle}>
             <button onClick={savePayloadRules} disabled={savingPayloadRules} className="btn btn-primary">
-              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存 Payload 规则'}
+              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存 Payload 规则')}
             </button>
           </div>
         </div>
@@ -1681,7 +1681,7 @@ export default function Settings() {
           </ResponsiveFormGrid>
           <div style={settingsModernActionsStyle}>
             <button onClick={saveProxyTransportSettings} disabled={savingProxyTransport} className="btn btn-primary">
-              {savingProxyTransport ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存传输与并发'}
+              {savingProxyTransport ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存传输与并发')}
             </button>
           </div>
         </div>
@@ -1952,13 +1952,13 @@ export default function Settings() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {showAdvancedRouting ? '收起高级参数' : '展开高级参数'}
+              {showAdvancedRouting ? tr('收起高级参数') : tr('展开高级参数')}
             </button>
           </div>
 
           <div style={{ marginTop: 12 }}>
             <button onClick={saveRouting} disabled={savingRouting} className="btn btn-primary">
-              {savingRouting ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存路由策略'}
+              {savingRouting ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存路由策略')}
             </button>
           </div>
         </div>
@@ -1984,7 +1984,7 @@ export default function Settings() {
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={() => setConnectionMode((prev) => (prev === 'shorthand' ? 'advanced' : 'shorthand'))}
                 >
-                  {connectionMode === 'shorthand' ? '高级输入连接串' : '使用半自动简写'}
+                  {connectionMode === 'shorthand' ? tr('高级输入连接串') : tr('使用半自动简写')}
                 </button>
               )}
             </div>
@@ -2035,7 +2035,7 @@ export default function Settings() {
                   style={{ border: '1px solid var(--color-border)' }}
                   onClick={() => setShowShorthandOptional((prev) => !prev)}
                 >
-                  {showShorthandOptional ? '收起端口/库名' : '展开端口/库名'}
+                  {showShorthandOptional ? tr('收起端口/库名') : tr('展开端口/库名')}
                 </button>
               </div>
               {showShorthandOptional && (
@@ -2085,24 +2085,24 @@ export default function Settings() {
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {testingMigrationConnection ? <><span className="spinner spinner-sm" /> {tr('测试中...')}</> : '测试连接'}
+              {testingMigrationConnection ? <><span className="spinner spinner-sm" /> {tr('测试中...')}</> : tr('测试连接')}
             </button>
             <button
               onClick={handleMigrateToExternalDatabase}
               disabled={isTunnelClientView || migratingDatabase || testingMigrationConnection || savingRuntimeDatabase}
-              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+              title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
               className="btn btn-primary"
             >
-              {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('迁移中...')}</> : '开始迁移'}
+              {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('迁移中...')}</> : tr('开始迁移')}
             </button>
             <button
               onClick={handleSaveRuntimeDatabaseConfig}
               disabled={isTunnelClientView || savingRuntimeDatabase || migratingDatabase || testingMigrationConnection}
-              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+              title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
-              {savingRuntimeDatabase ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : '保存为运行数据库（重启后生效）'}
+              {savingRuntimeDatabase ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : tr('保存为运行数据库（重启后生效）')}
             </button>
           </div>
 
@@ -2152,10 +2152,10 @@ export default function Settings() {
             <button
               onClick={saveSecuritySettings}
               disabled={savingSecurity || isTunnelClientView}
-              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+              title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
               className="btn btn-primary"
             >
-              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存安全设置'}
+              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存安全设置')}
             </button>
             <button
               onClick={() => {
@@ -2210,7 +2210,7 @@ export default function Settings() {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={saveAntiProbeSettings} disabled={savingSecurity} className="btn btn-primary">
-              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : '保存反探测设置'}
+              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('保存中...')}</> : tr('保存反探测设置')}
             </button>
           </div>
         </div>

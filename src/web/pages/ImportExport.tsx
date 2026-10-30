@@ -219,7 +219,7 @@ function parseImportSummary(raw: string): ParsedSummary | null {
     const ts = data.timestamp !== undefined && data.timestamp !== null
       ? new Date(data.timestamp)
       : null;
-    const timestampLabel = ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : '未知';
+    const timestampLabel = ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : tr('未知');
 
     return {
       valid: hasAccounts || hasPreferences,
@@ -249,10 +249,10 @@ function parseImportSummary(raw: string): ParsedSummary | null {
 
 function buildImportSuccessMessage(result: any): string {
   const sections: string[] = [];
-  if (result?.sections?.accounts) sections.push('连接与路由策略');
-  if (result?.sections?.preferences) sections.push('系统设置');
+  if (result?.sections?.accounts) sections.push(tr('连接与路由策略'));
+  if (result?.sections?.preferences) sections.push(tr('系统设置'));
 
-  const parts = [`导入完成：${sections.length ? sections.join('、') : '无有效数据'}`];
+  const parts = [`导入完成：${sections.length ? sections.join('、') : tr('无有效数据')}`];
   if (result?.summary) {
     const summary = result.summary;
     parts.push(
@@ -629,7 +629,7 @@ export default function ImportExport() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                   <div style={{ fontSize: 13, fontWeight: 600, color: dragOver ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
-                    {dragOver ? '松开以导入文件' : '拖拽 JSON 备份文件到此处'}
+                    {dragOver ? tr('松开以导入文件') : tr('拖拽 JSON 备份文件到此处')}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('或')} <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>{tr('点击选择文件')}</span>
                   </div>
@@ -679,7 +679,7 @@ export default function ImportExport() {
                 {summary.valid ? (
                   <>
                     <div>结构有效，版本：{summary.version}，时间：{summary.timestampLabel}</div>
-                    <div>包含分区：{summary.hasAccounts ? '连接与路由策略' : ''}{summary.hasAccounts && summary.hasPreferences ? ' + ' : ''}{summary.hasPreferences ? '系统设置' : ''}</div>
+                    <div>包含分区：{summary.hasAccounts ? tr('连接与路由策略') : ''}{summary.hasAccounts && summary.hasPreferences ? ' + ' : ''}{summary.hasPreferences ? tr('系统设置') : ''}</div>
                     {summary.isAllApiHubV2 ? (
                       <>
                         <div>{tr('检测到 ALL-API-Hub V2 兼容备份：将离线迁移可用连接。')}</div>
@@ -716,11 +716,11 @@ export default function ImportExport() {
             <button
               onClick={handleImport}
               disabled={isTunnelClientView || importing || !summary?.valid}
-              title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+              title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
               className="btn btn-primary"
               style={{ width: '100%', padding: '10px 0', fontSize: 14, fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
             >
-              {importing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('导入中...')}</> : '导入'}
+              {importing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {tr('导入中...')}</> : tr('导入')}
             </button>
           </div>
         </div>
@@ -733,7 +733,7 @@ export default function ImportExport() {
           </svg>
           <span style={{ fontSize: 15, fontWeight: 700 }}>{tr('WebDAV 同步')}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, fontSize: 12, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</span>
+            <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : tr('尚未同步')}</span>
             <span>最近错误：{webdavState.lastError || '无'}</span>
           </div>
         </div>
@@ -771,8 +771,8 @@ export default function ImportExport() {
                 }
               }}
               placeholder={clearWebdavPassword
-                ? '保存后将清空已存密码'
-                : (webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : '请输入密码')}
+                ? tr('保存后将清空已存密码')
+                : (webdavConfig.hasPassword ? `已保存 ${webdavConfig.passwordMasked}，留空则保持不变` : tr('请输入密码'))}
               disabled={clearWebdavPassword}
               style={settingsInputStyle}
             />
@@ -845,7 +845,7 @@ export default function ImportExport() {
             className="btn btn-primary"
             style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center' }}
           >
-            {webdavSaving ? '保存中...' : '保存 WebDAV 配置'}
+            {webdavSaving ? tr('保存中...') : tr('保存 WebDAV 配置')}
           </button>
           <button
             onClick={handleExportToWebdav}
@@ -853,16 +853,16 @@ export default function ImportExport() {
             className="btn btn-ghost"
             style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
-            {webdavAction === 'export' ? '导出中...' : '立即导出到 WebDAV'}
+            {webdavAction === 'export' ? tr('导出中...') : tr('立即导出到 WebDAV')}
           </button>
           <button
             onClick={handleImportFromWebdav}
             disabled={isTunnelClientView || webdavAction !== '' || webdavSaving || webdavConfigDirty}
-            title={isTunnelClientView ? '公网隧道访问时不可用，请在本机/内网控制台操作' : undefined}
+            title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
             className="btn btn-ghost"
             style={{ flex: isMobile ? '1 1 100%' : 1, justifyContent: 'center', border: '1px solid var(--color-border)' }}
           >
-            {webdavAction === 'import' ? '拉取中...' : '从 WebDAV 拉取'}
+            {webdavAction === 'import' ? tr('拉取中...') : tr('从 WebDAV 拉取')}
           </button>
         </div>
 

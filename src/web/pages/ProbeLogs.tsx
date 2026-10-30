@@ -465,7 +465,7 @@ export default function ProbeLogs() {
                 style={{ border: '1px solid var(--color-border)', padding: '8px 12px' }}
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}
-                title={hasActiveFilters ? '清除全部筛选条件并回到第一页' : '当前没有筛选条件'}
+                title={hasActiveFilters ? tr('清除全部筛选条件并回到第一页') : tr('当前没有筛选条件')}
               >{tr('清除筛选')}</button>
             </div>
           </div>

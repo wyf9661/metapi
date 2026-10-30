@@ -89,10 +89,10 @@ function EmptyState({ mode }: { mode: ViewMode }) {
         </svg>
       </div>
       <div className="empty-state-title" style={{ marginBottom: 4 }}>
-        {isSpend ? '今日暂无消耗' : '暂无站点数据'}
+        {isSpend ? tr('今日暂无消耗') : tr('暂无站点数据')}
       </div>
       <div className="empty-state-desc">
-        {isSpend ? '站点今日产生消耗后会自动展示排行' : '添加站点后将自动展示分布图表'}
+        {isSpend ? tr('站点今日产生消耗后会自动展示排行') : tr('添加站点后将自动展示分布图表')}
       </div>
     </div>
   );
