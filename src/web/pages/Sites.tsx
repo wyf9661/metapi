@@ -2,6 +2,9 @@ import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } f
 
 /** Debounce before auto-detecting while the operator is still typing. */
 const AUTO_DETECT_DEBOUNCE_MS = 700;
+// Raw, untranslated group key: the brand list is sorted against it, so it must
+// not change with the UI language.
+const OTHER_BRAND_NAME = '其他';
 
 /**
  * Only probe once what was typed is host-like. `new URL('htt')` parses fine, so
@@ -418,13 +421,13 @@ export default function Sites() {
     const groups = new Map<string, string[]>();
     for (const model of allModels) {
       const brand = getBrand(model);
-      const brandName = brand?.name || tr('其他');
+      const brandName = brand?.name || OTHER_BRAND_NAME;
       if (!groups.has(brandName)) groups.set(brandName, []);
       groups.get(brandName)!.push(model);
     }
     return [...groups.entries()].sort((a, b) => {
-      if (a[0] === '其他') return 1;
-      if (b[0] === '其他') return -1;
+      if (a[0] === OTHER_BRAND_NAME) return 1;
+      if (b[0] === OTHER_BRAND_NAME) return -1;
       return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
     });
   }, [availableModels]);

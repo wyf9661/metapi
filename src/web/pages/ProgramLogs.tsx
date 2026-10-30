@@ -58,6 +58,8 @@ function eventStatusLabel(row: ProgramEvent) {
     return { label: tr('成功'), cls: 'badge-success' };
   }
 
+  // Match the raw upstream wording (Chinese OR English) — the translated
+  // label must never feed this classifier, so keep the literals untranslated.
   if (text.includes('失败') || text.includes('failed') || text.includes('error')) {
     return { label: tr('失败'), cls: 'badge-error' };
   }

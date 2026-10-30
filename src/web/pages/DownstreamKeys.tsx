@@ -863,13 +863,14 @@ export default function DownstreamKeys() {
     if (ids.length === 0) return;
     setBatchActionLoading(true);
     try {
-      const action = label === '批量启用'
+      // Keyed by a stable code, not by the (translated) button label.
+      const action = label === 'enable'
         ? 'enable'
-        : label === '批量禁用'
+        : label === 'disable'
           ? 'disable'
-          : label === '批量删除'
+          : label === 'delete'
             ? 'delete'
-            : label === '批量清零用量'
+            : label === 'resetUsage'
               ? 'resetUsage'
               : 'updateMetadata';
       const payload = action === 'updateMetadata'
@@ -936,7 +937,7 @@ export default function DownstreamKeys() {
       return;
     }
 
-    await batchRun(tr('批量删除'), target.ids);
+    await batchRun('delete', target.ids);
   };
 
   const addTagFilter = (raw: string) => {
@@ -960,7 +961,7 @@ export default function DownstreamKeys() {
       toast.info(tr('请至少填写一个批量标签'));
       return;
     }
-    await batchRun(tr('批量归类'), selectedIds);
+    await batchRun('updateMetadata', selectedIds);
   };
 
   const filterControls = (
@@ -1081,9 +1082,9 @@ export default function DownstreamKeys() {
           infoStyle={{ color: 'var(--color-text-primary)' }}
         >
           <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? tr('归类/标签') : tr('批量归类/标签')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量启用'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('启用') : tr('批量启用')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量禁用'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('禁用') : tr('批量禁用')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun(tr('批量清零用量'), selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('清零') : tr('批量清零用量')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('enable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('启用') : tr('批量启用')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('disable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('禁用') : tr('批量禁用')}</button>
+          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('resetUsage', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('清零') : tr('批量清零用量')}</button>
           <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>{isMobile ? tr('删除') : tr('批量删除')}</button>
         </ResponsiveBatchActionBar>
       ) : null}
