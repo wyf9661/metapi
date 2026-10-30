@@ -258,7 +258,7 @@ export default function ProgramLogs() {
               {tr('仅看未读')}
             </label>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {total} 条
+              {tr('共')} {total} {tr('条')}
             </div>
           </div>
         )}
@@ -293,7 +293,7 @@ export default function ProgramLogs() {
             </label>
 
             <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-muted)' }}>
-              共 {total} 条
+              {tr('共')} {total} {tr('条')}
             </div>
           </div>
         )}

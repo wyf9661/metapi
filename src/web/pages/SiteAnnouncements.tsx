@@ -222,7 +222,7 @@ export default function SiteAnnouncements() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{tr(row.title)}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span className="badge badge-muted">{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
+                  <span className="badge badge-muted" data-i18n-skip>{siteNameById.get(row.siteId) || `站点 #${row.siteId}`}</span>
                   <span className={`badge ${platformBadgeClass(row.platform)}`}>{row.platform}</span>
                   <span className={`badge ${row.readAt ? 'badge-muted' : 'badge-warning'}`}>{row.readAt ? tr('已读') : tr('未读')}</span>
                 </div>

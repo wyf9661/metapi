@@ -1284,7 +1284,7 @@ export default function Dashboard({
                       : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
-                  <span>{Math.round(site.totalRequests || 0)} 次</span>
+                  <span>{Math.round(site.totalRequests || 0)} {tr('次')}</span>
                 </div>
                 <div className="site-availability-strip-compact">
                   {site.buckets.map((bucket, index) => (
@@ -1300,7 +1300,7 @@ export default function Dashboard({
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
                           `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
-                          `请求：${bucket.totalRequests} 次`,
+                          `${tr('请求：')}${bucket.totalRequests} ${tr('次')}`,
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`
@@ -1465,7 +1465,7 @@ export default function Dashboard({
                       : '—'}
                   </span>
                   <span className="site-observability-metric-sep">·</span>
-                  <span>{Math.round(modelRow.totalRequests || 0)} 次</span>
+                  <span>{Math.round(modelRow.totalRequests || 0)} {tr('次')}</span>
                 </div>
                 <div className="site-availability-strip-compact">
                   {modelRow.buckets.map((bucket, index) => (
@@ -1481,7 +1481,7 @@ export default function Dashboard({
                         data-tooltip={[
                           `时间：${formatAvailabilityBucketLabel(bucket)}`,
                           `可用性：${formatAvailabilityPercent(bucket.availabilityPercent)}`,
-                          `请求：${bucket.totalRequests} 次`,
+                          `${tr('请求：')}${bucket.totalRequests} ${tr('次')}`,
                           `成功/失败：${bucket.successCount}/${bucket.failedCount}`,
                           bucket.averageLatencyMs != null
                             ? `平均响应：${formatDashboardLatency(bucket.averageLatencyMs)}`

@@ -1605,6 +1605,13 @@ export const zhToEnSupplemental: Record<string, string> = {
   '；已覆盖：': '; covered: ',
   '并验证': ' and verify',
   '已加入该 key 的禁用列表': 'added to this key\'s disabled list',
+  '条': 'entries',
+  '次': 'times',
+  '已启用': 'enabled',
+  '已置顶': 'pinned',
+  '已取消置顶': 'unpinned',
+  '请求：': 'Requests: ',
+
 
 
 

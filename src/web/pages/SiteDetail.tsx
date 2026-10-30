@@ -74,7 +74,7 @@ export default function SiteDetail() {
             {tr('← 返回')}
           </button>
           <h2 className="page-title" style={{ margin: 0 }}>
-            {site.name}
+            <span data-i18n-skip>{site.name}</span>
           </h2>
           {site.platform && (
             <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>

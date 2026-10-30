@@ -1126,7 +1126,7 @@ export default function Sites() {
     setTogglingSiteId(site.id);
     try {
       await api.updateSite(site.id, { status: nextStatus });
-      toast.success(nextStatus === 'disabled' ? `站点 "${site.name}tr(" 已禁用` : `站点 ")${site.name}" 已启用`);
+      toast.success(nextStatus === 'disabled' ? `${tr('站点')} "${site.name}" ${tr('已禁用')}` : `${tr('站点')} "${site.name}" ${tr('已启用')}`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -1163,7 +1163,7 @@ export default function Sites() {
           ...unpinUpdates.map((update) => api.updateSite(update.id, { sortOrder: update.sortOrder })),
         ]);
       }
-      toast.success(nextPinned ? `站点 "${site.name}tr(" 已置顶` : `站点 ")${site.name}" 已取消置顶`);
+      toast.success(nextPinned ? `${tr('站点')} "${site.name}" ${tr('已置顶')}` : `${tr('站点')} "${site.name}" ${tr('已取消置顶')}`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
@@ -2006,7 +2006,7 @@ export default function Sites() {
                     title={(
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                          <span>{site.name || '-'}</span>
+                          <span data-i18n-skip>{site.name || '-'}</span>
                           <SiteOutboundFlags
                             proxyUrl={site.proxyUrl}
                             customHeaders={site.customHeaders}
@@ -2248,7 +2248,7 @@ export default function Sites() {
                   >
                     <td className="sites-name-col" style={{ fontWeight: 600 }}>
                       <div className="sites-name-cell">
-                        <div className="sites-name-primary">
+                        <div className="sites-name-primary" data-i18n-skip>
                           <a
                             href={site.url}
                             target="_blank"
