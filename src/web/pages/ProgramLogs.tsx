@@ -7,6 +7,7 @@ import { useIsMobile } from '../components/useIsMobile.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PaginationControls from '../components/PaginationControls.js';
+import ListPage from '../components/ListPage.js';
 import { usePersistedPageSize } from '../components/usePersistedPageSize.js';
 import { tr } from '../i18n.js';
 import type { ProgramEvent } from '../eventsTypes.js';
@@ -187,10 +188,15 @@ export default function ProgramLogs() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <h2 className="page-title">{tr('程序日志')}</h2>
-        <div className="page-actions">
+    <>
+      <ListPage
+        title={tr('程序日志')}
+        loading={loading}
+        isEmpty={events.length === 0}
+        emptyTitle={tr('暂无日志')}
+        emptyDesc={tr('当前筛选条件下没有程序日志。')}
+        actions={
+          <>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
@@ -214,9 +220,9 @@ export default function ProgramLogs() {
           >
             {clearing ? <><span className="spinner spinner-sm" /> {tr('清空中...')}</> : '清空日志'}
           </button>
-        </div>
-      </div>
-
+          </>
+        }
+        beforeList={
       <ResponsiveFilterPanel
         isMobile={isMobile}
         mobileOpen={showFilters}
@@ -290,17 +296,11 @@ export default function ProgramLogs() {
           </div>
         )}
       />
-
-      <div className="card" style={{ overflowX: 'auto' }}>
-        {loading ? (
-          <div style={{ padding: 20 }}>
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34 }} />
-          </div>
-        ) : isMobile ? (
+        }
+      >
+        {isMobile ? (
           <div className="mobile-card-list">
-            {events.length > 0 ? events.map((row) => {
+            {events.map((row) => {
               const level = levelLabel(row.level || 'info');
               const eventStatus = eventStatusLabel(row);
               return (
@@ -334,17 +334,9 @@ export default function ProgramLogs() {
                   <MobileField label="内容" value={row.message || '-'} stacked />
                 </MobileCard>
               );
-            }) : (
-              <div className="empty-state">
-                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div className="empty-state-title">{tr('暂无日志')}</div>
-                <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
-              </div>
-            )}
+            })}
           </div>
-        ) : events.length > 0 ? (
+        ) : (
           <table className="data-table program-logs-table">
             <colgroup>
               <col style={{ width: 160 }} />
@@ -419,16 +411,8 @@ export default function ProgramLogs() {
               })}
             </tbody>
           </table>
-        ) : (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="empty-state-title">{tr('暂无日志')}</div>
-            <div className="empty-state-desc">{tr('当前筛选条件下没有程序日志。')}</div>
-          </div>
         )}
-      </div>
+      </ListPage>
 
       <PaginationControls
         page={page}
@@ -443,6 +427,6 @@ export default function ProgramLogs() {
         }}
       />
 
-    </div>
+    </>
   );
 }

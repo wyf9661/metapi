@@ -10,6 +10,7 @@ import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import PaginationControls from '../components/PaginationControls.js';
 import CenteredModal from '../components/CenteredModal.js';
+import ListPage from '../components/ListPage.js';
 import MobileDrawer from '../components/MobileDrawer.js';
 import { tr, useI18n } from '../i18n.js';
 import DateTimeInput from '../components/DateTimeInput.js';
@@ -266,13 +267,11 @@ export default function ProbeLogs() {
     formatDateTimeLocal(value, language === 'zh' ? 'zh-CN' : 'en-US');
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title">{tr('测活日志')}</h2>
-          <p className="page-subtitle">{tr('记录每次模型可用性探测的结果与耗时。')}</p>
-        </div>
-        <div className="page-actions">
+    <>
+      <ListPage
+        title={tr('测活日志')}
+        subtitle={tr('记录每次模型可用性探测的结果与耗时。')}
+        actions={
           <button
             type="button"
             className="btn btn-ghost"
@@ -284,8 +283,13 @@ export default function ProbeLogs() {
           >
             {tr('刷新')}
           </button>
-        </div>
-      </div>
+        }
+        loading={loading}
+        isEmpty={logs.length === 0}
+        emptyTitle={tr('暂无测活记录')}
+        emptyDesc={tr('当前筛选条件下没有测活日志。')}
+        beforeList={
+          <>
 
       {/* 统计卡片 */}
       {stats && (
@@ -467,26 +471,10 @@ export default function ProbeLogs() {
           </div>
         )}
       />
-
-      {/* 日志列表 */}
-      <div className="card" style={{ overflowX: 'auto' }}>
-        {loading ? (
-          <div style={{ padding: 20 }}>
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34, marginBottom: 8 }} />
-            <div className="skeleton" style={{ width: '100%', height: 34 }} />
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="empty-state-title">{tr('暂无测活记录')}</div>
-            <div className="empty-state-desc">{tr('当前筛选条件下没有测活日志。')}</div>
-          </div>
-        ) : (
-          <>
-            {isMobile ? (
+          </>
+        }
+      >
+      {isMobile ? (
               <div className="mobile-card-list">
                 {logs.map((log) => (
                   <MobileCard
@@ -507,7 +495,7 @@ export default function ProbeLogs() {
                 ))}
               </div>
             ) : (
-              <table className="data-table probe-logs-table">
+                      <table className="data-table probe-logs-table">
                 <colgroup>
                   <col style={{ width: 90 }} />
                   <col style={{ width: 160 }} />
@@ -566,10 +554,8 @@ export default function ProbeLogs() {
                   ))}
                 </tbody>
               </table>
-            )}
-          </>
-        )}
-      </div>
+      )}
+      </ListPage>
 
       {total > 0 && (
         <PaginationControls
@@ -623,6 +609,6 @@ export default function ProbeLogs() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }
