@@ -1591,6 +1591,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '音频': 'Audio',
   '文档会以内联数据注入': 'Documents are injected inline',
   '附件': 'Attachments',
+  '到期': 'Expires',
+  '永久有效': 'Never expires',
 
 
 

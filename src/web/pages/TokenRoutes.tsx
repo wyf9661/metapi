@@ -1278,7 +1278,7 @@ export default function TokenRoutes() {
     const result = await requestConfirmation({
       title: tr('确认屏蔽模型'),
       description: (
-        <>{tr('将模型「')}<strong>{modelName}</strong>{tr('」加入账号「')}<strong>{accountLabel}</strong>」（站点 {siteName}）的禁用列表。<br />{tr('执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。')}</>
+        <>{tr('将模型「')}<strong>{modelName}</strong>{tr('」加入账号「')}<strong>{accountLabel}</strong>」（{tr('站点')} {siteName}）的禁用列表。<br />{tr('执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。')}</>
       ),
       confirmText: tr('确认屏蔽'),
       tone: 'warning',
