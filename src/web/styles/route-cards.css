@@ -83,7 +83,6 @@
   border-color: color-mix(in srgb, var(--color-text-muted) 22%, var(--color-border));
   color: var(--color-text-primary);
   box-shadow: 0 8px 16px rgba(28,25,23, 0.05);
-  transform: translateY(-1px);
 }
 
 .filter-chip.active {

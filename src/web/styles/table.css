@@ -998,9 +998,9 @@ body.site-drag-active * {
   cursor: pointer;
 }
 
+/* chips/links stay still on hover; only color+shadow carry the state (same rule as select) */
 .badge-link:hover .badge,
 .badge-link:focus-visible .badge {
-  transform: translateY(-1px);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
@@ -1284,7 +1284,6 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 }
 
 .missing-token-site-tag:hover {
-  transform: translateY(-1px);
   border-color: rgba(13,148,136, 0.55);
   background: #c3d9f2;
   box-shadow: 0 4px 10px rgba(13,148,136, 0.16);
