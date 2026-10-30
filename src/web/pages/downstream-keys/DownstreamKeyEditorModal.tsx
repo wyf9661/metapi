@@ -412,7 +412,7 @@ export default function DownstreamKeyEditorModal({
           <input value={form.maxRpm} onChange={(e) => onChange((prev) => ({ ...prev, maxRpm: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
-          <div className="downstream-key-modal-label">最大并发请求数 (In-Flight)</div>
+          <div className="downstream-key-modal-label">{tr('最大并发请求数')} (In-Flight)</div>
           <input value={form.maxInflight} onChange={(e) => onChange((prev) => ({ ...prev, maxInflight: e.target.value }))} placeholder={tr('留空表示不限')} style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">

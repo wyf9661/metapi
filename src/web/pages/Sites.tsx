@@ -1853,7 +1853,7 @@ export default function Sites() {
                     background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
                   }}
                 />
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ms（响应超过该时间则自动禁用，0=不限）</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ms{tr('（响应超过该时间则自动禁用，0=不限）')}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <button
