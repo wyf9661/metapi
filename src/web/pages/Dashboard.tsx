@@ -502,14 +502,14 @@ export default function Dashboard({
         if (res?.tunnel?.publicUrl || res?.tunnel?.tunnelUrl) {
           toast.success(tr('隧道已启用'));
         } else {
-          toast.info(res?.message || '隧道启动中');
+          toast.info(res?.message || tr('隧道启动中'));
         }
       }
       await refreshTunnel();
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       setTunnelError(errMessage || '隧道操作失败');
-      toast.error(errMessage || '隧道操作失败');
+      toast.error(errMessage || tr('隧道操作失败'));
       await refreshTunnel();
     } finally {
       setTunnelBusy(false);

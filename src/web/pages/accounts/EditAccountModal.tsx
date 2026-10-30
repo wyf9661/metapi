@@ -166,7 +166,7 @@ export default function EditAccountModal({
       onSaved();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新账号失败');
+      toast.error(eMessage || tr('更新账号失败'));
     } finally {
       setSavingEdit(false);
     }

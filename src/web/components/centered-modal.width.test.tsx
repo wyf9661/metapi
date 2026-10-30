@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readAllCss } from '../styles/readStyles.js';
+import { readAllCss } from '../styles/readStyles.testutil.js';
 
 describe('CenteredModal width', () => {
   it('applies the maxWidth prop through inline width instead of being capped by the global 500px rule', () => {

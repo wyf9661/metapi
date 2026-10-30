@@ -73,7 +73,7 @@ export default function SiteAnnouncements() {
       setServerTimeZone(nextServerTimeZone || undefined);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '加载站点公告失败');
+      toast.error(errorMessage || tr('加载站点公告失败'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -126,7 +126,7 @@ export default function SiteAnnouncements() {
       toast.success(tr('公告已清空'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '清空公告失败');
+      toast.error(errorMessage || tr('清空公告失败'));
     } finally {
       setClearing(false);
     }
@@ -143,7 +143,7 @@ export default function SiteAnnouncements() {
       toast.success(tr('已标记全部为已读'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '标记失败');
+      toast.error(errorMessage || tr('标记失败'));
     } finally {
       setMarkingAll(false);
     }
@@ -155,7 +155,7 @@ export default function SiteAnnouncements() {
       toast.success(tr('公告同步任务已启动'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '启动同步失败');
+      toast.error(errorMessage || tr('启动同步失败'));
     }
   };
 

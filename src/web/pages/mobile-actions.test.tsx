@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readAllCss } from '../styles/readStyles.js';
+import { readAllCss } from '../styles/readStyles.testutil.js';
 
 function findRuleValue(source: string, selector: string, property: string): number | null {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

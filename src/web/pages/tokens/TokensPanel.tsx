@@ -223,7 +223,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       };
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '加载令牌失败');
+      toast.error(eMessage || tr('加载令牌失败'));
       return {
         tokens: [] as any[],
         accounts: [] as any[],
@@ -272,7 +272,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         if (cancelled) return;
         setGroupOptions(['default']);
         setForm((prev) => ({ ...prev, group: 'default' }));
-        toast.error(error?.message || '拉取分组失败，已回退 default');
+        toast.error(error?.message || tr('拉取分组失败，已回退 default'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -310,7 +310,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       .catch((error: any) => {
         if (cancelled) return;
         setEditGroupOptions((current) => (current.includes(currentGroup) ? current : [...current, currentGroup]));
-        toast.error(error?.message || '拉取分组失败，已保留当前分组');
+        toast.error(error?.message || tr('拉取分组失败，已保留当前分组'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -469,7 +469,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       } catch (error) {
         // The site could not confirm that the token is gone; the local row is
         // kept on purpose, so surface the server's reason instead of silence.
-        toast.error(error instanceof Error ? error.message : '删除失败');
+        toast.error(error instanceof Error ? error.message : tr('删除失败'));
       }
     });
   };
@@ -509,7 +509,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       })
       .catch((error: any) => {
         if (editingTokenIdRef.current !== token.id) return;
-        toast.error(error?.message || '加载令牌详情失败');
+        toast.error(error?.message || tr('加载令牌详情失败'));
       })
       .finally(() => {
         if (editingTokenIdRef.current !== token.id) return;
@@ -552,7 +552,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新令牌失败');
+      toast.error(eMessage || tr('更新令牌失败'));
     } finally {
       setSavingEdit(false);
     }
@@ -582,7 +582,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '复制令牌失败');
+      toast.error(errorMessage || tr('复制令牌失败'));
     }
   };
 
@@ -616,7 +616,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '创建令牌失败');
+      toast.error(eMessage || tr('创建令牌失败'));
     } finally {
       setSaving(false);
     }
@@ -629,9 +629,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       const res = await api.syncAccountTokens(syncingAccountId) as AccountTokenSyncResult;
       const status = resolveSyncStatus(res);
       if (status === 'failed') {
-        toast.error(`同步失败：${resolveSyncMessage(res, '请检查账号令牌或站点状态')}`);
+        toast.error(`同步失败：${resolveSyncMessage(res, tr('请检查账号令牌或站点状态'))}`);
       } else if (isMaskedPendingSyncResult(res)) {
-        toast.info(resolveSyncMessage(res, '上游返回了脱敏令牌，请补全明文 token'));
+        toast.info(resolveSyncMessage(res, tr('上游返回了脱敏令牌，请补全明文 token')));
         const loaded = await load();
         const pendingIds = Array.isArray(res.pendingTokenIds)
           ? res.pendingTokenIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
@@ -650,7 +650,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         }
         return;
       } else if (status === 'skipped') {
-        toast.info(`同步已跳过：${resolveSyncMessage(res, '账号缺少可用 Session Cookie')}`);
+        toast.info(`同步已跳过：${resolveSyncMessage(res, tr('账号缺少可用 Session Cookie'))}`);
       } else {
         const coverage = res.coverageRefresh?.refresh?.[0];
         const modelCount = Number(coverage?.modelCount);
@@ -694,7 +694,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       });
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '同步令牌失败');
+      toast.error(eMessage || tr('同步令牌失败'));
     } finally {
       setSyncing(false);
     }
@@ -705,7 +705,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
     try {
       const res = await api.syncAllAccountTokens();
       if (res?.queued) {
-        toast.info(res.message || '已开始同步令牌，请稍后查看日志');
+        toast.info(res.message || tr('已开始同步令牌，请稍后查看日志'));
         await load();
         return;
       }
@@ -720,9 +720,9 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       if (syncResults.length === 0) {
         const status = resolveSyncStatus(res as AccountTokenSyncResult);
         if (status === 'failed') {
-          toast.error(`全部同步失败：${resolveSyncMessage(res, '请稍后重试')}`);
+          toast.error(`全部同步失败：${resolveSyncMessage(res, tr('请稍后重试'))}`);
         } else if (status === 'skipped') {
-          toast.info(`全部同步已跳过：${resolveSyncMessage(res, '没有可同步的账号')}`);
+          toast.info(`全部同步已跳过：${resolveSyncMessage(res, tr('没有可同步的账号'))}`);
         } else {
           toast.success(tr('全部账号同步完成'));
         }
@@ -735,13 +735,13 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         toast.success(`全部同步完成：成功 ${successRows.length}，跳过 ${skippedRows.length}，失败 ${failedRows.length}`);
 
         failedRows.slice(0, 3).forEach((item) => {
-          toast.error(`${resolveAccountLabel(item)} 同步失败：${resolveSyncMessage(item, '请检查账号配置')}`);
+          toast.error(`${resolveAccountLabel(item)} 同步失败：${resolveSyncMessage(item, tr('请检查账号配置'))}`);
         });
         maskedRows.slice(0, 3).forEach((item) => {
-          toast.info(`${resolveAccountLabel(item)} 需要补全明文 token：${resolveSyncMessage(item, '上游返回脱敏令牌')}`);
+          toast.info(`${resolveAccountLabel(item)} 需要补全明文 token：${resolveSyncMessage(item, tr('上游返回脱敏令牌'))}`);
         });
         skippedRows.slice(0, 3).forEach((item) => {
-          toast.info(`${resolveAccountLabel(item)} 已跳过：${resolveSyncMessage(item, '不满足同步条件')}`);
+          toast.info(`${resolveAccountLabel(item)} 已跳过：${resolveSyncMessage(item, tr('不满足同步条件'))}`);
         });
 
         if (failedRows.length > 3) {
@@ -756,7 +756,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       emitTokenCoverageChanged({ source: 'account-token-sync-all' });
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '全部同步失败');
+      toast.error(eMessage || tr('全部同步失败'));
     } finally {
       setSyncingAll(false);
     }
@@ -784,7 +784,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '同步站点令牌失败');
+      toast.error(eMessage || tr('同步站点令牌失败'));
     } finally {
       setSyncingAll(false);
     }
@@ -1310,7 +1310,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                             <button
                               onClick={() => withRowLoading(`${loadingPrefix}-toggle`, async () => {
                                 await api.updateAccountToken(token.id, { enabled: !token.enabled });
-                                toast.success(token.enabled ? '令牌已禁用' : '令牌已启用');
+                                toast.success(token.enabled ? tr('令牌已禁用') : tr('令牌已启用'));
                                 await load();
                               })}
                               disabled={!!rowLoading[`${loadingPrefix}-toggle`]}
@@ -1436,7 +1436,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                           <button
                             onClick={() => withRowLoading(`${loadingPrefix}-toggle`, async () => {
                               await api.updateAccountToken(token.id, { enabled: !token.enabled });
-                              toast.success(token.enabled ? '令牌已禁用' : '令牌已启用');
+                              toast.success(token.enabled ? tr('令牌已禁用') : tr('令牌已启用'));
                               await load();
                             })}
                             disabled={!!rowLoading[`${loadingPrefix}-toggle`]}

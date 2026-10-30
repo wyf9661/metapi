@@ -113,7 +113,7 @@ export default function ProgramLogs() {
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '加载程序日志失败');
+      toast.error(eMessage || tr('加载程序日志失败'));
     } finally {
       if (seq === loadSeqRef.current) {
         setLoading(false);
@@ -133,7 +133,7 @@ export default function ProgramLogs() {
     } catch (e) {
       // Previously escaped as an unhandled rejection: the spinner stopped and
       // the row stayed unread with zero user feedback.
-      toast.error(e instanceof Error ? e.message : '操作失败');
+      toast.error(e instanceof Error ? e.message : tr('操作失败'));
     } finally {
       setRowLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -165,7 +165,7 @@ export default function ProgramLogs() {
       toast.success(tr('已标记全部为已读'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '标记失败');
+      toast.error(eMessage || tr('标记失败'));
     } finally {
       setMarkingAll(false);
     }
@@ -181,7 +181,7 @@ export default function ProgramLogs() {
       toast.success(tr('日志已清空'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '清空失败');
+      toast.error(eMessage || tr('清空失败'));
     } finally {
       setClearing(false);
     }

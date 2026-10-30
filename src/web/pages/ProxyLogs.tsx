@@ -346,7 +346,7 @@ export default function ProxyLogs() {
         if (controller.signal.aborted) return;
         const eMessage = e instanceof Error ? e.message : String(e);
         if (seq !== loadSeq.current) return;
-        if (!silent) toast.error(eMessage || '加载日志失败');
+        if (!silent) toast.error(eMessage || tr('加载日志失败'));
       } finally {
         if (loadAbortRef.current === controller) loadAbortRef.current = null;
         if (seq === loadSeq.current) setLoading(false);
@@ -608,7 +608,7 @@ export default function ProxyLogs() {
         if (controller.signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!options?.suppressToast) {
-          toast.error(errorMessage || '加载代理调试追踪失败');
+          toast.error(errorMessage || tr('加载代理调试追踪失败'));
         }
       } finally {
         if (debugListAbortRef.current === controller) {
@@ -637,7 +637,7 @@ export default function ProxyLogs() {
         await syncDebugTraceItems(items, { refreshSelectedDetail: true });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(errorMessage || '加载代理调试面板失败');
+        toast.error(errorMessage || tr('加载代理调试面板失败'));
       } finally {
         if (!silent) setDebugPanelLoading(false);
       }
@@ -701,7 +701,7 @@ export default function ProxyLogs() {
         return normalized;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        toast.error(errorMessage || '保存代理调试设置失败');
+        toast.error(errorMessage || tr('保存代理调试设置失败'));
         return null;
       } finally {
         setDebugPanelSaving(false);
@@ -751,7 +751,7 @@ export default function ProxyLogs() {
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '删除调试追踪失败');
+      toast.error(errorMessage || tr('删除调试追踪失败'));
     } finally {
       setDebugPanelSaving(false);
     }

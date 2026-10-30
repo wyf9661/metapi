@@ -449,7 +449,7 @@ export default function TokenRoutes() {
       setRebuilding(true);
       const res = await api.rebuildRoutes(true);
       if (res?.queued) {
-        toast.info(res.message || '已开始重建路由，请稍后查看日志');
+        toast.info(res.message || tr('已开始重建路由，请稍后查看日志'));
         invalidateChannels();
         await load();
         return;
@@ -468,7 +468,7 @@ export default function TokenRoutes() {
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '重建路由失败');
+      toast.error(eMessage || tr('重建路由失败'));
     } finally {
       setRebuilding(false);
     }
@@ -497,11 +497,11 @@ export default function TokenRoutes() {
         throw new Error('刷新任务未返回 taskId');
       }
 
-      toast.info(response?.message || '已开始后台刷新路由选中概率，可稍后返回查看');
+      toast.info(response?.message || tr('已开始后台刷新路由选中概率，可稍后返回查看'));
       monitorRouteDecisionRefreshTask(taskId);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '刷新路由选择概率失败');
+      toast.error(errorMessage || tr('刷新路由选择概率失败'));
     }
   };
 
@@ -649,7 +649,7 @@ export default function TokenRoutes() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '删除路由失败');
+      toast.error(eMessage || tr('删除路由失败'));
     }
   };
 
@@ -660,13 +660,13 @@ export default function TokenRoutes() {
     );
     try {
       await api.updateRoute(route.id, { enabled: newEnabled });
-      toast.success(newEnabled ? '路由已启用' : '路由已禁用');
+      toast.success(newEnabled ? tr('路由已启用') : tr('路由已禁用'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       setRouteSummaries((prev) =>
         prev.map((item) => (item.id === route.id ? { ...item, enabled: route.enabled } : item)),
       );
-      toast.error(eMessage || '切换路由状态失败');
+      toast.error(eMessage || tr('切换路由状态失败'));
     }
   };
 
@@ -1113,7 +1113,7 @@ export default function TokenRoutes() {
       );
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '移除通道失败');
+      toast.error(eMessage || tr('移除通道失败'));
     }
   };
 
@@ -1134,7 +1134,7 @@ export default function TokenRoutes() {
       await loadChannels(routeId, true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '恢复默认失败');
+      toast.error(eMessage || tr('恢复默认失败'));
     }
   };
 
@@ -1143,11 +1143,11 @@ export default function TokenRoutes() {
     setUpdatingChannel((prev) => ({ ...prev, [channelId]: true }));
     try {
       await api.updateChannel(channelId, { enabled });
-      toast.success(enabled ? '通道已启用' : '通道已禁用');
+      toast.success(enabled ? tr('通道已启用') : tr('通道已禁用'));
       await loadChannels(routeId, true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新通道状态失败');
+      toast.error(eMessage || tr('更新通道状态失败'));
     } finally {
       setUpdatingChannel((prev) => ({ ...prev, [channelId]: false }));
     }
@@ -1169,7 +1169,7 @@ export default function TokenRoutes() {
       await loadChannels(routeId, true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新令牌失败');
+      toast.error(eMessage || tr('更新令牌失败'));
     } finally {
       setUpdatingChannel((prev) => ({ ...prev, [channelId]: false }));
     }
@@ -1253,7 +1253,7 @@ export default function TokenRoutes() {
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       setChannels(routeId, previousChannels);
-      toast.error(eMessage || '保存通道优先级失败，已回滚');
+      toast.error(eMessage || tr('保存通道优先级失败，已回滚'));
     } finally {
       setSavingPriorityByRoute((prev) => ({ ...prev, [routeId]: false }));
     }
@@ -1301,7 +1301,7 @@ export default function TokenRoutes() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '屏蔽模型失败');
+      toast.error(eMessage || tr('屏蔽模型失败'));
     }
   };
 
@@ -1335,7 +1335,7 @@ export default function TokenRoutes() {
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '清除路由冷却失败');
+      toast.error(eMessage || tr('清除路由冷却失败'));
     } finally {
       setClearingCooldownByRoute((prev) => ({ ...prev, [routeId]: false }));
     }

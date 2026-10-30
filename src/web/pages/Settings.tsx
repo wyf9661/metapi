@@ -535,7 +535,7 @@ export default function Settings() {
       });
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '加载设置失败');
+      toast.error(errMessage || tr('加载设置失败'));
     } finally {
       setLoading(false);
     }
@@ -572,7 +572,7 @@ export default function Settings() {
       setTurnstileSolverApiKeyDraft('');
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingSchedule(false);
     }
@@ -585,7 +585,7 @@ export default function Settings() {
       toast.success(tr('已开始全部签到，请稍后查看签到日志'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '触发签到失败');
+      toast.error(errMessage || tr('触发签到失败'));
     } finally {
       setTestingCheckin(false);
     }
@@ -634,7 +634,7 @@ export default function Settings() {
       toast.success(tr('传输与会话并发设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingProxyTransport(false);
     }
@@ -662,7 +662,7 @@ export default function Settings() {
       toast.success(tr('代理失败规则已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingProxyFailureRules(false);
     }
@@ -687,7 +687,7 @@ export default function Settings() {
       toast.success(tr('Payload 规则已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存 Payload 规则失败');
+      toast.error(errMessage || tr('保存 Payload 规则失败'));
     } finally {
       setSavingPayloadRules(false);
     }
@@ -770,7 +770,7 @@ export default function Settings() {
       toast.success(tr('路由策略已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingRouting(false);
     }
@@ -807,7 +807,7 @@ export default function Settings() {
       toast.success(tr('安全设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingSecurity(false);
     }
@@ -821,7 +821,7 @@ export default function Settings() {
       toast.success(`缓存已清理（模型缓存 ${res.deletedModelAvailability || 0} 条）`);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '清理缓存失败');
+      toast.error(errMessage || tr('清理缓存失败'));
     } finally {
       setClearingCache(false);
     }
@@ -846,7 +846,7 @@ export default function Settings() {
       toast.success(tr('反探测设置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存失败');
+      toast.error(errMessage || tr('保存失败'));
     } finally {
       setSavingSecurity(false);
     }
@@ -866,7 +866,7 @@ export default function Settings() {
       window.location.reload();
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '重新初始化系统失败');
+      toast.error(errMessage || tr('重新初始化系统失败'));
       setFactoryResetting(false);
     }
   };
@@ -1071,11 +1071,11 @@ export default function Settings() {
                 setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: next }));
                 try {
                   await api.setTunnelDashboardAccess(next);
-                  toast.success(next ? '已允许隧道访问控制台' : '已限制隧道仅 API 访问');
+                  toast.success(next ? tr('已允许隧道访问控制台') : tr('已限制隧道仅 API 访问'));
                 } catch (err) {
                   const errMessage = err instanceof Error ? err.message : String(err);
                   setRuntime((prev) => ({ ...prev, tunnelDashboardAccess: !next }));
-                  toast.error(errMessage || '更新失败');
+                  toast.error(errMessage || tr('更新失败'));
                 }
               }}
               style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}

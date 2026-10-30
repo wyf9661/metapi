@@ -357,7 +357,7 @@ export default function ImportExport() {
       })
       .catch((err: any) => {
         if (!alive) return;
-        toast.error(err?.message || '加载 WebDAV 配置失败');
+        toast.error(err?.message || tr('加载 WebDAV 配置失败'));
       });
     return () => {
       alive = false;
@@ -378,7 +378,7 @@ export default function ImportExport() {
       toast.success(tr('导出成功'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '导出失败');
+      toast.error(errMessage || tr('导出失败'));
     } finally {
       setExportingType('');
     }
@@ -453,7 +453,7 @@ export default function ImportExport() {
       setSelectedFileName('');
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '导入失败');
+      toast.error(errMessage || tr('导入失败'));
     } finally {
       setImporting(false);
     }
@@ -481,7 +481,7 @@ export default function ImportExport() {
       toast.success(tr('WebDAV 配置已保存'));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存 WebDAV 配置失败');
+      toast.error(errMessage || tr('保存 WebDAV 配置失败'));
     } finally {
       setWebdavSaving(false);
     }
@@ -495,7 +495,7 @@ export default function ImportExport() {
       toast.success(`已导出到 WebDAV：${result?.fileUrl || webdavConfig.fileUrl}`);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '导出到 WebDAV 失败');
+      toast.error(errMessage || tr('导出到 WebDAV 失败'));
     } finally {
       setWebdavAction('');
     }
@@ -517,7 +517,7 @@ export default function ImportExport() {
       toast.success(buildImportSuccessMessage(result));
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '从 WebDAV 导入失败');
+      toast.error(errMessage || tr('从 WebDAV 导入失败'));
     } finally {
       setWebdavAction('');
     }

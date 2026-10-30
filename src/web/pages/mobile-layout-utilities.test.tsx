@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readAllCss } from '../styles/readStyles.js';
+import { readAllCss } from '../styles/readStyles.testutil.js';
 
 describe('Mobile layout utilities', () => {
   it('allows page actions and pagination controls to wrap on narrow screens', () => {

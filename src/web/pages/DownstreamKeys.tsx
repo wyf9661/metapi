@@ -504,7 +504,7 @@ export default function DownstreamKeys() {
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       setLoadError(errMessage || '加载下游密钥列表失败');
-      toast.error(errMessage || '加载下游密钥列表失败');
+      toast.error(errMessage || tr('加载下游密钥列表失败'));
     } finally {
       setLoading(false);
     }
@@ -586,7 +586,7 @@ export default function DownstreamKeys() {
       setExclusionSourceLoaded(true);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '加载可允许站点与令牌失败');
+      toast.error(errMessage || tr('加载可允许站点与令牌失败'));
     } finally {
       setExclusionSourceLoading(false);
     }
@@ -841,7 +841,7 @@ export default function DownstreamKeys() {
       await load();
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
-      toast.error(errMessage || '保存下游密钥失败');
+      toast.error(errMessage || tr('保存下游密钥失败'));
     } finally {
       setSaving(false);
     }
@@ -910,7 +910,7 @@ export default function DownstreamKeys() {
     await withRowLoading(`toggle-${item.id}`, async () => {
       await api.updateDownstreamApiKey(item.id, { enabled: !item.enabled });
       await load();
-      toast.success(item.enabled ? '已禁用该密钥' : '已启用该密钥');
+      toast.success(item.enabled ? tr('已禁用该密钥') : tr('已启用该密钥'));
     });
   };
 

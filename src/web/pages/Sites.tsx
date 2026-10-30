@@ -667,7 +667,7 @@ export default function Sites() {
       toast.success(tr('刷新后探测设置已保存'));
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存失败');
+      toast.error(eMessage || tr('保存失败'));
     } finally {
       setProbeSaving(false);
     }
@@ -776,7 +776,7 @@ export default function Sites() {
               .finally(() => setProbeCompleted(true));
           } else if (type === 'error') {
             addLog(d.message || '探测失败', 'var(--color-danger)');
-            toast.error(d.message || '探测失败');
+            toast.error(d.message || tr('探测失败'));
             // Refresh model state even on error
             api.getSiteAvailableModels(siteId)
               .then((res: any) => {
@@ -815,7 +815,7 @@ export default function Sites() {
         return;
       }
       addLog(eMessage || '探测失败', 'var(--color-danger)');
-      toast.error(eMessage || '探测失败');
+      toast.error(eMessage || tr('探测失败'));
     } finally {
       setProbing(false);
       probeAbortRef.current = null;
@@ -831,12 +831,12 @@ export default function Sites() {
     }
     const serializedCustomHeaders = serializeSiteCustomHeaders(form.customHeaders);
     if (!serializedCustomHeaders.valid) {
-      toast.error(serializedCustomHeaders.error || '自定义请求头格式不正确');
+      toast.error(serializedCustomHeaders.error || tr('自定义请求头格式不正确'));
       return;
     }
     const serializedApiEndpoints = serializeSiteApiEndpoints(form.apiEndpoints);
     if (!serializedApiEndpoints.valid) {
-      toast.error(serializedApiEndpoints.error || 'API 请求地址格式不正确');
+      toast.error(serializedApiEndpoints.error || tr('API 请求地址格式不正确'));
       return;
     }
 
@@ -912,7 +912,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存失败');
+      toast.error(eMessage || tr('保存失败'));
     } finally {
       setSaving(false);
     }
@@ -1090,14 +1090,14 @@ export default function Sites() {
         if (autoDetectSignatureRef.current === requestedSignature) {
           autoDetectSignatureRef.current = null;
         }
-        if (!options?.silent) toast.error(result?.error || '无法识别平台类型');
+        if (!options?.silent) toast.error(result?.error || tr('无法识别平台类型'));
       }
     } catch (e) {
       if (autoDetectSignatureRef.current === requestedSignature) {
         autoDetectSignatureRef.current = null;
       }
       const eMessage = e instanceof Error ? e.message : String(e);
-      if (!options?.silent) toast.error(eMessage || '自动检测失败');
+      if (!options?.silent) toast.error(eMessage || tr('自动检测失败'));
     } finally {
       setDetecting(false);
     }
@@ -1123,11 +1123,11 @@ export default function Sites() {
     setTogglingSiteId(site.id);
     try {
       await api.updateSite(site.id, { status: nextStatus });
-      toast.success(nextStatus === 'disabled' ? `站点 "${site.name}" 已禁用` : `站点 "${site.name}" 已启用`);
+      toast.success(nextStatus === 'disabled' ? `站点 "${site.name}tr(" 已禁用` : `站点 ")${site.name}" 已启用`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换站点状态失败');
+      toast.error(eMessage || tr('切换站点状态失败'));
     } finally {
       setTogglingSiteId(null);
     }
@@ -1160,11 +1160,11 @@ export default function Sites() {
           ...unpinUpdates.map((update) => api.updateSite(update.id, { sortOrder: update.sortOrder })),
         ]);
       }
-      toast.success(nextPinned ? `站点 "${site.name}" 已置顶` : `站点 "${site.name}" 已取消置顶`);
+      toast.success(nextPinned ? `站点 "${site.name}tr(" 已置顶` : `站点 ")${site.name}" 已取消置顶`);
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换置顶失败');
+      toast.error(eMessage || tr('切换置顶失败'));
     } finally {
       setPinningSiteId(null);
     }
@@ -1195,7 +1195,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新排序失败');
+      toast.error(eMessage || tr('更新排序失败'));
       await load();
     } finally {
       setOrderingSiteId(null);
@@ -1305,7 +1305,7 @@ export default function Sites() {
       await load();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '删除失败');
+      toast.error(eMessage || tr('删除失败'));
     } finally {
       setDeleting(null);
     }
@@ -1356,10 +1356,10 @@ export default function Sites() {
             onClick={async () => {
               try {
                 const res = await api.triggerCheckinAll();
-                toast.success(res?.message || '已触发全部签到');
+                toast.success(res?.message || tr('已触发全部签到'));
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '签到触发失败');
+                toast.error(eMessage || tr('签到触发失败'));
               }
             }}
             className="btn btn-soft-primary"
@@ -1371,13 +1371,13 @@ export default function Sites() {
               try {
                 const res = await api.refreshAccountHealth();
                 if (res?.queued) {
-                  toast.info(res.message || '账号状态刷新任务已提交');
+                  toast.info(res.message || tr('账号状态刷新任务已提交'));
                 } else {
-                  toast.success(res?.message || '账号状态已刷新');
+                  toast.success(res?.message || tr('账号状态已刷新'));
                 }
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '刷新状态失败');
+                toast.error(eMessage || tr('刷新状态失败'));
               }
             }}
             className="btn btn-soft-primary"
@@ -1389,13 +1389,13 @@ export default function Sites() {
               try {
                 const res = await api.syncAllAccountTokens();
                 if (res?.queued) {
-                  toast.info(res.message || '已开始同步令牌，请稍后查看日志');
+                  toast.info(res.message || tr('已开始同步令牌，请稍后查看日志'));
                 } else {
                   toast.success(tr('同步全部账号令牌完成'));
                 }
               } catch (e) {
                 const eMessage = e instanceof Error ? e.message : String(e);
-                toast.error(eMessage || '同步失败');
+                toast.error(eMessage || tr('同步失败'));
               }
             }}
             className="btn btn-soft-primary"

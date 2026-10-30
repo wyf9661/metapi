@@ -91,7 +91,7 @@ export default function CheckinLog() {
   useEffect(() => {
     if (!logsQuery.isError) return;
     const eMessage = logsQuery.error instanceof Error ? logsQuery.error.message : String(logsQuery.error);
-    toast.error(eMessage || '加载签到记录失败');
+    toast.error(eMessage || tr('加载签到记录失败'));
   }, [logsQuery.isError, logsQuery.errorUpdatedAt]);
 
 
@@ -170,14 +170,14 @@ export default function CheckinLog() {
     try {
       const res = await api.triggerCheckinAll();
       if (res?.queued) {
-        toast.info(res.message || '已开始签到，请稍后查看签到记录');
+        toast.info(res.message || tr('已开始签到，请稍后查看签到记录'));
       } else {
-        toast.success(res?.message || '签到已执行');
+        toast.success(res?.message || tr('签到已执行'));
       }
       await logsQuery.refetch();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '触发签到失败');
+      toast.error(eMessage || tr('触发签到失败'));
     } finally {
       setTriggering(false);
     }

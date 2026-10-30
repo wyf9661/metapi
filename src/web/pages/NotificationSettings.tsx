@@ -169,7 +169,7 @@ export default function NotificationSettings() {
             });
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '加载通知设置失败');
+            toast.error(errMessage || tr('加载通知设置失败'));
         } finally {
             setLoading(false);
         }
@@ -243,7 +243,7 @@ export default function NotificationSettings() {
             toast.success(tr('通知设置已保存'));
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '保存失败');
+            toast.error(errMessage || tr('保存失败'));
         } finally {
             setSavingNotify(false);
         }
@@ -253,10 +253,10 @@ export default function NotificationSettings() {
         setTestingNotify(true);
         try {
             const res = await api.testNotification();
-            toast.success(res?.message || '测试通知已发送');
+            toast.success(res?.message || tr('测试通知已发送'));
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : String(err);
-            toast.error(errMessage || '触发测试通知失败');
+            toast.error(errMessage || tr('触发测试通知失败'));
         } finally {
             setTestingNotify(false);
         }

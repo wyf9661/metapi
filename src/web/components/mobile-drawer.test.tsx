@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, create } from 'react-test-renderer';
 import MobileDrawer from './MobileDrawer.js';
-import { readAllCss } from '../styles/readStyles.js';
+import { readAllCss } from '../styles/readStyles.testutil.js';
 
 vi.mock('react-dom', () => ({
   createPortal: (node: unknown) => node,

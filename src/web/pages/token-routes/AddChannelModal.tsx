@@ -123,7 +123,7 @@ export default function AddChannelModal({
       onClose();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '批量添加通道失败');
+      toast.error(eMessage || tr('批量添加通道失败'));
     } finally {
       setSubmitting(false);
     }

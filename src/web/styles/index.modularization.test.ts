@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import postcss from 'postcss';
-import { readAllCss } from './readStyles.js';
+import { readAllCss } from './readStyles.testutil.js';
 
 function rules(source: string): string[] {
   return postcss.parse(source).nodes.flatMap((node) => node.type === 'atrule' && node.name === 'import' ? [] : [node.toString()]);

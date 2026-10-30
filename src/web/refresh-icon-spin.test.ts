@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { readAllCss } from './styles/readStyles.js';
+import { readAllCss } from './styles/readStyles.testutil.js';
 
 // The refresh icons render mirrored: scaleX(-1) is baked into every
 // spin-mirrored keyframe so mirror+rotation stay on ONE transform channel

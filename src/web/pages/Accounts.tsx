@@ -242,7 +242,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       setSites(nextSites);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error(errorMessage || '加载账号列表失败');
+      toast.error(errorMessage || tr('加载账号列表失败'));
     } finally {
       setLoaded(true);
     }
@@ -462,11 +462,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         toast.success(msg);
         load(true);
       } else {
-        toast.error(result.message || '登录失败');
+        toast.error(result.message || tr('登录失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '登录请求失败');
+      toast.error(eMessage || tr('登录请求失败'));
     } finally {
       setSaving(false);
     }
@@ -589,12 +589,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           seededRecommendedModels = true;
         } catch (seedErr) {
           const seedErrMessage = seedErr instanceof Error ? seedErr.message : String(seedErr);
-          toast.error(seedErrMessage || '连接已添加，但推荐模型补录失败');
+          toast.error(seedErrMessage || tr('连接已添加，但推荐模型补录失败'));
         }
       }
       closeAddPanel();
       if (result.queued) {
-        toast.info(result.message || '账号已添加，后台正在同步初始化信息。');
+        toast.info(result.message || tr('账号已添加，后台正在同步初始化信息。'));
         const jobId = typeof result.jobId === 'string' ? result.jobId : '';
         if (jobId) {
           // Poll init task so runtime health flips from "未知" without manual refresh.
@@ -634,7 +634,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '添加失败');
+      toast.error(eMessage || tr('添加失败'));
     } finally {
       setSaving(false);
     }
@@ -651,7 +651,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       if (successMsg) toast.success(successMsg);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '操作失败');
+      toast.error(eMessage || tr('操作失败'));
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
       void load(true);
@@ -711,7 +711,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       if (modelModalRequestSeqRef.current !== requestId) return;
-      toast.error(eMessage || options.errorMessage || '加载模型列表失败');
+      toast.error(eMessage || options.errorMessage || tr('加载模型列表失败'));
       setModelModal((s) =>
         options.closeOnError
           ? { ...s, open: false, account: null, loading: false }
@@ -767,7 +767,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       closeModelModal();
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '保存失败');
+      toast.error(eMessage || tr('保存失败'));
     } finally {
       setModelModal((s) => ({ ...s, saving: false }));
     }
@@ -794,11 +794,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           refreshUpstream: false,
         });
       } else {
-        toast.error(res.message || '手动添加模型失败');
+        toast.error(res.message || tr('手动添加模型失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '手动添加模型失败');
+      toast.error(eMessage || tr('手动添加模型失败'));
     } finally {
       setModelModal((s) => ({ ...s, addingManualModels: false }));
     }
@@ -819,11 +819,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
           refreshUpstream: false,
         });
       } else {
-        toast.error(res.message || '删除手动模型失败');
+        toast.error(res.message || tr('删除手动模型失败'));
       }
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '删除手动模型失败');
+      toast.error(eMessage || tr('删除手动模型失败'));
     } finally {
       setModelModal((s) => ({ ...s, removingManualModelName: null }));
     }
@@ -932,14 +932,14 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     try {
       const res = await api.refreshAccountHealth();
       if (res?.queued) {
-        toast.info(res.message || '账号状态刷新任务已提交，完成后会自动更新。');
+        toast.info(res.message || tr('账号状态刷新任务已提交，完成后会自动更新。'));
       } else {
-        toast.success(res?.message || '账号状态已刷新');
+        toast.success(res?.message || tr('账号状态已刷新'));
       }
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '刷新账号状态失败');
+      toast.error(eMessage || tr('刷新账号状态失败'));
     } finally {
       setActionLoading((s) => ({ ...s, 'health-refresh': false }));
     }
@@ -957,7 +957,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换签到状态失败');
+      toast.error(eMessage || tr('切换签到状态失败'));
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -969,11 +969,11 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     setActionLoading((s) => ({ ...s, [key]: true }));
     try {
       await api.updateAccount(account.id, { isPinned: nextPinned });
-      toast.success(nextPinned ? '账号已置顶' : '账号已取消置顶');
+      toast.success(nextPinned ? tr('账号已置顶') : tr('账号已取消置顶'));
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '切换账号置顶失败');
+      toast.error(eMessage || tr('切换账号置顶失败'));
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -1038,7 +1038,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '更新账号排序失败');
+      toast.error(eMessage || tr('更新账号排序失败'));
     } finally {
       setActionLoading((s) => ({ ...s, [key]: false }));
     }
@@ -1176,7 +1176,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
       load(true);
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
-      toast.error(eMessage || '重新绑定失败');
+      toast.error(eMessage || tr('重新绑定失败'));
     } finally {
       setRebindSaving(false);
     }

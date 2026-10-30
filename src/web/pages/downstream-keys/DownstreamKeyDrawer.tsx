@@ -63,7 +63,7 @@ export default function DownstreamKeyDrawer({
       })
       .catch((err: any) => {
         if (cancelled) return;
-        toast.error(err?.message || '加载 Key 概览失败');
+        toast.error(err?.message || tr('加载 Key 概览失败'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -93,7 +93,7 @@ export default function DownstreamKeyDrawer({
       })
       .catch((err: any) => {
         if (cancelled) return;
-        toast.error(err?.message || '加载趋势失败');
+        toast.error(err?.message || tr('加载趋势失败'));
       })
       .finally(() => {
         if (cancelled) return;
