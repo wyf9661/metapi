@@ -14,6 +14,7 @@ type CenteredModalProps = {
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
   showCloseButton?: boolean;
+  className?: string;
 };
 
 export default function CenteredModal({
@@ -27,6 +28,7 @@ export default function CenteredModal({
   closeOnBackdrop = false,
   closeOnEscape = false,
   showCloseButton = true,
+  className = '',
 }: CenteredModalProps) {
   const presence = useAnimatedVisibility(open, 220);
   const titleId = useId();
@@ -79,7 +81,7 @@ export default function CenteredModal({
     >
       <div
         ref={dialogRef}
-        className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
+        className={`modal-content ${presence.isVisible ? '' : 'is-closing'} ${className}`.trim()}
         style={{ width: `min(90vw, ${maxWidth}px)`, maxWidth: `${maxWidth}px` }}
         onClick={(event) => event.stopPropagation()}
         role="dialog"

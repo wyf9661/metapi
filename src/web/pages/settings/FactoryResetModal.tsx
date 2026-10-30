@@ -1,13 +1,8 @@
-import { createPortal } from 'react-dom';
 import { tr } from '../../i18n.js';
-
-type ModalPresence = {
-  shouldRender: boolean;
-  isVisible: boolean;
-};
+import CenteredModal from '../../components/CenteredModal.js';
 
 type FactoryResetModalProps = {
-  presence: ModalPresence;
+  open: boolean;
   factoryResetting: boolean;
   factoryResetSecondsLeft: number;
   adminToken: string;
@@ -16,52 +11,46 @@ type FactoryResetModalProps = {
 };
 
 export default function FactoryResetModal({
-  presence,
+  open,
   factoryResetting,
   factoryResetSecondsLeft,
   adminToken,
   onClose,
   onConfirm,
 }: FactoryResetModalProps) {
-  if (!presence.shouldRender) {
-    return null;
-  }
-
   const confirmLabel = factoryResetting
     ? tr('重新初始化中...')
     : (factoryResetSecondsLeft > 0
       ? `确认重新初始化系统（${factoryResetSecondsLeft}s）`
       : tr('确认重新初始化系统'));
 
-  const modal = (
-    <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
-      <div
-        className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
-        style={{ maxWidth: 720, border: '1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border))' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header" style={{ color: 'var(--color-danger)' }}>{tr('确认重新初始化系统')}</div>
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 12, lineHeight: 1.8 }}>{tr('这是不可逆操作。系统会清空当前 metapi 使用中的全部数据库内容，并在成功后立即退出当前登录状态。')}</div>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.9 }}>
-            <div>{tr('• 当前若使用外部 MySQL/Postgres，也会先清空该外部库中的 metapi 数据。')}</div>
-            <div>{tr('• 系统随后会强制切回默认 SQLite。')}</div>
-            <div>{tr('• 管理员 Token 将重置为')} <code style={{ fontFamily: 'var(--font-mono)' }}>{adminToken}</code>。</div>
-            <div>{tr('• 完成后会立即退出登录并刷新页面，回到当前首装初始状态。')}</div>
-          </div>
-        </div>
-        <div className="modal-footer">
+  return (
+    <CenteredModal
+      open={open}
+      onClose={onClose}
+      title={tr('确认重新初始化系统')}
+      maxWidth={720}
+      closeOnBackdrop
+      className="modal-danger"
+      bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      footer={
+        <>
           <button onClick={onClose} disabled={factoryResetting} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={onConfirm} disabled={factoryResetting || factoryResetSecondsLeft > 0} className="btn btn-danger">
             {factoryResetting
               ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {confirmLabel}</>
               : confirmLabel}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 12, lineHeight: 1.8 }}>{tr('这是不可逆操作。系统会清空当前 metapi 使用中的全部数据库内容，并在成功后立即退出当前登录状态。')}</div>
+      <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.9 }}>
+        <div>{tr('• 当前若使用外部 MySQL/Postgres，也会先清空该外部库中的 metapi 数据。')}</div>
+        <div>{tr('• 系统随后会强制切回默认 SQLite。')}</div>
+        <div>{tr('• 管理员 Token 将重置为')} <code style={{ fontFamily: 'var(--font-mono)' }}>{adminToken}</code>。</div>
+        <div>{tr('• 完成后会立即退出登录并刷新页面，回到当前首装初始状态。')}</div>
       </div>
-    </div>
+    </CenteredModal>
   );
-
-  const isTestEnv = import.meta.env.MODE === 'test';
-  return !isTestEnv && typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }

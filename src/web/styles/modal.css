@@ -39,6 +39,15 @@
   animation: scale-out 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
+/* destructive dialogs: red ring + red header instead of the default hairline */
+.modal-content.modal-danger {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-danger) 45%, var(--color-border-light)), 0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.14);
+}
+
+.modal-content.modal-danger .modal-header {
+  color: var(--color-danger);
+}
+
 .modal-header {
   padding: 20px 24px 0;
   display: flex;

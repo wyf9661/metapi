@@ -3,7 +3,6 @@ import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import ChangeKeyModal from '../components/ChangeKeyModal.js';
-import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import ModernSelect from '../components/ModernSelect.js';
 import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import FactoryResetModal from './settings/FactoryResetModal.js';
@@ -212,7 +211,6 @@ export default function Settings() {
   const [runtimeDatabaseState, setRuntimeDatabaseState] = useState<RuntimeDatabaseState | null>(null);
   const [showChangeKey, setShowChangeKey] = useState(false);
   const [factoryResetOpen, setFactoryResetOpen] = useState(false);
-  const factoryResetPresence = useAnimatedVisibility(factoryResetOpen, 220);
   const [factoryResetting, setFactoryResetting] = useState(false);
   const [factoryResetSecondsLeft, setFactoryResetSecondsLeft] = useState(FACTORY_RESET_CONFIRM_SECONDS);
   const toast = useToast();
@@ -2216,7 +2214,7 @@ export default function Settings() {
         </div>
       </div>
       <FactoryResetModal
-        presence={factoryResetPresence}
+        open={factoryResetOpen}
         factoryResetting={factoryResetting}
         factoryResetSecondsLeft={factoryResetSecondsLeft}
         adminToken={FACTORY_RESET_ADMIN_TOKEN}

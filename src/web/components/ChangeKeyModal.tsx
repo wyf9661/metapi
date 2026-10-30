@@ -1,28 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import { api } from '../api.js';
 import { useToast } from './Toast.js';
 import { persistAuthSession } from '../authSession.js';
-import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import CenteredModal from './CenteredModal.js';
 import { tr } from '../i18n.js';
 
 export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const presence = useAnimatedVisibility(open, 200);
   const [oldToken, setOldToken] = useState('');
   const [newToken, setNewToken] = useState('');
   const [confirmToken, setConfirmToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
-
-  useEffect(() => {
-    if (!open || typeof document === 'undefined') return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
 
   const handleSubmit = async () => {
     setError('');
@@ -60,70 +49,67 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
     }
   };
 
-  if (!presence.shouldRender) return null;
-
+  const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 };
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '10px 14px', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', fontSize: 13, outline: 'none',
     background: 'var(--color-bg-inset)', color: 'var(--color-text-primary)',
   };
 
-  const modal = (
-    <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
-      <div className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-        <div className="modal-header">{tr('修改管理员 Token')}</div>
-
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('旧 Token')}</label>
-            <input
-              type="password"
-              value={oldToken}
-              onChange={e => { setOldToken(e.target.value); setError(''); }}
-              placeholder={tr('输入当前 Token')}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('新 Token')}</label>
-            <input
-              type="password"
-              value={newToken}
-              onChange={e => { setNewToken(e.target.value); setError(''); }}
-              placeholder={tr('输入新 Token (至少 8 位)')}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>{tr('确认新 Token')}</label>
-            <input
-              type="password"
-              value={confirmToken}
-              onChange={e => { setConfirmToken(e.target.value); setError(''); }}
-              placeholder={tr('再次输入新 Token')}
-              style={inputStyle}
-            />
-          </div>
-
-          {error && (
-            <div className="alert alert-error">
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div className="modal-footer">
+  return (
+    <CenteredModal
+      open={open}
+      onClose={onClose}
+      title={tr('修改管理员 Token')}
+      maxWidth={420}
+      closeOnBackdrop
+      closeOnEscape
+      bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      footer={
+        <>
           <button onClick={onClose} className="btn btn-ghost">{tr('取消')}</button>
           <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
             {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />{tr('更新中...')}</> : tr('确认修改')}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div>
+        <label style={labelStyle}>{tr('旧 Token')}</label>
+        <input
+          type="password"
+          style={inputStyle}
+          value={oldToken}
+          onChange={e => { setOldToken(e.target.value); setError(''); }}
+          placeholder={tr('输入当前 Token')}
+        />
       </div>
-    </div>
-  );
+      <div>
+        <label style={labelStyle}>{tr('新 Token')}</label>
+        <input
+          type="password"
+          style={inputStyle}
+          value={newToken}
+          onChange={e => { setNewToken(e.target.value); setError(''); }}
+          placeholder={tr('输入新 Token (至少 8 位)')}
+        />
+      </div>
+      <div>
+        <label style={labelStyle}>{tr('确认新 Token')}</label>
+        <input
+          type="password"
+          style={inputStyle}
+          value={confirmToken}
+          onChange={e => { setConfirmToken(e.target.value); setError(''); }}
+          placeholder={tr('再次输入新 Token')}
+        />
+      </div>
 
-  // Skip the portal under the test runner (react-test-renderer cannot host a
-  // ReactDOM.createPortal into jsdom's document.body). Mirrors CenteredModal.
-  const isTestEnv = import.meta.env.MODE === 'test';
-  return !isTestEnv && typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
+      {error && (
+        <div className="alert alert-error">
+          {error}
+        </div>
+      )}
+    </CenteredModal>
+  );
 }
