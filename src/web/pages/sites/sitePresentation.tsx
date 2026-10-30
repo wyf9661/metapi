@@ -315,11 +315,11 @@ export const platformColors: Record<string, string> = {
 
 export const SITE_PLATFORM_OPTIONS = [
   { value: '', label: tr('平台类型（可自动检测）') },
-  { value: 'new-api', label: 'new-api', description: '聚合面板，多渠道统一管理' },
-  { value: 'one-api', label: 'one-api', description: '经典聚合面板，通用 OpenAI 中转' },
-  { value: 'sub2api', label: 'sub2api', description: '订阅式中转面板，可同步套餐与余额' },
-  { value: 'metapi', label: 'metapi', description: '另一个 MetAPI 实例，填下游 key 同步余额与用量' },
-  { value: 'openai', label: 'openai', description: '通用 OpenAI 兼容接口，手填 Base URL' },
-  { value: 'claude', label: 'claude', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' },
-  { value: 'gemini', label: 'gemini', description: '通用 Gemini / Google AI 兼容接口' },
+  { value: 'new-api', label: 'new-api', description: tr('聚合面板，多渠道统一管理') },
+  { value: 'one-api', label: 'one-api', description: tr('经典聚合面板，通用 OpenAI 中转') },
+  { value: 'sub2api', label: 'sub2api', description: tr('订阅式中转面板，可同步套餐与余额') },
+  { value: 'metapi', label: 'metapi', description: tr('另一个 MetAPI 实例，填下游 key 同步余额与用量') },
+  { value: 'openai', label: 'openai', description: tr('通用 OpenAI 兼容接口，手填 Base URL') },
+  { value: 'claude', label: 'claude', description: tr('Claude / Anthropic 接口，手填 Base URL + API Key') },
+  { value: 'gemini', label: 'gemini', description: tr('通用 Gemini / Google AI 兼容接口') },
 ];

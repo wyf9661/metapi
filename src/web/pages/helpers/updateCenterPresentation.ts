@@ -37,7 +37,7 @@ export function buildUpdateReminder(input: {
     return {
       label: tr('无法检查更新'),
       badgeClassName: 'badge badge-muted',
-      detail: '暂未获取到可比较的版本信息。',
+      detail: tr('暂未获取到可比较的版本信息。'),
       highlight: false,
     };
   }
@@ -64,7 +64,7 @@ export function buildUpdateReminder(input: {
   return {
     label: tr('已是最新'),
     badgeClassName: 'badge badge-muted',
-    detail: '当前运行版本与已发现的部署目标没有明显差异。',
+    detail: tr('当前运行版本与已发现的部署目标没有明显差异。'),
     highlight: false,
   };
 }

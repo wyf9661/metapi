@@ -71,7 +71,7 @@ const EMPTY_ROUTE_CANDIDATE_VIEW: RouteCandidateView = {
 const EMPTY_MISSING_ITEMS: MissingTokenRouteSiteActionItem[] = [];
 const EMPTY_MISSING_GROUP_ITEMS: MissingTokenGroupRouteSiteActionItem[] = [];
 const ROUTE_ICON_OPTIONS: RouteIconOption[] = [
-  { value: '', label: tr('自动品牌图标'), description: '按模型匹配规则自动识别品牌', iconText: '✦' },
+  { value: '', label: tr('自动品牌图标'), description: tr('按模型匹配规则自动识别品牌'), iconText: '✦' },
 ];
 
 type RouteEditorForm = {
@@ -1092,7 +1092,7 @@ export default function TokenRoutes() {
     const dismissed = localStorage.getItem(dismissedKey) === 'true';
     if (!dismissed) {
       const result = await requestConfirmation({
-        title: '确认移除通道',
+        title: tr('确认移除通道'),
         description: (
           <>{tr('移除的通道会在定时模型刷新时被自动重建恢复，但')}<strong>{tr('它的累计统计（成功/失败、成本、冷却）会丢失')}</strong>{tr('， 重建出来的是全新的一条。')}<br />{tr('想恢复系统默认配置、又保留统计，请用')}<strong>{tr('「恢复默认」')}</strong>{tr('；只是临时停用则用')}<strong>{tr('禁用开关')}</strong>。
           </>
@@ -1119,7 +1119,7 @@ export default function TokenRoutes() {
 
   const handleResetChannel = async (channelId: number, routeId: number) => {
     const confirmed = await requestConfirmation({
-      title: '确认恢复默认',
+      title: tr('确认恢复默认'),
       description: (
         <>{tr('将清除该通道的手动配置（优先级、权重、启用状态、来源模型、绑定令牌、请求改写规则）， 交回系统按当前账号与模型重新派生。')}<br />
           <strong>{tr('累计统计（成功/失败、成本、延迟、冷却）会保留')}</strong>{tr('，通道也不会被移除。')}</>
@@ -1276,7 +1276,7 @@ export default function TokenRoutes() {
     const accountId = channel.accountId;
     const accountLabel = channel.account?.username || `account-${accountId}`;
     const result = await requestConfirmation({
-      title: '确认屏蔽模型',
+      title: tr('确认屏蔽模型'),
       description: (
         <>{tr('将模型「')}<strong>{modelName}</strong>{tr('」加入账号「')}<strong>{accountLabel}</strong>」（站点 {siteName}）的禁用列表。<br />{tr('执行后将自动触发路由重建，该账号下此模型的通道将不再生成，同一站点的其他账号不受影响。')}</>
       ),

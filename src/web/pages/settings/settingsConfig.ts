@@ -48,7 +48,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'default',
     title: 'default',
-    description: '字段缺失时才注入，适合补默认参数。',
+    description: tr('字段缺失时才注入，适合补默认参数。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -61,7 +61,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'default-raw',
     title: 'default-raw',
-    description: '字段缺失时注入原始 JSON，适合 schema、复杂对象等值。',
+    description: tr('字段缺失时注入原始 JSON，适合 schema、复杂对象等值。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -74,7 +74,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'override',
     title: 'override',
-    description: '无论原请求是否已有该字段，都强制覆盖。',
+    description: tr('无论原请求是否已有该字段，都强制覆盖。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],
@@ -87,7 +87,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'override-raw',
     title: 'override-raw',
-    description: '无论原请求是否已有该字段，都强制覆盖为原始 JSON。',
+    description: tr('无论原请求是否已有该字段，都强制覆盖为原始 JSON。'),
     placeholder: `[
   {
     "models": [{ "name": "gemini-*", "protocol": "gemini" }],
@@ -100,7 +100,7 @@ export const PAYLOAD_RULES_EDITOR_SECTIONS = [
   {
     key: 'filter',
     title: 'filter',
-    description: '删除匹配请求中的字段。',
+    description: tr('删除匹配请求中的字段。'),
     placeholder: `[
   {
     "models": [{ "name": "gpt-*", "protocol": "codex" }],

@@ -1,4 +1,5 @@
 import type { PlaygroundProtocol } from './modelTesterSession.js';
+import { tr } from '../../i18n.js';
 import {
   buildConversationAcceptList,
   detectConversationFileKind,
@@ -60,7 +61,7 @@ export function resolveConversationFileCapability(
       imageMode: 'native',
       audioMode: 'unsupported',
       documentMode: 'inline_only',
-      reason: '当前界面的会话附件会以内联文档方式发送。',
+      reason: tr('当前界面的会话附件会以内联文档方式发送。'),
     };
   }
 
@@ -70,7 +71,7 @@ export function resolveConversationFileCapability(
       imageMode: 'native',
       audioMode: 'native',
       documentMode: 'inline_only',
-      reason: '当前界面的会话附件会以内联文档方式发送。',
+      reason: tr('当前界面的会话附件会以内联文档方式发送。'),
     };
   }
 
@@ -79,7 +80,7 @@ export function resolveConversationFileCapability(
     imageMode: 'unsupported',
     audioMode: 'unsupported',
     documentMode: 'unsupported',
-    reason: '当前协议暂不支持会话附件。',
+    reason: tr('当前协议暂不支持会话附件。'),
   };
 }
 

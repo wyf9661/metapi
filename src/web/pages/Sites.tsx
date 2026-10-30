@@ -549,7 +549,7 @@ export default function Sites() {
     const current = normalizedFormPlatform;
     const options = SITE_PLATFORM_OPTIONS
       .map((option) => option.value === 'claude'
-        ? { ...option, label: 'claude API', description: 'Claude / Anthropic 接口，手填 Base URL + API Key' }
+        ? { ...option, label: 'claude API', description: tr('Claude / Anthropic 接口，手填 Base URL + API Key') }
         : option);
     return (!current || options.some((option) => option.value === current))
       ? options
@@ -811,7 +811,7 @@ export default function Sites() {
     } catch (e) {
       const eMessage = e instanceof Error ? e.message : String(e);
       if (e instanceof Error && e.name === 'AbortError') {
-        setProbeLog((prev) => [...prev, { id: probeLogSeqRef.current++, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: '已手动停止', color: 'var(--color-text-muted)' }]);
+        setProbeLog((prev) => [...prev, { id: probeLogSeqRef.current++, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text: tr('已手动停止'), color: 'var(--color-text-muted)' }]);
         return;
       }
       addLog(eMessage || '探测失败', 'var(--color-danger)');

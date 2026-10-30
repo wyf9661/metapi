@@ -1566,5 +1566,6 @@ export const zhToEnSupplemental: Record<string, string> = {
   '移除': 'Remove',
   '备份/恢复': 'Backup/Restore',
   '已是最新': 'Up to date',
+  '聚合面板，多渠道统一管理': 'Aggregated panel for unified multi-channel management',
 
 };

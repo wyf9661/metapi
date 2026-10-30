@@ -6,23 +6,23 @@ import { buildUpdateReminder } from './helpers/updateCenterPresentation.js';
 const VERSION = (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0').trim();
 
 const FEATURES = [
-  { icon: '🌐', title: '统一代理网关', desc: '一个 Key、一个入口，兼容 OpenAI / Claude 下游格式' },
-  { icon: '🧠', title: '智能路由引擎', desc: '按成本、延迟、成功率自动选择最优通道，故障自动转移' },
-  { icon: '📡', title: '多站点聚合', desc: '集中管理 New API / One API / Sub2API 等' },
-  { icon: '🔍', title: '自动模型发现', desc: '上游新增模型自动出现在模型列表，零配置路由生成' },
-  { icon: '🏪', title: '模型广场', desc: '跨站模型覆盖、定价对比、延迟与成功率实测数据' },
-  { icon: '✅', title: '自动签到', desc: '定时签到 + 余额刷新，不再手动操心' },
-  { icon: '🔔', title: '多渠道告警', desc: '钉钉 / 飞书 / Server酱 / 邮件，余额不足及时提醒' },
-  { icon: '📦', title: '轻量部署', desc: '单 Docker 容器，内置 SQLite，无外部依赖' },
+  { icon: '🌐', title: tr('统一代理网关'), desc: tr('一个 Key、一个入口，兼容 OpenAI / Claude 下游格式') },
+  { icon: '🧠', title: tr('智能路由引擎'), desc: tr('按成本、延迟、成功率自动选择最优通道，故障自动转移') },
+  { icon: '📡', title: tr('多站点聚合'), desc: tr('集中管理 New API / One API / Sub2API 等') },
+  { icon: '🔍', title: tr('自动模型发现'), desc: tr('上游新增模型自动出现在模型列表，零配置路由生成') },
+  { icon: '🏪', title: tr('模型广场'), desc: tr('跨站模型覆盖、定价对比、延迟与成功率实测数据') },
+  { icon: '✅', title: tr('自动签到'), desc: tr('定时签到 + 余额刷新，不再手动操心') },
+  { icon: '🔔', title: tr('多渠道告警'), desc: tr('钉钉 / 飞书 / Server酱 / 邮件，余额不足及时提醒') },
+  { icon: '📦', title: tr('轻量部署'), desc: tr('单 Docker 容器，内置 SQLite，无外部依赖') },
 ];
 
 const TECH_STACK = [
-  { name: 'Fastify', desc: '高性能 Node.js 后端框架' },
-  { name: 'React', desc: '用户界面库' },
-  { name: 'TypeScript', desc: '端到端类型安全' },
-  { name: 'Tailwind CSS v4', desc: '原子化样式框架' },
-  { name: 'Drizzle ORM', desc: '轻量 TypeScript ORM' },
-  { name: 'SQLite', desc: '零配置嵌入式数据库' },
+  { name: 'Fastify', desc: tr('高性能 Node.js 后端框架') },
+  { name: 'React', desc: tr('用户界面库') },
+  { name: 'TypeScript', desc: tr('端到端类型安全') },
+  { name: 'Tailwind CSS v4', desc: tr('原子化样式框架') },
+  { name: 'Drizzle ORM', desc: tr('轻量 TypeScript ORM') },
+  { name: 'SQLite', desc: tr('零配置嵌入式数据库') },
 ];
 
 const LINKS = [
