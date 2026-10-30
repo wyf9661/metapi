@@ -1,0 +1,69 @@
+/* ===== Pill Tabs ===== */
+.pill-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* 窄屏下 tab 栏超出容器时出现细滚动条，横向滑动查看全部 tab */
+.pill-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+.pill-tabs::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-sm);
+  background: rgba(128, 128, 128, 0.4);
+}
+.pill-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-theme="dark"] .pill-tabs {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pill-tab {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  height: 34px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  white-space: nowrap;
+}
+
+.pill-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.pill-tab.active {
+  background: var(--color-bg-card);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
+}
+
+/* Dark mode active pill: the PillTabBg <img> paints a neutral raised-grey
+   (#5d6564) — CSS paint gets flattened to neutral gray by a system
+   force-dark engine, <img> content does not, so the active tab remains a
+   clearly lighter block there too.  Text switches from brand teal to the
+   near-white foreground for readable contrast on the raised surface. */
+[data-theme="dark"] .pill-tab.active {
+  background: #5d6564;
+  color: var(--color-text-primary);
+}

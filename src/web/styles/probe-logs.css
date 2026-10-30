@@ -1,0 +1,269 @@
+/* ===== Probe Logs ===== */
+.probe-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+@media (min-width: 1024px) {
+  .probe-stats-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.probe-stat-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .probe-stat-card {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .probe-stat-card .probe-stat-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .probe-stat-card .probe-stat-value {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+}
+
+.probe-stat-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.probe-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.probe-filter-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* 复用使用日志(ProxyLogs)的工具栏排版：内联 label + 输入框，flex 换行 */
+.probe-filter-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.probe-filter-field-inline > span {
+  white-space: nowrap;
+}
+
+.probe-filter-field-inline input {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.probe-filter-field-inline input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+/* 测活日志桌面工具栏中的 ModernSelect：保持使用日志的内联标签排版 */
+.probe-filter-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 197px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.probe-filter-select > span {
+  flex: 0 0 auto;
+}
+
+.probe-filter-select > .modern-select {
+  width: 137px;
+  min-width: 137px;
+}
+
+/* Probe log desktop filters only need a few pixels to keep Reset on one row. */
+.probe-filter-toolbar {
+  gap: 6px;
+}
+
+.probe-filter-total {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.probe-logs-table td {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+
+
+.probe-logs-table .probe-question-cell {
+  max-width: 350px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-secondary);
+}
+
+/* Probe detail dialog body (shared by desktop modal and mobile drawer) */
+.probe-detail-body {
+  padding: 16px;
+}
+
+.probe-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+}
+
+.probe-detail-item {
+  min-width: 0;
+}
+
+.probe-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.probe-detail-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.probe-detail-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.probe-detail-block {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.probe-detail-error {
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-danger) 22%, var(--color-border-light));
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--color-danger);
+  word-break: break-word;
+}
+
+.probe-detail-answer {
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: normal;
+}
+
+/* KaTeX 公式渲染样式 */
+.katex-display-block {
+  text-align: center;
+  padding: 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display-block .katex-display {
+  margin: 0;
+}
+
+.katex-fallback {
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-bg-card));
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9em;
+  color: var(--color-danger);
+}
+
+/* 疑似二进制/乱码响应的展示区域 */
+.probe-binary-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.probe-binary-hint {
+  font-size: 12px;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 22%, var(--color-border-light));
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.probe-binary-snippet {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  word-break: break-all;
+}
+
+.probe-binary-details {
+  font-size: 12px;
+}
+
+.probe-binary-details summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  user-select: none;
+  padding: 4px 0;
+}
+
+.probe-binary-details summary:hover {
+  text-decoration: underline;
+}
+
+.probe-binary-raw {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-top: 6px;
+  color: var(--color-text-muted);
+}

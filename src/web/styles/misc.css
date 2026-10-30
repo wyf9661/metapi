@@ -1,0 +1,297 @@
+/* ===== Scrollbar (WebKit) ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ===== Selection ===== */
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* ===== Page Transition ===== */
+.page-enter {
+  /* Own layer so the fade never competes with card-level compositing. */
+  will-change: opacity;
+  animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ===== Info Tip ===== */
+.info-tip {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: #faf5e6;
+  border: 1px solid #f4e39d;
+  color: #92400e;
+}
+
+[data-theme="dark"] .info-tip {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 34%, transparent);
+  color: var(--color-warning);
+}
+
+.alert {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.alert-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.alert-success {
+  background: var(--color-success-soft);
+  border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+  color: color-mix(in srgb, var(--color-success) 70%, black);
+}
+
+.alert-info {
+  background: var(--color-info-soft);
+  border-color: color-mix(in srgb, var(--color-info) 35%, transparent);
+  color: color-mix(in srgb, var(--color-info) 72%, black);
+}
+
+.alert-warning {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 38%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 76%, black);
+}
+
+.alert-error {
+  background: var(--color-danger-soft);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+  color: color-mix(in srgb, var(--color-danger) 72%, black);
+}
+
+.metric-positive {
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.metric-warning {
+  color: var(--color-warning);
+  font-weight: 500;
+}
+
+.metric-negative {
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+.metric-muted {
+  color: var(--color-text-muted);
+}
+
+.kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+
+.kpi-chip-success {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 26%, transparent);
+  color: var(--color-success);
+}
+
+.kpi-chip-warning {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+  color: var(--color-warning);
+}
+
+/* ===== User Dropdown ===== */
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+  padding: 4px;
+  z-index: 110;
+  animation: slide-down 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.user-dropdown.is-closing {
+  animation: dropdown-out 0.16s ease both;
+  pointer-events: none;
+}
+
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.user-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .user-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.user-dropdown-item.danger {
+  color: var(--color-danger);
+}
+
+.user-dropdown-item.danger:hover {
+  background: #f9eded;
+}
+
+[data-theme="dark"] .user-dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ===== Search Result Items ===== */
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-primary);
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.search-result-item:hover {
+  background: var(--color-selection-bg);
+}
+
+.notification-event-item {
+  transition: background-color 0.16s ease;
+}
+
+.notification-event-item:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-card));
+}
+
+/* ===== Chart Panel Entrance Animation ===== */
+.chart-panel-enter {
+  animation: chartSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes chartSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===== Tab Content Transition ===== */
+.tab-content-enter {
+  animation: tabFade 0.3s ease-out forwards;
+}
+
+@keyframes tabFade {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ===== Chart Container Smooth Transition ===== */
+.chart-transition {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ===== Pulse Glow Effect for Stat Values ===== */
+.stat-value-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+
+  0%,
+  100% {
+    text-shadow: none;
+  }
+
+  50% {
+    text-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+}
+
+/* ===== Additional Stagger Delays for Chart Panels ===== */
+.stagger-7 {
+  animation-delay: 0.6s;
+}
+
+.stagger-8 {
+  animation-delay: 0.7s;
+}
+
+/* ===== Dark Mode Chart Container ===== */
+[data-theme="dark"] .chart-container {
+  border-color: var(--color-border);
+}
+
+/* =============================================
+   NewAPI-style Components
+   ============================================= */

@@ -1,0 +1,340 @@
+/* ===== Filter Panel (Left Sidebar) ===== */
+.filter-panel {
+  width: 240px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  border-right: 1px solid var(--color-border-light);
+  padding: 0 16px 16px 0;
+  overflow-y: auto;
+  /* Desktop locks body scroll; .main-content is the scroll container and its
+     top edge already sits below the topbar. Sticky offsets are relative to
+     that container, so top:0 pins the panel to the pane top and max-height
+     leaves a 24px breathing gap at the bottom of the pane. */
+  max-height: calc(100vh - var(--topbar-height) - 24px);
+  position: sticky;
+  top: 0;
+}
+
+.filter-panel.filter-collapsible {
+  transition:
+    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease;
+  transform-origin: left top;
+}
+
+.filter-panel.filter-collapsible.is-closing {
+  width: 0;
+  opacity: 0;
+  transform: translateX(-10px);
+  padding: 0;
+  border-color: transparent;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.filter-panel-section {
+  margin-bottom: 20px;
+}
+
+.filter-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-panel-title button {
+  font-size: 12px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.filter-panel-title button:hover {
+  background: var(--color-selection-bg);
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+.filter-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .filter-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.filter-item.active {
+  /* Match the sidebar's selected entry: same subtle selection tint. */
+  background: var(--color-selection-bg);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.filter-item-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.filter-item-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  min-width: 20px;
+  text-align: center;
+}
+
+[data-theme="dark"] .filter-item-count {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.filter-item.active .filter-item-count {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+}
+
+/* ===== Model Card ===== */
+.model-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.model-card:hover {
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.model-card+.model-card {
+  margin-top: 12px;
+}
+
+.model-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.model-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  /* Letters on the page background, no fill tile. */
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.model-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.model-card-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.model-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.model-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.model-card-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-inset);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.model-card-action-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-selection-bg);
+}
+
+.model-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.model-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  transition: all 0.15s;
+}
+
+.model-tag-green {
+  /* Uniform with the site-name tag: outline only, neutral hue. */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.model-tag-blue {
+  /* Site names are labels, not statuses; outline-only like the brand tag. */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.model-tag-purple {
+  /* Brand / 低延迟 tags: same neutral outline as the site-name tag. */
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.model-tag-orange {
+  /* The "risk" tag is a warning, so it uses the warning token. */
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 34%, transparent);
+  color: var(--color-warning);
+}
+
+/* Token chips inside a model's expand area / account table: same neutral
+   outline as the site-name tag, no fill, no success colour. */
+.model-token-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.model-tag-gray {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+
+
+
+
+
+
+
+
+[data-theme="dark"] .model-tag-gray {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-border);
+}
+
+/* Model card expand area */
+.model-card-expand {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-light);
+  animation: fade-in 0.2s ease both;
+}
+
+.anim-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition:
+    grid-template-rows 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.anim-collapse.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.anim-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-presence {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.panel-presence.is-closing {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.985);
+  pointer-events: none;
+}
