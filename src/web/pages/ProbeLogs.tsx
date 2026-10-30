@@ -570,7 +570,7 @@ export default function ProbeLogs() {
             });
           }}
           visible
-          rangeLabel={`显示第 ${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
+          totalItems={total}
           pageSize={pageSize}
           onPageSizeChange={(next) => {
             setPageSize(next);

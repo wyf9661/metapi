@@ -389,7 +389,7 @@ export default function Settings() {
   };
 
   const proxyTransportModeLabel = runtime.codexUpstreamWebsocketEnabled ? tr('上游 WebSocket 已启用') : tr('HTTP 优先');
-  const proxyTransportQueueLabel = `会话池 ${runtime.proxySessionChannelConcurrencyLimit} 并发 / ${runtime.proxySessionChannelQueueWaitMs}ms`;
+  const proxyTransportQueueLabel = `${tr('会话池')} ${runtime.proxySessionChannelConcurrencyLimit} ${tr('并发')} / ${runtime.proxySessionChannelQueueWaitMs}ms`;
 
   const syncPayloadRuleDraftsFromObject = (value: unknown) => {
     setPayloadRuleDrafts(normalizePayloadRulesForEditor(value));
@@ -1039,7 +1039,7 @@ export default function Settings() {
         <div className="card animate-slide-up stagger-2" style={{ padding: 20, order: 2 }} data-settings-card="public-tunnel">
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{tr('公网隧道访问')}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-            对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。
+            {tr('对应仪表盘「创建隧道」。默认公网只允许 API；开启后才可通过隧道 URL 打开控制台（仍需管理员登录令牌）。')}
             {isTunnelClientView ? tr(' 当前为公网隧道访问，此开关已锁定。') : ''}
           </div>
           <label style={{
@@ -1109,7 +1109,7 @@ export default function Settings() {
             </div>
             <div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                签到间隔{runtime.checkinScheduleMode !== 'interval' && (
+                {tr('签到间隔')}{runtime.checkinScheduleMode !== 'interval' && (
                   <span style={{ color: 'var(--color-text-muted)', opacity: 0.75 }}>{tr('（间隔方式可用）')}</span>
                 )}
               </div>
@@ -1285,7 +1285,7 @@ export default function Settings() {
               checked={runtime.proxyEmptyContentFailEnabled}
               onChange={(e) => setRuntime((prev) => ({ ...prev, proxyEmptyContentFailEnabled: e.target.checked }))}
             />
-            空内容（completion=0，即使 prompt 有 token 也算）判定失败
+            {tr('空内容（completion=0，即使 prompt 有 token 也算）判定失败')}
           </label>
           <div>
             <button onClick={saveProxyFailureRules} disabled={savingProxyFailureRules} className="btn btn-primary">
@@ -1299,11 +1299,11 @@ export default function Settings() {
             <div style={settingsModernTitleBlockStyle}>
               <div style={settingsModernTitleStyle}>{tr('Payload 规则')}</div>
               <div style={settingsModernDescriptionStyle}>
-                对匹配模型的上游请求做默认注入、强制覆盖或字段过滤。规则结构参考 CPA 的 payload 配置，常见场景可直接注入
+                {tr('对匹配模型的上游请求做默认注入、强制覆盖或字段过滤。规则结构参考 CPA 的 payload 配置，常见场景可直接注入')}
                 {' '}
                 <code style={{ fontFamily: 'var(--font-mono)' }}>reasoning.effort</code>
                 {' '}
-                之类的参数。
+                {tr('之类的参数。')}
               </div>
             </div>
             <div style={settingsModernPillRowStyle}>
@@ -2108,9 +2108,9 @@ export default function Settings() {
 
           {runtimeDatabaseState && (
             <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.8, marginBottom: migrationSummary ? 12 : 0 }}>
-              <div>当前运行：{runtimeDatabaseState.active.dialect}（{runtimeDatabaseState.active.connection || '(empty)' }）{runtimeDatabaseState.active.ssl && ' [SSL]'}</div>
+              <div>{tr('当前运行：')}{runtimeDatabaseState.active.dialect}（{runtimeDatabaseState.active.connection || '(empty)' }）{runtimeDatabaseState.active.ssl && ' [SSL]'}</div>
               <div>
-                已保存待生效：
+                {tr('已保存待生效：')}
                 {runtimeDatabaseState.saved
                   ? ` ${runtimeDatabaseState.saved.dialect}（${runtimeDatabaseState.saved.connection}）${runtimeDatabaseState.saved.ssl ? ' [SSL]' : ''}`
                   : tr(' 未保存')}

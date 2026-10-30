@@ -226,9 +226,6 @@ export default function ProxyLogs() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const currentOffset = (safePage - 1) * pageSize;
-  const displayedStart = total === 0 ? 0 : currentOffset + 1;
-  const displayedEnd =
-    total === 0 ? 0 : Math.min(currentOffset + logs.length, total);
   const debugTraceTotalPages = Math.max(
     1,
     Math.ceil(debugTraces.length / DEBUG_TRACE_PAGE_SIZE),
@@ -1188,7 +1185,7 @@ export default function ProxyLogs() {
           />
           <CompactSummaryMetric
             label={tr('最近追踪')}
-            value={`${debugTraces.length} 条`}
+            value={`${debugTraces.length} ${tr('条')}`}
           />
           <CompactSummaryMetric
             label={tr('最新时间')}
@@ -1202,10 +1199,10 @@ export default function ProxyLogs() {
 
         <div style={{ display: 'grid', gap: 4 }}>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            记录内容：{formatProxyDebugCaptureSummary(debugSettings)}
+            {tr('记录内容：')}{formatProxyDebugCaptureSummary(debugSettings)}
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            过滤范围：{formatProxyDebugTargetSummary(debugSettings)}
+            {tr('过滤范围：')}{formatProxyDebugTargetSummary(debugSettings)}
           </div>
         </div>
       </div>
@@ -1389,8 +1386,8 @@ export default function ProxyLogs() {
                     marginRight: 'auto',
                   }}
                 >
-                  显示第 {debugTraceDisplayedStart} - {debugTraceDisplayedEnd}{' '}
-                  条，共 {debugTraces.length} 条
+                  {tr('显示第')} {debugTraceDisplayedStart} - {debugTraceDisplayedEnd}{' '}
+                  {tr('条，共')} {debugTraces.length} {tr('条')}
                 </div>
                 <button
                   className="pagination-btn"
@@ -1815,8 +1812,8 @@ export default function ProxyLogs() {
                           </div>
                         ) : (
                           <div className="mobile-billing-lines">
-                            输入 {formatProxyLogTokenValue(detailLog.promptTokens)} tokens
-                            {' + '}输出 {formatProxyLogTokenValue(detailLog.completionTokens)} tokens
+                            {tr('输入')} {formatProxyLogTokenValue(detailLog.promptTokens)} tokens
+                            {' + '}{tr('输出')} {formatProxyLogTokenValue(detailLog.completionTokens)} tokens
                             {' = '}总计 {formatProxyLogTokenValue(detailLog.totalTokens)} tokens
                             {typeof detailLog.estimatedCost === 'number'
                               ? `，预估费用 $${detailLog.estimatedCost.toFixed(6)}`
@@ -2679,7 +2676,7 @@ export default function ProxyLogs() {
           totalPages={totalPages}
           onPageChange={setPage}
           visible
-          rangeLabel={`显示第 ${displayedStart} - ${displayedEnd} 条，共 ${total} 条`}
+          totalItems={total}
           pageSize={pageSize}
           onPageSizeChange={(nextSize) => {
             setPageSize(nextSize);

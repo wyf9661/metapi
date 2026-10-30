@@ -684,7 +684,7 @@ export default function ImportExport() {
                       <>
                         <div>{tr('检测到 ALL-API-Hub V2 兼容备份：将离线迁移可用连接。')}</div>
                         <div>
-                          统计：账号 {summary.accountsCount} / 书签 {summary.bookmarksCount} / 独立 API 凭据 {summary.profilesCount}
+                          {tr('统计：账号')} {summary.accountsCount} / {tr('书签')} {summary.bookmarksCount} / {tr('独立 API 凭据')} {summary.profilesCount}
                         </div>
                         {summary.ignoredSections.length ? (
                           <div>不会原生导入：{summary.ignoredSections.join('、')}</div>
@@ -701,7 +701,7 @@ export default function ImportExport() {
                       || summary.downstreamApiKeysCount
                       || summary.settingsCount) ? (
                       <div>
-                        统计：站点 {summary.sitesCount} / 账号 {summary.accountsCount} / 令牌 {summary.tokensCount} / 路由 {summary.routesCount} / 通道 {summary.channelsCount} / 禁用模型 {summary.siteDisabledModelsCount} / 手工模型 {summary.manualModelsCount} / 下游 Key {summary.downstreamApiKeysCount} / 设置 {summary.settingsCount}
+                        {tr('统计：站点')} {summary.sitesCount} / {tr('账号')} {summary.accountsCount} / {tr('令牌')} {summary.tokensCount} / {tr('路由')} {summary.routesCount} / {tr('通道')} {summary.channelsCount} / 禁用模型 {summary.siteDisabledModelsCount} / 手工模型 {summary.manualModelsCount} / 下游 Key {summary.downstreamApiKeysCount} / 设置 {summary.settingsCount}
                       </div>
                     ) : null}
                     {summary.hasLegacyData ? <div>{tr('检测到兼容结构：将按兼容模式导入。')}</div> : null}
@@ -733,8 +733,8 @@ export default function ImportExport() {
           </svg>
           <span style={{ fontSize: 15, fontWeight: 700 }}>{tr('WebDAV 同步')}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, fontSize: 12, color: 'var(--color-text-secondary)', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : tr('尚未同步')}</span>
-            <span>最近错误：{webdavState.lastError || tr('无')}</span>
+            <span>{tr('上次同步：')}{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : tr('尚未同步')}</span>
+            <span>{tr('最近错误：')}{webdavState.lastError || tr('无')}</span>
           </div>
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14 }}>{tr('支持手动推送、手动拉取，以及定时自动导出到 WebDAV。')}</div>

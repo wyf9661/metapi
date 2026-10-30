@@ -1436,7 +1436,7 @@ export default function Sites() {
       />
 
       <div className="info-tip" style={{ marginBottom: 12 }}>
-        站点倍率 = 全局权重 × 下游 API Key 站点倍率；数值越大越容易被选中。建议 0.5-3，默认 1，长期不超过 5。
+        {tr('站点倍率 = 全局权重 × 下游 API Key 站点倍率；数值越大越容易被选中。建议 0.5-3，默认 1，长期不超过 5。')}
       </div>
 
       <DeleteConfirmModal
@@ -1577,7 +1577,7 @@ export default function Sites() {
             <div className="alert alert-info animate-scale-in">
               <div className="alert-title">{tr('检测到常见 API 路径后缀')}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-                保存或自动检测时会将主站点 URL 规范化为 {primarySiteUrlAnalysis.persistedUrl}。
+                {tr('保存或自动检测时会将主站点 URL 规范化为')} {primarySiteUrlAnalysis.persistedUrl}{tr('。')}
               </div>
             </div>
           ) : null}
@@ -1903,7 +1903,7 @@ export default function Sites() {
               {probeCompleted && brandGroups.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--color-text-secondary)' }}>{tr('探测后可用模型')}<span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>
-                      — 共 {availableModels.length} 个
+                      — {tr('共')} {availableModels.length} {tr('个')}
                     </span>
                   </div>
                   <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px 0' }}>
@@ -2195,7 +2195,7 @@ export default function Sites() {
                             className="btn btn-link btn-link-danger"
                           >
                             {deleting === site.id ? <span className="spinner spinner-sm" /> : null}
-                            删除
+                            {tr('删除')}
                           </button>
                         </div>
                       </div>
@@ -2272,7 +2272,7 @@ export default function Sites() {
                           const allEnabled = enabledCount === endpoints.length;
                           return (
                             <span className={`badge ${allEnabled ? 'badge-info' : 'badge-warning'}`} style={{ fontSize: 11 }}>
-                              API 地址 {enabledCount}/{endpoints.length} 条启用
+                              {tr('API 地址')} {enabledCount}/{endpoints.length} {tr('条启用')}
                             </span>
                           );
                         })()}
@@ -2373,7 +2373,7 @@ export default function Sites() {
                           className="btn btn-link btn-link-danger"
                         >
                           {deleting === site.id ? <span className="spinner spinner-sm" /> : null}
-                          删除
+                          {tr('删除')}
                         </button>
                       </div>
                     </td>
@@ -2416,7 +2416,7 @@ export default function Sites() {
             navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
           }}
           visible={showSitePagination}
-          rangeLabel={`显示第 ${(safePage - 1) * pageSize + 1} - ${Math.min(safePage * pageSize, sortedSites.length)} 条，共 ${sortedSites.length} 条`}
+          totalItems={sortedSites.length}
           pageSize={exactPageSize}
           onPageSizeChange={(next) => {
             setExactPageSize(next);

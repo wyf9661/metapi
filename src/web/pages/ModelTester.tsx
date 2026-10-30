@@ -319,7 +319,7 @@ export default function ModelTester() {
           />
           {models.length > 0 ? (
             <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
-              共 {models.length} 个模型，打开下拉可搜索
+              {tr('共')} {models.length} {tr('个模型，打开下拉可搜索')}
             </div>
           ) : null}
 

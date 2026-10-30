@@ -748,7 +748,7 @@ export default function Dashboard({
                   className="dashboard-stat-inline"
                   style={{ color: todayReward > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}
                 >
-                  （今日 +{todayReward.toFixed(2)}）
+                  {tr('（今日 +')}{todayReward.toFixed(2)}{tr('）')}
                 </span>
               </div>
             </div>
@@ -767,7 +767,7 @@ export default function Dashboard({
                   className="dashboard-stat-inline"
                   style={{ color: todaySpend > 0 ? 'var(--color-danger)' : 'var(--color-text-muted)' }}
                 >
-                  （今日 -{todaySpend.toFixed(2)}）
+                  {tr('（今日 -')}{todaySpend.toFixed(2)}{tr('）')}
                 </span>
               </div>
             </div>
@@ -1075,7 +1075,7 @@ export default function Dashboard({
                 onClick={() => setObservabilityTab('sites')}
               >
                 {observabilityTab === 'sites' && <PillTabBg />}
-                站点
+                {tr('站点')}
               </button>
               <button
                 type="button"
@@ -1083,7 +1083,7 @@ export default function Dashboard({
                 onClick={() => setObservabilityTab('models')}
               >
                 {observabilityTab === 'models' && <PillTabBg />}
-                模型
+                {tr('模型')}
               </button>
             </div>
           </div>
@@ -1120,7 +1120,7 @@ export default function Dashboard({
                   onClick={() => setSiteChartTab('distribution')}
                 >
                   {siteChartTab === 'distribution' && <PillTabBg />}
-                  站点分布
+                  {tr('站点分布')}
                 </button>
                 <button
                   type="button"
@@ -1131,7 +1131,7 @@ export default function Dashboard({
                   }}
                 >
                   {siteChartTab === 'trend' && <PillTabBg />}
-                  站点趋势
+                  {tr('站点趋势')}
                 </button>
               </div>
             </div>

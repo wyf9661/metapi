@@ -19,7 +19,7 @@ describe('Sites centered modal adoption', () => {
     expect(source).toContain('准确主站点 URL（面板/登录/签到地址，如 https://nih.cc）');
     expect(source).toContain('API 请求地址（如 https://api.nih.cc）');
     expect(source).toContain("label={tr('API 请求地址')}");
-    expect(source).toContain('API 地址 {enabledCount}/{endpoints.length} 条启用');
+    expect(source).toContain("{tr('API 地址')} {enabledCount}/{endpoints.length} {tr('条启用')}");
     expect(source).not.toContain('站点 URL（面板/登录/签到地址，如 https://console.example.com）');
     expect(source).not.toContain('API 请求地址（如 https://api.example.com）');
     expect(source).not.toContain('AI 请求地址池');

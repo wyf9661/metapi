@@ -82,7 +82,7 @@ export default function RouteSelectorModal({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
               <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                  精确模型 ({selectorModelSearch.trim()
+                  {tr('精确模型')} ({selectorModelSearch.trim()
                     ? `${filteredExactModelOptions.length}/${exactModelOptions.length}`
                     : exactModelOptions.length})
                 </div>
@@ -176,7 +176,7 @@ export default function RouteSelectorModal({
 
               <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-sm)', padding: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                  群组 ({selectorGroupSearch.trim()
+                  {tr('群组')} ({selectorGroupSearch.trim()
                     ? `${filteredGroupRouteOptions.length}/${groupRouteOptions.length}`
                     : groupRouteOptions.length})
                 </div>
