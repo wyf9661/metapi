@@ -2092,10 +2092,9 @@ function ensureClaudeStartEvents(
       content: [],
       stop_reason: null,
       stop_sequence: null,
-      usage: {
-        input_tokens: 0,
-        output_tokens: 0,
-      },
+      // No counters on purpose: a peer reading 0 would log "upstream
+      // accounted" and lose the distinction from a real zero-token call.
+      usage: {},
     },
   };
 

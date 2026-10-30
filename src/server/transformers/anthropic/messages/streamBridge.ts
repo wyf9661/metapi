@@ -263,9 +263,13 @@ function ensureClaudeStartEvents(
         content: [],
         stop_reason: null,
         stop_sequence: null,
+        // Omit the counters we never learned instead of inventing 0. A peer
+        // metapi that read a 0 here recorded "upstream accounted, for free"
+        // and its usage log could not tell this apart from a real zero.
         usage: {
-          input_tokens: context.usage?.inputTokens ?? 0,
-          output_tokens: 0,
+          ...(typeof context.usage?.inputTokens === 'number'
+            ? { input_tokens: context.usage.inputTokens }
+            : {}),
         },
       },
     }),
@@ -600,9 +604,9 @@ function buildDoneEvents(
         stop_reason: toClaudeStopReason(finishReason),
         stop_sequence: null,
       },
-      usage: {
-        output_tokens: context.usage?.outputTokens ?? 0,
-      },
+      ...(typeof context.usage?.outputTokens === 'number'
+        ? { usage: { output_tokens: context.usage.outputTokens } }
+        : {}),
     }),
     serializeSse('message_stop', {
       type: 'message_stop',
