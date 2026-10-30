@@ -110,6 +110,44 @@
   min-height: 38px;
 }
 
+@media (max-width: 768px) {
+  /* bottom sheet: the modern mobile dialog affordance — full width, top
+     radii only, slides up from the edge and sits on the home bar. */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+    /* shortcut: hardcoded teal-black matches the brand rgba literals used
+       across select/modal; upgrade if the brand color ever moves. */
+    background: rgba(12, 20, 22, 0.55);
+  }
+  .modal-content {
+    /* CenteredModal sets width inline; the sheet must win over the inline style. */
+    width: 100% !important;
+    max-width: 100%;
+    margin: 0;
+    max-height: 90dvh;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .modal-content.is-closing {
+    animation: sheet-down 0.22s ease both;
+  }
+  .modal-footer .btn {
+    flex: 1 1 0;
+  }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sheet-down {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(24px); opacity: 0; }
+}
+
 .site-created-summary,
 .site-created-helper-text {
   margin: 0;

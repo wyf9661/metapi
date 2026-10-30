@@ -504,12 +504,6 @@
     border-radius: var(--radius-md);
   }
 
-  /* --- Modals --- */
-  .modal-content {
-    margin: 12px;
-    max-width: calc(100vw - 24px);
-    border-radius: 14px;
-  }
 
   /* --- User Dropdown --- */
   .user-dropdown {
