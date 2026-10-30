@@ -194,8 +194,7 @@ export default function AccountRebindModal({
                       disabled={
                         rebindVerifying || !rebindForm.accessToken.trim()
                       }
-                      className="btn btn-ghost"
-                      style={{ border: '1px solid var(--color-border)' }}
+                      className="btn btn-ghost btn-outline"
                     >
                       {rebindVerifying ? (
                         <>

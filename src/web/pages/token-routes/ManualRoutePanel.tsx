@@ -405,8 +405,7 @@ export default function ManualRoutePanel({
       <button
         type="button"
         onClick={onCancel}
-        className="btn btn-ghost"
-        style={{ border: '1px solid var(--color-border)' }}
+        className="btn btn-ghost btn-outline"
       >
         {editingRouteId ? tr('取消编辑') : tr('取消')}
       </button>
@@ -436,8 +435,7 @@ export default function ManualRoutePanel({
       <button
         type="button"
         onClick={closeSourcePicker}
-        className="btn btn-ghost"
-        style={{ border: '1px solid var(--color-border)' }}
+        className="btn btn-ghost btn-outline"
       >
         {tr('取消')}
       </button>

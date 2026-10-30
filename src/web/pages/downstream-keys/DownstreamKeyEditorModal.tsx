@@ -506,8 +506,8 @@ export default function DownstreamKeyEditorModal({
                     <div className="downstream-key-modal-help">{tr('留空表示放行所有模型；勾选后仅允许所选精确模型，新增模型需手动补充。')}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedModels: exactModels }))}>{tr('全选')}</button>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}>{tr('清空')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, selectedModels: exactModels }))}>{tr('全选')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, selectedModels: [] }))}>{tr('清空')}</button>
                   </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedModelCount} 个模型</div>
@@ -546,8 +546,8 @@ export default function DownstreamKeyEditorModal({
                     <div className="downstream-key-modal-help">{tr('留空表示放行所有群组路由；勾选后仅允许所选群组。')}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: groupRouteOptions.map((route) => route.id) }))}>{tr('全选')}</button>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}>{tr('清空')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: groupRouteOptions.map((route) => route.id) }))}>{tr('全选')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, selectedGroupRouteIds: [] }))}>{tr('清空')}</button>
                   </div>
                 </div>
                 <div className="downstream-key-modal-meta">已选 {selectedGroupCount} 个群组</div>
@@ -595,8 +595,8 @@ export default function DownstreamKeyEditorModal({
                     <div className="downstream-key-modal-help">{tr('留空表示放行所有站点；勾选后仅允许所选站点，新增站点需手动补充。')}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: normalizeAllowedSiteIds(siteOptions.map((site) => site.siteId)) }))}>{tr('全选')}</button>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: [] }))}>{tr('清空')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: normalizeAllowedSiteIds(siteOptions.map((site) => site.siteId)) }))}>{tr('全选')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: [] }))}>{tr('清空')}</button>
                   </div>
                 </div>
                 <div className="downstream-key-modal-meta">已允许 {form.allowedSiteIds.length} 个站点</div>
@@ -644,8 +644,8 @@ export default function DownstreamKeyEditorModal({
                     <div className="downstream-key-modal-help">{tr('留空表示放行所有 API Key/令牌；勾选后仅允许所选凭证，新增凭证需手动补充。')}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: normalizeAllowedCredentialRefs(credentialOptions.map((item) => item.ref)) }))}>{tr('全选')}</button>
-                    <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: [] }))}>{tr('清空')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: normalizeAllowedCredentialRefs(credentialOptions.map((item) => item.ref)) }))}>{tr('全选')}</button>
+          <button type="button" className="btn btn-ghost btn-outline" onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: [] }))}>{tr('清空')}</button>
                   </div>
                 </div>
                 <div className="downstream-key-modal-meta">已允许 {form.allowedCredentialRefs.length} 个凭证</div>

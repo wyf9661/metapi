@@ -844,8 +844,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
           <button
             type="button"
             onClick={() => setShowMobileTools(true)}
-            className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
+            className="btn btn-ghost btn-outline"
           >
             {tr('同步与筛选')}
           </button>
@@ -945,16 +944,14 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
             <button
               onClick={handleSync}
               disabled={syncing || syncingAll || !syncingAccountId}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {syncing ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步站点令牌')}
             </button>
             <button
               onClick={handleSyncAll}
               disabled={syncing || syncingAll || activeAccounts.length === 0}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {syncingAll ? <><span className="spinner spinner-sm" /> {tr('同步中...')}</> : tr('同步全部账号')}
             </button>

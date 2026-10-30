@@ -988,8 +988,7 @@ export default function DownstreamKeys() {
           <ModernSelect value={groupFilter} onChange={(value) => setGroupFilter(String(value || '__all__'))} options={groupFilterOptions} />
         </div>
         <button
-          className="btn btn-ghost"
-          style={{ border: '1px solid var(--color-border)' }}
+          className="btn btn-ghost btn-outline"
           onClick={() => { setSearchInput(''); setStatus('all'); setGroupFilter('__all__'); setSelectedTags([]); setTagMatchMode('any'); }}
           disabled={!hasActiveDownstreamKeyFilters}
           title={hasActiveDownstreamKeyFilters ? tr('重置全部筛选条件') : tr('当前没有筛选条件')}
@@ -1044,7 +1043,7 @@ export default function DownstreamKeys() {
       actions={
         <>
           <RangeToggle range={range} onChange={setRange} />
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void load()} disabled={loading}>
+     <button className="btn btn-ghost btn-outline" onClick={() => void load()} disabled={loading}>
             {loading ? <><span className="spinner spinner-sm" /> {tr('刷新中...')}</> : tr('刷新')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>{tr('+ 新增下游密钥')}</button>
@@ -1090,10 +1089,10 @@ export default function DownstreamKeys() {
           info={`已选 ${selectedIds.length} 个密钥`}
           infoStyle={{ color: 'var(--color-text-primary)' }}
         >
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? tr('归类/标签') : tr('批量归类/标签')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('enable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('启用') : tr('批量启用')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('disable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('禁用') : tr('批量禁用')}</button>
-          <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => void batchRun('resetUsage', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('清零') : tr('批量清零用量')}</button>
+     <button className="btn btn-ghost btn-outline" onClick={openBatchMetadata} disabled={batchActionLoading}>{isMobile ? tr('归类/标签') : tr('批量归类/标签')}</button>
+     <button className="btn btn-ghost btn-outline" onClick={() => void batchRun('enable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('启用') : tr('批量启用')}</button>
+     <button className="btn btn-ghost btn-outline" onClick={() => void batchRun('disable', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('禁用') : tr('批量禁用')}</button>
+     <button className="btn btn-ghost btn-outline" onClick={() => void batchRun('resetUsage', selectedIds)} disabled={batchActionLoading}>{isMobile ? tr('清零') : tr('批量清零用量')}</button>
           <button className="btn btn-link btn-link-danger" onClick={() => setDeleteConfirm({ mode: 'batch', ids: [...selectedIds] })} disabled={batchActionLoading}>{isMobile ? tr('删除') : tr('批量删除')}</button>
         </ResponsiveBatchActionBar>
       ) : null}
@@ -1107,12 +1106,11 @@ export default function DownstreamKeys() {
             </div>
             {isMobile && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                <button className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => setShowFilters(true)}>
+        <button className="btn btn-ghost btn-outline" onClick={() => setShowFilters(true)}>
                   {tr('筛选')}
                 </button>
                 <button
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={() => toggleSelectAllVisible(!allVisibleSelected)}
                 >
                   {allVisibleSelected ? tr('取消全选') : tr('全选可见')}

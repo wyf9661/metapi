@@ -1322,20 +1322,17 @@ export default function Settings() {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={applyCodexDefaultHighReasoningPreset}
                 >{tr('Codex 默认高推理')}</button>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={addPayloadVisualRule}
                 >{tr('新增规则')}</button>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={() => setShowPayloadRulesEditor((prev) => !prev)}
                 >
                   {showPayloadRulesEditor ? tr('收起高级 JSON 编辑') : tr('展开高级 JSON 编辑')}
@@ -1482,8 +1479,7 @@ export default function Settings() {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-ghost"
-                    style={{ border: '1px solid var(--color-border)' }}
+                    className="btn btn-ghost btn-outline"
                     onClick={syncVisualRulesFromAdvancedJson}
                   >{tr('同步到可视化规则')}</button>
                 </div>
@@ -1947,8 +1943,7 @@ export default function Settings() {
             >{tr('成本优先')}</button>
             <button
               onClick={() => setShowAdvancedRouting((prev) => !prev)}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {showAdvancedRouting ? tr('收起高级参数') : tr('展开高级参数')}
             </button>
@@ -1978,8 +1973,7 @@ export default function Settings() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
               {migrationDialect !== 'sqlite' && (
                 <button
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={() => setConnectionMode((prev) => (prev === 'shorthand' ? 'advanced' : 'shorthand'))}
                 >
                   {connectionMode === 'shorthand' ? tr('高级输入连接串') : tr('使用半自动简写')}
@@ -2029,8 +2023,7 @@ export default function Settings() {
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <button
-                  className="btn btn-ghost"
-                  style={{ border: '1px solid var(--color-border)' }}
+                  className="btn btn-ghost btn-outline"
                   onClick={() => setShowShorthandOptional((prev) => !prev)}
                 >
                   {showShorthandOptional ? tr('收起端口/库名') : tr('展开端口/库名')}
@@ -2080,8 +2073,7 @@ export default function Settings() {
             <button
               onClick={handleTestExternalDatabaseConnection}
               disabled={testingMigrationConnection || migratingDatabase || savingRuntimeDatabase}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {testingMigrationConnection ? <><span className="spinner spinner-sm" /> {tr('测试中...')}</> : tr('测试连接')}
             </button>
@@ -2097,8 +2089,7 @@ export default function Settings() {
               onClick={handleSaveRuntimeDatabaseConfig}
               disabled={isTunnelClientView || savingRuntimeDatabase || migratingDatabase || testingMigrationConnection}
               title={isTunnelClientView ? tr('公网隧道访问时不可用，请在本机/内网控制台操作') : undefined}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {savingRuntimeDatabase ? <><span className="spinner spinner-sm" /> {tr('保存中...')}</> : tr('保存为运行数据库（重启后生效）')}
             </button>

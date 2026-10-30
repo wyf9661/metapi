@@ -1112,8 +1112,7 @@ export default function ProxyLogs() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
               aria-expanded={debugTracePanelExpanded}
               data-debug-trace-panel-toggle
               onClick={() => setDebugTracePanelExpanded((current) => !current)}
@@ -1155,8 +1154,7 @@ export default function ProxyLogs() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
               onClick={() => {
                 setDebugDraftSettings(debugSettings);
                 setShowDebugSettingsModal(true);
@@ -1164,8 +1162,7 @@ export default function ProxyLogs() {
             >{tr('调试设置')}</button>
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
               onClick={() => void loadDebugState()}
               disabled={debugPanelLoading}
             >
@@ -1173,8 +1170,7 @@ export default function ProxyLogs() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
               onClick={() => void handleClearDebugTraces()}
               disabled={debugPanelSaving || debugPanelLoading}
               data-tooltip={tr('删除全部调试追踪，下一条从 #1 开始')}

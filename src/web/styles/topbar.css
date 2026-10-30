@@ -471,6 +471,16 @@
   color: var(--color-primary);
 }
 
+
+/* neutral-bordered ghost button: replaces the hand-rolled inline
+   `border: 1px solid var(--color-border)` on ghost actions. */
+.btn-outline {
+  border-color: var(--color-border);
+}
+
+.btn-outline:hover {
+  border-color: var(--color-text-muted);
+}
 .btn-ghost:hover {
   background: color-mix(in srgb, var(--color-primary) 18%, var(--color-bg-card));
   border-color: color-mix(in srgb, var(--color-primary) 36%, transparent);

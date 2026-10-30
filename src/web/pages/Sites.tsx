@@ -1336,8 +1336,7 @@ export default function Sites() {
               <button
                 type="button"
                 onClick={() => setShowMobileTools(true)}
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
+                className="btn btn-ghost btn-outline"
               >{tr('排序与操作')}</button>
             </>
           ) : (
@@ -1482,7 +1481,7 @@ export default function Sites() {
           }}
           footer={(
             <>
-              <button onClick={closeEditor} className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }}>
+       <button onClick={closeEditor} className="btn btn-ghost btn-outline" >
                 {tr('取消')}
               </button>
               <button
@@ -1613,8 +1612,7 @@ export default function Sites() {
               <button
                 type="button"
                 onClick={addApiEndpointRow}
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
+                className="btn btn-ghost btn-outline"
               >{tr('+ 添加 API 地址')}</button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7 }}>{tr('仅用于 `/v1/*`、模型发现和 API Key 验证。不填时跟随主站点 URL；多条地址按列表顺序轮询，禁用的地址不参与调度。')}</div>
@@ -1694,8 +1692,7 @@ export default function Sites() {
               <button
                 type="button"
                 onClick={addCustomHeaderRow}
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
+                className="btn btn-ghost btn-outline"
               >{tr('+ 添加请求头')}</button>
             </div>
             {form.customHeaders.map((header, index) => (

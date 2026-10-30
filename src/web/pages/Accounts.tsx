@@ -1268,8 +1268,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   <button
                     type="button"
                     onClick={() => setShowMobileTools(true)}
-                    className="btn btn-ghost"
-                    style={{ border: '1px solid var(--color-border)' }}
+                    className="btn btn-ghost btn-outline"
                   >{tr('排序与操作')}</button>
                 )}
               </>
@@ -1388,8 +1387,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   );
                 }}
                 disabled={actionLoading['checkin-all']}
-                className="btn btn-ghost"
-                style={{ border: '1px solid var(--color-border)' }}
+                className="btn btn-ghost btn-outline"
               >
                 {actionLoading['checkin-all'] ? (
                   <>
@@ -1407,8 +1405,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                 await handleRefreshRuntimeHealth();
               }}
               disabled={actionLoading['health-refresh']}
-              className="btn btn-ghost"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="btn btn-ghost btn-outline"
             >
               {actionLoading['health-refresh'] ? (
                 <>
