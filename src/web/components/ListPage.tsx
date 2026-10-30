@@ -6,6 +6,8 @@ const DEFAULT_ICON_PATH = 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
 // card, loading skeleton, empty state and pagination footer. Pages pass
 // only the list itself as `children`.
 export default function ListPage({
+  className,
+  style,
   title,
   subtitle,
   actions,
@@ -20,6 +22,7 @@ export default function ListPage({
   cardStyle,
   iconPath = DEFAULT_ICON_PATH,
 }: {
+  className?: string;
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
@@ -29,13 +32,14 @@ export default function ListPage({
   loadingFallback?: ReactNode;
   isEmpty?: boolean;
   emptyTitle: string;
-  emptyDesc?: string;
+  emptyDesc?: ReactNode;
   pagination?: ReactNode;
   cardStyle?: CSSProperties;
   iconPath?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <div className="animate-fade-in">
+    <div className={`animate-fade-in${className ? ` ${className}` : ''}`} style={style}>
       <div className="page-header">
         <div>
           <h2 className="page-title">{title}</h2>

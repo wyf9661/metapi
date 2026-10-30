@@ -27,6 +27,7 @@ import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import PageJumpInput from '../components/PageJumpInput.js';
 import PaginationControls from '../components/PaginationControls.js';
+import ListPage from '../components/ListPage.js';
 import { parseProxyLogPathMeta } from './helpers/proxyLogPathMeta.js';
 import {DEFAULT_PROXY_DEBUG_SETTINGS, DEBUG_REFRESH_INTERVAL_MS, DEBUG_TRACE_PAGE_SIZE, EMPTY_SUMMARY, TRACE_TABLE_LIMIT, buildBillingProcessLines, buildProxyDebugSettingsPayload, buildProxyLogsRouteSearch, firstByteColor, formatBillingDetailSummary, formatFirstByteLabel, formatLatency, formatProxyDebugCaptureSummary, formatProxyDebugTargetSummary, formatProxyLogTokenValue, formatProxyLogUsageSource, formatStreamModeLabel, formatTokensPerSecond, latencyColor, normalizeProxyDebugSettings, parseStoredDebugPreview, persistDebugTracePanelExpanded, readProxyLogsRouteState, readStoredDebugTracePanelExpanded, renderDownstreamKeySummary, proxyLogKeyChipColors, resolveProxyLogClientDisplay, proxyLogRetryColor, resolveProxyLogInputTokens, toApiTimeBoundary, formatProxyLogTokenPair, type ProxyDebugSettingsState, type ProxyLogRenderItem} from './helpers/proxyLogsHelpers.js';
 import {CompactSummaryMetric, copyTextToClipboard, renderProxyLogClientCell, ProxyLogTimingCell, StreamModeIcon} from './helpers/proxyLogsUi.js';
@@ -945,22 +946,31 @@ export default function ProxyLogs() {
   );
 
   return (
-    <div className="animate-fade-in proxy-logs-page">
-      <div className="page-header" style={{ marginBottom: 16 }}>
-        <div>
-          <h2 className="page-title">{tr('使用日志')}</h2>
-          <div className="page-subtitle">{tr('按站点、客户端和时间筛选代理请求，并在需要时查看最近调试追踪。')}</div>
+    <>
+    <ListPage
+      className="proxy-logs-page"
+      title={tr('使用日志')}
+      subtitle={tr('按站点、客户端和时间筛选代理请求，并在需要时查看最近调试追踪。')}
+      loading={loading}
+      loadingFallback={
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[...Array(8)].map((_, i) => (
+            <div key={i} style={{ display: 'flex', gap: 16 }}>
+              <div className="skeleton" style={{ width: 140, height: 16 }} />
+              <div className="skeleton" style={{ width: 200, height: 16 }} />
+              <div className="skeleton" style={{ width: 50, height: 16 }} />
+              <div className="skeleton" style={{ width: 50, height: 16 }} />
+              <div className="skeleton" style={{ width: 50, height: 16 }} />
+              <div className="skeleton" style={{ width: 70, height: 16 }} />
+            </div>
+          ))}
         </div>
-        <div
-          className="page-actions"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-          }}
-        >
+      }
+      isEmpty={!loading && logs.length === 0}
+      emptyTitle={tr('暂无使用日志')}
+      emptyDesc={tr('当请求通过代理时，日志将显示在这里')}
+      actions={
+        <>
           {siteFilter ? <span className="kpi-chip">{activeSiteLabel}</span> : null}
           <button
             onClick={() => setAutoRefresh((v) => !v)}
@@ -1023,9 +1033,10 @@ export default function ProxyLogs() {
             </svg>
             {loading ? tr('加载中...') : tr('刷新')}
           </button>
-        </div>
-      </div>
-
+        </>
+      }
+      beforeList={
+        <>
       <ResponsiveFilterPanel
         isMobile={isMobile}
         mobileOpen={showFilters}
@@ -1521,28 +1532,10 @@ export default function ProxyLogs() {
         <div className="alert alert-error" style={{ marginBottom: 12 }}>{tr('结束时间必须晚于开始时间')}</div>
       )}
 
-      <div className="card" style={{ overflowX: 'auto' }}>
-        {loading ? (
-          <div
-            style={{
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            {[...Array(8)].map((_, i) => (
-              <div key={i} style={{ display: 'flex', gap: 16 }}>
-                <div className="skeleton" style={{ width: 140, height: 16 }} />
-                <div className="skeleton" style={{ width: 200, height: 16 }} />
-                <div className="skeleton" style={{ width: 50, height: 16 }} />
-                <div className="skeleton" style={{ width: 50, height: 16 }} />
-                <div className="skeleton" style={{ width: 50, height: 16 }} />
-                <div className="skeleton" style={{ width: 70, height: 16 }} />
-              </div>
-            ))}
-          </div>
-        ) : isMobile ? (
+        </>
+      }
+    >
+        {isMobile ? (
           <div className="mobile-card-list">
             {logs.map((log) => {
               const detailState = detailById[log.id];
@@ -2649,26 +2642,7 @@ export default function ProxyLogs() {
             </tbody>
           </table>
         )}
-        {!loading && logs.length === 0 && (
-          <div className="empty-state">
-            <svg
-              className="empty-state-icon"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            <div className="empty-state-title">{tr('暂无使用日志')}</div>
-            <div className="empty-state-desc">{tr('当请求通过代理时，日志将显示在这里')}</div>
-          </div>
-        )}
-      </div>
+    </ListPage>
 
       {total > 0 && (
         <PaginationControls
@@ -2685,6 +2659,6 @@ export default function ProxyLogs() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
