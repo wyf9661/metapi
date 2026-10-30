@@ -238,8 +238,12 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     // For native Anthropic streams, EOF without message_stop is not a clean
     // completion. Forward the partial stream as-is instead of fabricating an
     // end_turn/message_stop pair that makes clients think the run finished.
+    // Exception: the upstream already reported a stop_reason and the terminal pair is only
+    // held back for the trailing usage chunk (OpenAI-compatible relays send usage after
+    // finish_reason), so a pending finish still has to be flushed here.
     if (input.downstreamFormat === 'claude' && !claudeContext.doneSent) {
-      return;
+      const hasPendingFinish = typeof (claudeContext as { pendingFinishReason?: unknown }).pendingFinishReason === 'string';
+      if (!hasPendingFinish) return;
     }
 
     if (

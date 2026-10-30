@@ -7,12 +7,24 @@ type SerializedAnthropicEvent = {
   payload: Record<string, any>;
 };
 
-function collectSerializedEvents(events: Array<Record<string, unknown>>): SerializedAnthropicEvent[] {
+function collectSerializedEvents(
+  events: Array<Record<string, unknown>>,
+  options?: { flushDone?: boolean },
+): SerializedAnthropicEvent[] {
   const streamContext = anthropicMessagesTransformer.createStreamContext('claude-opus-4-6');
   const downstreamContext = anthropicMessagesTransformer.createDownstreamContext();
-  const serialized = events
-    .flatMap((event) => anthropicMessagesTransformer.serializeStreamEvent(event as any, streamContext, downstreamContext))
-    .join('');
+  const serialized = [
+    ...events.flatMap((event) => anthropicMessagesTransformer.serializeStreamEvent(
+      event as any,
+      streamContext,
+      downstreamContext,
+    )),
+    // Mirror the proxy stream, which always flushes the (possibly deferred) terminal pair
+    // at EOF/[DONE]. Only fires when a finishReason left it pending.
+    ...(options?.flushDone
+      ? anthropicMessagesTransformer.serializeDone(streamContext, downstreamContext)
+      : []),
+  ].join('');
 
   return anthropicMessagesTransformer.pullSseEvents(serialized).events.map((item) => ({
     event: item.event,
@@ -238,7 +250,7 @@ describe('anthropicMessagesStream.serializeEvent', () => {
         finishReason: 'stop',
         done: true,
       },
-    ]);
+    ], { flushDone: true });
 
     expect(events.map((item) => item.payload.type)).toEqual([
       'message_start',

@@ -122,7 +122,8 @@ describe('anthropic exit surfaces a failed stream', () => {
       streamContext,
       downstreamContext,
     );
-    const text = lines.join('');
+    // The terminal pair is deferred until the trailing usage chunk arrives (or EOF).
+    const text = [...lines, ...anthropicMessagesStream.serializeDone(streamContext, downstreamContext)].join('');
 
     expect(text).toContain('event: error');
     expect(text).toContain('"type":"api_error"');
@@ -133,9 +134,14 @@ describe('anthropic exit surfaces a failed stream', () => {
     const streamContext = anthropicMessagesStream.createContext('claude-test');
     const downstreamContext = anthropicMessagesStream.createDownstreamContext();
 
-    const text = anthropicMessagesStream
-      .serializeEvent({ finishReason: 'content_filter', done: true }, streamContext, downstreamContext)
-      .join('');
+    const text = [
+      ...anthropicMessagesStream.serializeEvent(
+        { finishReason: 'content_filter', done: true },
+        streamContext,
+        downstreamContext,
+      ),
+      ...anthropicMessagesStream.serializeDone(streamContext, downstreamContext),
+    ].join('');
 
     expect(text).toContain('"stop_reason":"refusal"');
     expect(text).not.toContain('event: error');

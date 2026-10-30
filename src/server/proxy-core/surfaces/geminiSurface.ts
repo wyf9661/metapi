@@ -40,6 +40,7 @@ import { detectDownstreamClientContext, type DownstreamClientContext } from '../
 import { insertProxyLog } from '../../services/proxyLogStore.js';
 import { summarizeConversationFileInputsInOpenAiBody } from '../capabilities/conversationFileCapabilities.js';
 import { getRuntimeResponseReader, readRuntimeResponseText } from '../executors/types.js';
+import { relayOpenAiChatSseToGeminiSse } from '../runtime/geminiCompatSseStream.js';
 import { fetchWithObservedFirstByte, getObservedResponseMeta, parseLocalFirstByteTimeoutBudgetMs } from '../firstByteTimeout.js';
 import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { recordPerformanceShadowAttempt, recordPerformanceShadowSample } from '../../services/performanceShadow.js';
@@ -1589,6 +1590,130 @@ export async function geminiProxyRoute(app: FastifyInstance) {
         upstreamPath = endpointResult.upstreamPath;
         const upstream = endpointResult.upstream;
         const firstByteLatencyMs = getObservedResponseMeta(upstream)?.firstByteLatencyMs ?? null;
+
+        // The compatibility path talks to OpenAI-shaped upstreams, so a streaming request comes
+        // back as chat SSE. Reading it as text and handing it to the *final* serializer emitted
+        // the raw `data: {...}` frames as one chunk's text and logged 0/0 tokens; relay the SSE
+        // frame by frame instead (native Gemini upstreams take the branch above).
+        if (isStreamAction && geminiGenerateContentTransformer.stream.isSseContentType(upstream.headers.get('content-type'))) {
+          const upstreamReader = getRuntimeResponseReader(upstream);
+          if (!upstreamReader) {
+            throw new Error('Gemini compatibility upstream stream is unreadable');
+          }
+          if (isFastifyReplyCommitted(reply)) {
+            throw new Error('Cannot start Gemini stream after response already committed');
+          }
+          const captureStreamChunks = debugTrace?.options.captureStreamChunks === true;
+          reply.hijack();
+          reply.raw.statusCode = upstream.status;
+          reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+          reply.raw.setHeader('Cache-Control', 'no-cache');
+          const reader = createIdleGuardedStreamReader({
+            reader: upstreamReader,
+            timeoutMs: resolveProxyStreamIdleTimeoutMs(),
+          });
+          const unwireStreamCancel = wireStreamCancelOnClientDisconnect(
+            reply,
+            () => () => reader.cancel('client disconnected'),
+          );
+          try {
+            const relayed = await relayOpenAiChatSseToGeminiSse({
+              reader,
+              modelName: actualModel,
+              responseId: `chatcmpl-meta-${Date.now()}`,
+              write: (line) => reply.raw.write(line),
+              wrapResponsePayload: isGeminiCliDownstream,
+            });
+            const latency = Date.now() - startTime;
+            const responseBody = captureStreamChunks
+              ? relayed.rawStreamText
+              : { stream: true, usage: relayed.usage };
+            await recordGeminiChannelSuccessBestEffort(selected.channel.id, latency, actualModel);
+            bindSurfaceStickyChannel({
+              stickySessionKey,
+              selected,
+              requestedModel,
+              downstreamApiKeyId,
+            });
+            await logProxy(
+              selected,
+              requestedModel,
+              'success',
+              upstream.status,
+              latency,
+              null,
+              retryCount,
+              downstreamPath,
+              upstreamPath,
+              clientContext,
+              relayed.usage.promptTokens,
+              relayed.usage.completionTokens,
+              relayed.usage.totalTokens,
+              isStreamAction,
+              firstByteLatencyMs,
+              requestTraceId,
+            );
+            await safeInsertSurfaceProxyDebugAttempt(debugTrace, {
+              attemptIndex: retryCount,
+              endpoint: 'gemini-compat-openai',
+              requestPath: upstreamPath,
+              targetUrl: upstreamPath,
+              runtimeExecutor: 'default',
+              requestHeaders: {},
+              requestBody: null,
+              responseStatus: upstream.status,
+              responseHeaders: buildSurfaceProxyDebugResponseHeaders(upstream),
+              responseBody,
+              rawErrorText: null,
+              recoverApplied: false,
+              downgradeDecision: false,
+              downgradeReason: null,
+              memoryWrite: null,
+            });
+            await finalizeDebugSuccess(
+              upstream.status,
+              upstreamPath,
+              buildSurfaceProxyDebugResponseHeaders(upstream),
+              responseBody,
+            );
+            return reply;
+          } catch (error) {
+            const latency = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : 'Gemini upstream stream failed';
+            await failureToolkit.recordChannelFailure({
+              selected,
+              modelName: requestedModel,
+              status: 502,
+              errorText: errorMessage,
+            });
+            await logProxy(
+              selected,
+              requestedModel,
+              'failed',
+              502,
+              latency,
+              errorMessage,
+              retryCount,
+              downstreamPath,
+              upstreamPath,
+              clientContext,
+              0,
+              0,
+              0,
+              isStreamAction,
+              firstByteLatencyMs,
+              requestTraceId,
+            );
+            await finalizeDebugFailure(502, { error: { message: errorMessage } }, upstreamPath).catch(() => undefined);
+            return reply;
+          } finally {
+            unwireStreamCancel();
+            if (!reply.raw.writableEnded) {
+              reply.raw.end();
+            }
+          }
+        }
+
         const rawText = await readRuntimeResponseText(upstream, bodyReadGuards);
         let upstreamData: unknown = rawText;
         try {
