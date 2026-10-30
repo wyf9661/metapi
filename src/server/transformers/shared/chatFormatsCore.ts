@@ -72,6 +72,13 @@ export type NormalizedStreamEvent = {
   }>;
   finishReason?: string | null;
   done?: boolean;
+  /**
+   * Token accounting reported by the upstream chunk, normalized to OpenAI chat naming
+   * (`prompt_tokens` / `completion_tokens`). OpenAI-compatible relays send this in a
+   * trailing chunk whose `choices` array is empty, so it must never be dropped: downstream
+   * Anthropic/Responses surfaces have no other place to read real usage from.
+   */
+  usagePayload?: Record<string, unknown>;
 };
 
 export type NormalizedFinalResponse = {
@@ -1479,12 +1486,57 @@ export function normalizeUpstreamFinalResponse(
   };
 }
 
+export function extractUpstreamUsagePayload(payload: Record<string, unknown>): Record<string, unknown> | undefined {
+  const usage = isRecord(payload.usage)
+    ? payload.usage
+    : (isRecord((payload as any).token_usage) ? (payload as any).token_usage : null);
+  if (!usage) return undefined;
+
+  const toCount = (value: unknown): number | undefined => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
+  };
+
+  const promptTokens = toCount(usage.prompt_tokens ?? usage.input_tokens);
+  const completionTokens = toCount(usage.completion_tokens ?? usage.output_tokens);
+  const totalTokens = toCount(usage.total_tokens)
+    ?? (promptTokens !== undefined && completionTokens !== undefined
+      ? promptTokens + completionTokens
+      : undefined);
+
+  const mapped: Record<string, unknown> = {};
+  if (promptTokens !== undefined) mapped.prompt_tokens = promptTokens;
+  if (completionTokens !== undefined) mapped.completion_tokens = completionTokens;
+  if (totalTokens !== undefined) mapped.total_tokens = totalTokens;
+
+  const promptDetails = isRecord(usage.prompt_tokens_details)
+    ? usage.prompt_tokens_details
+    : (isRecord(usage.input_tokens_details) ? usage.input_tokens_details : null);
+  if (promptDetails) mapped.prompt_tokens_details = { ...promptDetails };
+
+  const cacheReadTokens = toCount(
+    usage.cache_read_input_tokens
+    ?? usage.prompt_cache_hit_tokens
+    ?? (promptDetails ? promptDetails.cached_tokens : undefined),
+  );
+  if (cacheReadTokens !== undefined) mapped.cache_read_input_tokens = cacheReadTokens;
+
+  const cacheCreationTokens = toCount(
+    usage.cache_creation_input_tokens ?? usage.claude_cache_creation_5_m_tokens,
+  );
+  if (cacheCreationTokens !== undefined) mapped.cache_creation_input_tokens = cacheCreationTokens;
+
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
 export function normalizeUpstreamStreamEvent(
   payload: unknown,
   context: StreamTransformContext,
   fallbackModel: string,
 ): NormalizedStreamEvent {
   if (!isRecord(payload)) return {};
+
+  const usagePayload = extractUpstreamUsagePayload(payload);
 
   if (Array.isArray(payload.choices)) {
     // Per-payload: fragments of one call never span two calls, and a chunk that omits all
@@ -1564,6 +1616,7 @@ export function normalizeUpstreamStreamEvent(
       reasoningSignature,
       toolCallDeltas: toolCallDeltas.length > 0 ? toolCallDeltas : undefined,
       finishReason: normalizeStopReason(choice?.finish_reason),
+      ...(usagePayload ? { usagePayload } : {}),
     };
   }
 

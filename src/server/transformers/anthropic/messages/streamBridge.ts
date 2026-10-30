@@ -48,7 +48,21 @@ type ExtendedClaudeDownstreamContext = ClaudeDownstreamContext & {
    * can report real counts: they used to be hard-coded to 0, so every Anthropic-over-
    * streaming response was billed as zero tokens.
    */
-  usage?: { inputTokens?: number | null; outputTokens?: number | null };
+  usage?: {
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalTokens?: number | null;
+    cacheReadTokens?: number | null;
+    cacheCreationTokens?: number | null;
+  };
+  /**
+   * Upstream already reported a stop_reason but no token counts yet: OpenAI-compatible
+   * relays send the usage chunk *after* the finish_reason chunk, so the terminating
+   * message_delta/message_stop pair is held back until usage lands (or the stream ends).
+   * Emitting it eagerly is what made the trailing usage chunk unrepresentable, so every
+   * Anthropic-over-OpenAI stream was billed as zero tokens downstream.
+   */
+  pendingFinishReason?: string | null;
 };
 
 export const ANTHROPIC_RAW_SSE_EVENT_NAMES = new Set([
@@ -231,13 +245,52 @@ function toTokenCount(value: unknown): number | null {
 }
 
 /** Anthropic spells the input side `input_tokens` and, on message_delta, only `output_tokens`. */
-function usageSnapshot(usage: Record<string, unknown>): { inputTokens?: number | null; outputTokens?: number | null } {
-  const snapshot: { inputTokens?: number | null; outputTokens?: number | null } = {};
-  const input = toTokenCount(usage.input_tokens);
-  const output = toTokenCount(usage.output_tokens);
+function usageSnapshot(usage: Record<string, unknown>): {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheCreationTokens?: number | null;
+} {
+  const snapshot: {
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalTokens?: number | null;
+    cacheReadTokens?: number | null;
+    cacheCreationTokens?: number | null;
+  } = {};
+  const input = toTokenCount(usage.input_tokens ?? usage.prompt_tokens);
+  const output = toTokenCount(usage.output_tokens ?? usage.completion_tokens);
+  const total = toTokenCount(usage.total_tokens);
+  const cacheRead = toTokenCount(
+    usage.cache_read_input_tokens
+    ?? usage.prompt_cache_hit_tokens
+    ?? usage.cached_tokens
+    ?? (isRecord(usage.prompt_tokens_details) ? usage.prompt_tokens_details.cached_tokens : undefined),
+  );
+  const cacheCreation = toTokenCount(
+    usage.cache_creation_input_tokens ?? usage.claude_cache_creation_5_m_tokens,
+  );
   if (input !== null) snapshot.inputTokens = input;
   if (output !== null) snapshot.outputTokens = output;
+  if (total !== null) snapshot.totalTokens = total;
+  if (cacheRead !== null) snapshot.cacheReadTokens = cacheRead;
+  if (cacheCreation !== null) snapshot.cacheCreationTokens = cacheCreation;
   return snapshot;
+}
+
+/**
+ * OpenAI-compatible upstreams report usage on the chunk itself (`prompt_tokens` /
+ * `completion_tokens`), which the generic stream normalizer now preserves as `usagePayload`.
+ * Fold it into the per-stream snapshot so the terminating message_delta can report it.
+ */
+function captureNormalizedUsage(
+  event: NormalizedStreamEvent,
+  context: ExtendedClaudeDownstreamContext,
+): void {
+  const usagePayload = (event as { usagePayload?: unknown }).usagePayload;
+  if (!isRecord(usagePayload)) return;
+  context.usage = { ...context.usage, ...usageSnapshot(usagePayload as Record<string, unknown>) };
 }
 
 function buildClaudeMessageId(sourceId: string): string {
@@ -604,8 +657,26 @@ function buildDoneEvents(
         stop_reason: toClaudeStopReason(finishReason),
         stop_sequence: null,
       },
-      ...(typeof context.usage?.outputTokens === 'number'
-        ? { usage: { output_tokens: context.usage.outputTokens } }
+      ...(context.usage && (
+        typeof context.usage.outputTokens === 'number'
+        || typeof context.usage.inputTokens === 'number'
+      )
+        ? {
+            usage: {
+              ...(typeof context.usage.inputTokens === 'number'
+                ? { input_tokens: context.usage.inputTokens }
+                : {}),
+              ...(typeof context.usage.outputTokens === 'number'
+                ? { output_tokens: context.usage.outputTokens }
+                : {}),
+              ...(typeof context.usage.cacheReadTokens === 'number'
+                ? { cache_read_input_tokens: context.usage.cacheReadTokens }
+                : {}),
+              ...(typeof context.usage.cacheCreationTokens === 'number'
+                ? { cache_creation_input_tokens: context.usage.cacheCreationTokens }
+                : {}),
+            },
+          }
         : {}),
     }),
     serializeSse('message_stop', {
@@ -769,6 +840,11 @@ export function serializeAnthropicFinalAsStream(
       streamContext,
       downstreamContext,
     ),
+  );
+  // The terminal pair is deferred while a stream may still surface its usage chunk; a
+  // finalized non-stream response has nothing left to wait for, so flush it here.
+  lines.push(
+    ...anthropicMessagesStream.serializeDone(streamContext, downstreamContext),
   );
 
   return lines;
@@ -991,6 +1067,7 @@ export const anthropicMessagesStream = {
   ): string[] {
     const context = ensureContext(downstreamContext);
     const anthropicEvent = event as AnthropicExtendedStreamEvent;
+    captureNormalizedUsage(event, context);
     const events: string[] = [];
     const startBlock = anthropicEvent.anthropic?.startBlock;
     const normalizedStartIndex = normalizeBlockIndex(startBlock?.index);
@@ -1117,8 +1194,19 @@ export const anthropicMessagesStream = {
       }
     }
 
-    if (event.finishReason || event.done) {
-      events.push(...buildDoneEvents(streamContext, context, event.finishReason));
+    if ((event.finishReason || event.done) && !context.doneSent) {
+      context.pendingFinishReason = context.pendingFinishReason ?? event.finishReason ?? 'stop';
+    }
+
+    // Hold the terminal pair until the usage chunk lands. OpenAI-compatible relays send
+    // usage one chunk *after* finish_reason, so closing the message on finish_reason alone
+    // makes the counts unrepresentable and every stream bills as zero tokens.
+    if (!context.doneSent && context.pendingFinishReason) {
+      const usageKnown = typeof context.usage?.outputTokens === 'number'
+        || typeof context.usage?.inputTokens === 'number';
+      if (usageKnown || event.finishReason === undefined) {
+        events.push(...buildDoneEvents(streamContext, context, context.pendingFinishReason));
+      }
     }
 
     return events;
@@ -1128,7 +1216,7 @@ export const anthropicMessagesStream = {
     downstreamContext: ClaudeDownstreamContext,
   ): string[] {
     const context = ensureContext(downstreamContext);
-    return buildDoneEvents(streamContext, context, 'stop');
+    return buildDoneEvents(streamContext, context, context.pendingFinishReason ?? 'stop');
   },
   pullSseEvents(buffer: string) {
     return pullSseEventsWithDone(buffer);
