@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { readAllCss } from '../styles/readStyles.testutil.js';
 
 describe('Mobile layout shell styles', () => {
