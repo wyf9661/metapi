@@ -28,7 +28,7 @@ describe('check-in ignores the connection status', () => {
     expect(start).toBeGreaterThan(-1);
     const body = source.slice(start, start + 400);
 
-    expect(body).toContain("row.accounts?.checkinEnabled === true");
+    expect(body).toContain('row.accounts?.checkinEnabled === true');
     expect(body).toContain("row.sites?.status !== 'disabled'");
     expect(body).not.toContain("row.accounts?.status === 'active'");
   });
