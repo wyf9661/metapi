@@ -18,6 +18,7 @@ export default function ListPage({
   emptyDesc,
   pagination,
   cardStyle,
+  iconPath = DEFAULT_ICON_PATH,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -31,6 +32,7 @@ export default function ListPage({
   emptyDesc?: string;
   pagination?: ReactNode;
   cardStyle?: CSSProperties;
+  iconPath?: string;
 }) {
   return (
     <div className="animate-fade-in">
@@ -56,7 +58,7 @@ export default function ListPage({
         ) : isEmpty ? (
           <div className="empty-state">
             <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d={DEFAULT_ICON_PATH} />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d={iconPath} />
             </svg>
             <div className="empty-state-title">{emptyTitle}</div>
             {emptyDesc ? <div className="empty-state-desc">{emptyDesc}</div> : null}

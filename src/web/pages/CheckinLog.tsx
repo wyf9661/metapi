@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
+import ListPage from '../components/ListPage.js';
 import { useToast } from '../components/Toast.js';
 import { PillTabBg } from '../components/PillTabBg.js';
 import { useIsMobile } from '../components/useIsMobile.js';
@@ -263,9 +264,9 @@ export default function CheckinLog() {
   );
 
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
-        <h2 className="page-title">{tr('签到记录')}</h2>
+    <ListPage
+      title={tr('签到记录')}
+      actions={
         <button
           onClick={handleTriggerAll}
           disabled={triggering}
@@ -278,7 +279,8 @@ export default function CheckinLog() {
             '运行所有签到'
           )}
         </button>
-      </div>
+      }
+      beforeList={
 
       <ResponsiveFilterPanel
         isMobile={isMobile}
@@ -314,36 +316,29 @@ export default function CheckinLog() {
           </div>
         )}
       />
-
-      <div
-        className="card"
-        style={{
-          overflowX: 'auto',
-          borderTopLeftRadius: 0,
-          borderTopRightRadius: 0,
-        }}
-      >
-        {loading ? (
-          <div
-            style={{
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            {[...Array(5)].map((_, i) => (
-              <div key={i} style={{ display: 'flex', gap: 16 }}>
-                <div className="skeleton" style={{ width: 120, height: 16 }} />
-                <div className="skeleton" style={{ width: 80, height: 16 }} />
-                <div className="skeleton" style={{ width: 120, height: 16 }} />
-                <div className="skeleton" style={{ width: 70, height: 16 }} />
-                <div className="skeleton" style={{ flex: 1, height: 16 }} />
-                <div className="skeleton" style={{ width: 60, height: 16 }} />
-              </div>
-            ))}
-          </div>
-        ) : isMobile ? (
+      }
+      loading={loading}
+      isEmpty={filtered.length === 0}
+      emptyTitle={tr('暂无签到记录')}
+      emptyDesc={tr('点击“运行所有签到”开始执行')}
+      iconPath="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+      cardStyle={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
+      loadingFallback={
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} style={{ display: 'flex', gap: 16 }}>
+              <div className="skeleton" style={{ width: 120, height: 16 }} />
+              <div className="skeleton" style={{ width: 80, height: 16 }} />
+              <div className="skeleton" style={{ width: 120, height: 16 }} />
+              <div className="skeleton" style={{ width: 70, height: 16 }} />
+              <div className="skeleton" style={{ flex: 1, height: 16 }} />
+              <div className="skeleton" style={{ width: 60, height: 16 }} />
+            </div>
+          ))}
+        </div>
+      }
+    >
+        {isMobile ? (
           <div className="mobile-card-list">
             {filtered.map((log: any) => {
               const status = getStatus(log);
@@ -562,26 +557,6 @@ export default function CheckinLog() {
           </table>
         )}
 
-        {!loading && filtered.length === 0 && (
-          <div className="empty-state">
-            <svg
-              className="empty-state-icon"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div className="empty-state-title">{tr('暂无签到记录')}</div>
-            <div className="empty-state-desc">{tr('点击“运行所有签到”开始执行')}</div>
-          </div>
-        )}
-      </div>
-    </div>
+    </ListPage>
   );
 }
