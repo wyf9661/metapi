@@ -312,10 +312,10 @@ export default function ModelTester() {
             options={modelOptions}
             placeholder={models.length === 0 ? '暂无模型，请先拉取列表' : '选择模型'}
             disabled={models.length === 0}
-            emptyLabel="无匹配模型"
+            emptyLabel={tr('无匹配模型')}
             menuMaxHeight={280}
             searchable
-            searchPlaceholder="搜索模型"
+            searchPlaceholder={tr('搜索模型')}
           />
           {models.length > 0 ? (
             <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>

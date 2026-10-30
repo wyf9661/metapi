@@ -1412,7 +1412,7 @@ export default function Sites() {
         isMobile={isMobile}
         mobileOpen={showMobileTools}
         onMobileClose={() => setShowMobileTools(false)}
-        mobileTitle="站点排序与操作"
+        mobileTitle={tr('站点排序与操作')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1441,7 +1441,7 @@ export default function Sites() {
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
         title={tr('确认删除站点')}
-        confirmText="确认删除"
+        confirmText={tr('确认删除')}
         loading={Boolean(deleteConfirm?.siteId && deleting === deleteConfirm.siteId)}
         description={<>{tr('确定要删除站点')} <strong>{deleteConfirm?.siteName || `#${deleteConfirm?.siteId}`}</strong> {tr('吗？')}</>}
       />

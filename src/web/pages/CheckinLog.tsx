@@ -287,7 +287,7 @@ export default function CheckinLog() {
         mobileOpen={showFilters}
         onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
-        mobileTitle="筛选签到记录"
+        mobileTitle={tr('筛选签到记录')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {timeRangeControls}

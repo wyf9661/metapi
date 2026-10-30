@@ -2144,7 +2144,7 @@ export default function Settings() {
             value={adminIpAllowlistText}
             disabled={isTunnelClientView}
             onChange={(e) => setAdminIpAllowlistText(e.target.value)}
-            placeholder={'例如：\n127.0.0.1\n192.168.1.10\n192.168.1.0/24'}
+            placeholder={tr('例如：\n127.0.0.1\n192.168.1.10\n192.168.1.0/24')}
             rows={4}
             style={{ ...inputStyle, fontFamily: 'var(--font-mono)', resize: 'vertical', marginBottom: 10 }}
           />

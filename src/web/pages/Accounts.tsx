@@ -1359,7 +1359,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         isMobile={isMobile}
         mobileOpen={showMobileTools}
         onMobileClose={() => setShowMobileTools(false)}
-        mobileTitle="连接排序与操作"
+        mobileTitle={tr('连接排序与操作')}
         mobileContent={
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1472,7 +1472,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
         title={tr('确认删除连接')}
-        confirmText="确认删除"
+        confirmText={tr('确认删除')}
         loading={Boolean(
           deleteConfirm?.accountId &&
             actionLoading[`delete-${deleteConfirm.accountId}`],
@@ -2428,12 +2428,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 capabilities.canCheckin ? (
                                   <StatusToggle
                                     enabled={a.checkinEnabled}
-                                    onLabel="开启"
-                                    offLabel="关闭"
+                                    onLabel={tr('开启')}
+                                    offLabel={tr('关闭')}
                                     onClick={() => handleToggleCheckin(a)}
                                     busy={!!actionLoading[`checkin-toggle-${a.id}`]}
-                                    tooltipOn="点击关闭签到，全部签到会忽略此账号"
-                                    tooltipOff="点击开启签到"
+                                    tooltipOn={tr('点击关闭签到，全部签到会忽略此账号')}
+                                    tooltipOff={tr('点击开启签到')}
                                   />
                                 ) : (
                                   <StatusPill tone="muted" style={{ fontSize: 11 }}>{tr('不支持')}</StatusPill>
@@ -2680,12 +2680,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             {capabilities.canCheckin ? (
                               <StatusToggle
                                 enabled={a.checkinEnabled}
-                                onLabel="开启"
-                                offLabel="关闭"
+                                onLabel={tr('开启')}
+                                offLabel={tr('关闭')}
                                 onClick={() => handleToggleCheckin(a)}
                                 busy={!!actionLoading[`checkin-toggle-${a.id}`]}
-                                tooltipOn="点击关闭签到，全部签到会忽略此账号"
-                                tooltipOff="点击开启签到"
+                                tooltipOn={tr('点击关闭签到，全部签到会忽略此账号')}
+                                tooltipOff={tr('点击开启签到')}
                               />
                             ) : (
                               <StatusPill tone="muted" style={{ fontSize: 11 }}>{tr('不支持')}</StatusPill>

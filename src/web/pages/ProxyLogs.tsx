@@ -1463,7 +1463,7 @@ export default function ProxyLogs() {
             setDebugDraftSettings(debugSettings);
           }}
           title={tr('调试设置')}
-          closeLabel="关闭调试设置"
+          closeLabel={tr('关闭调试设置')}
           side="right"
         >
           <div style={{ padding: 16, display: 'grid', gap: 16 }}>
@@ -1492,7 +1492,7 @@ export default function ProxyLogs() {
           open={showDebugTraceDetailModal}
           onClose={closeDebugTraceDetailModal}
           title={selectedDebugTraceListItem?.sessionId || '追踪详情'}
-          closeLabel="关闭追踪详情"
+          closeLabel={tr('关闭追踪详情')}
           side="right"
         >
           <div style={{ padding: 16, display: 'grid', gap: 16 }}>

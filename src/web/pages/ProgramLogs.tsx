@@ -228,7 +228,7 @@ export default function ProgramLogs() {
         mobileOpen={showFilters}
         onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
-        mobileTitle="筛选程序日志"
+        mobileTitle={tr('筛选程序日志')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <ModernSelect

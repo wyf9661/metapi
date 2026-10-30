@@ -1,5 +1,6 @@
 import React from 'react';
 import MobileDrawer from './MobileDrawer.js';
+import { tr } from '../i18n.js';
 
 type MobileFilterSheetProps = {
   open: boolean;
@@ -15,7 +16,7 @@ export default function MobileFilterSheet({
   children,
 }: MobileFilterSheetProps) {
   return (
-    <MobileDrawer open={open} onClose={onClose} title={title} closeLabel="关闭筛选">
+    <MobileDrawer open={open} onClose={onClose} title={title} closeLabel={tr('关闭筛选')}>
       <div className="mobile-filter-panel">
         {children}
       </div>

@@ -1114,7 +1114,7 @@ export default function DownstreamKeys() {
             isMobile={isMobile}
             mobileOpen={showFilters}
             onMobileClose={() => setShowFilters(false)}
-            mobileTitle="筛选下游密钥"
+            mobileTitle={tr('筛选下游密钥')}
             mobileContent={filterControls}
             desktopContent={filterControls}
           />
@@ -1367,7 +1367,7 @@ export default function DownstreamKeys() {
         onClose={() => setDeleteConfirm(null)}
         onConfirm={() => void confirmDelete()}
         title={tr('确认删除下游密钥')}
-        confirmText="确认删除"
+        confirmText={tr('确认删除')}
         loading={batchActionLoading || (deleteConfirm?.mode === 'single' && !!rowLoading[`delete-${deleteConfirm.item.id}`])}
         description={deleteConfirm?.mode === 'single'
           ? <>{tr('确定要删除密钥')} <strong>{deleteConfirm.item.name}</strong> {tr('吗？')}</>

@@ -713,8 +713,8 @@ function RouteCardInner({
               onLabel={tr('启用')}
               offLabel={tr('禁用')}
               onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-              tooltipOn="点击禁用此路由"
-              tooltipOff="点击启用此路由"
+              tooltipOn={tr('点击禁用此路由')}
+              tooltipOff={tr('点击启用此路由')}
               style={{ flexShrink: 0, fontSize: 11 }}
             />
           )}
@@ -845,8 +845,8 @@ function RouteCardInner({
                 onLabel={tr('启用')}
                 offLabel={tr('禁用')}
                 onClick={(e) => { e.stopPropagation(); onToggleEnabled(route); }}
-                tooltipOn="点击禁用此路由"
-                tooltipOff="点击启用此路由"
+                tooltipOn={tr('点击禁用此路由')}
+                tooltipOff={tr('点击启用此路由')}
                 style={{ fontSize: 11 }}
               />
             )}

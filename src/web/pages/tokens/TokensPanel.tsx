@@ -925,7 +925,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         isMobile={isMobile}
         mobileOpen={showMobileTools}
         onMobileClose={() => setShowMobileTools(false)}
-        mobileTitle="令牌同步与筛选"
+        mobileTitle={tr('令牌同步与筛选')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -969,7 +969,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
         onClose={() => setDeleteConfirm(null)}
         onConfirm={confirmDelete}
         title={tr('确认删除令牌')}
-        confirmText="确认删除"
+        confirmText={tr('确认删除')}
         loading={Boolean(deleteConfirm?.tokenId && rowLoading[`token-${deleteConfirm.tokenId}-delete`])}
         description={<>{tr('确定要删除令牌')} <strong>{deleteConfirm?.tokenName || `#${deleteConfirm?.tokenId}`}</strong> {tr('吗？')}</>}
       />

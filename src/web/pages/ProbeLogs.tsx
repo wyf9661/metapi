@@ -326,7 +326,7 @@ export default function ProbeLogs() {
         mobileOpen={showFilters}
         onMobileOpen={() => setShowFilters(true)}
         onMobileClose={() => setShowFilters(false)}
-        mobileTitle="筛选测活日志"
+        mobileTitle={tr('筛选测活日志')}
         mobileContent={(
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
@@ -588,7 +588,7 @@ export default function ProbeLogs() {
               open={Boolean(selectedLog)}
               onClose={() => setSelectedLog(null)}
               title={tr('测活详情')}
-              closeLabel="关闭测活详情"
+              closeLabel={tr('关闭测活详情')}
               side="right"
             >
               <div className="probe-detail-body">
