@@ -107,7 +107,7 @@ export default function About() {
           </span>
         </div>
         <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
-          <div>GitHub 稳定版：{latestGitHubVersion || tr('暂无数据')}</div>
+          <div>GitHub {tr('稳定版：')}{latestGitHubVersion || tr('暂无数据')}</div>
         </div>
       </div>
 

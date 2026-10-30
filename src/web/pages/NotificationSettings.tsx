@@ -422,7 +422,7 @@ export default function NotificationSettings() {
                                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                             </div>
                             <div>
-                                <div style={{ fontWeight: 600, fontSize: 15 }}>Server酱 (SendKey)</div>
+                                <div style={{ fontWeight: 600, fontSize: 15 }}>ServerChan (SendKey)</div>
                                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('微信推送消息支持')}</div>
                             </div>
                         </div>
@@ -599,7 +599,7 @@ export default function NotificationSettings() {
                         {/* Pass */}
                         <div>
                             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
-                                账号密码
+                                {tr('账号密码')}
                                 {runtime.smtpPassMasked && <span style={{ color: 'var(--color-primary)', marginLeft: 8, fontSize: 12 }}>{tr('(当前已设置)')}</span>}
                             </div>
                             <input

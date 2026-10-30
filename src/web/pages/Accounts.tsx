@@ -1483,7 +1483,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
             <strong>
               {deleteConfirm?.accountName || `#${deleteConfirm?.accountId}`}
             </strong>{' '}
-            吗？
+            {tr('吗？')}
           </>
         }
       />
@@ -1737,7 +1737,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             <code style={{ fontFamily: 'var(--font-mono)' }}>
                               localStorage.getItem('refresh_token')
                             </code>{' '}
-                            获取。
+                            {tr('获取。')}
                           </div>
                         </div>
                         <div
@@ -2016,7 +2016,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     >
                       <div>{createIntentPreset.description}</div>
                       <div>
-                        推荐模型：
+                        {tr('推荐模型：')}
                         {createIntentPreset.recommendedModels.join(' / ')}
                       </div>
                       {createIntentPreset.recommendedSkipModelFetch && (
@@ -2109,7 +2109,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   <div
                     style={{ fontSize: 12, color: 'var(--color-text-muted)' }}
                   >
-                    已识别 {parsedApiKeys.length} 个 API Key
+                    {tr('已识别')} {parsedApiKeys.length} {tr('个 API Key')}
                     {isBatchApiKeyInput
                       ? tr('，添加时会逐条创建同站点连接并参与轮询')
                       : ''}

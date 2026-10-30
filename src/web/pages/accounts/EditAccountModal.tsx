@@ -198,7 +198,7 @@ export default function EditAccountModal({
                     borderColor: 'rgba(255,255,255,0.3)',
                   }}
                 />{' '}
-                保存中...
+                {tr('保存中...')}
               </>
             ) : (
               tr('保存修改')

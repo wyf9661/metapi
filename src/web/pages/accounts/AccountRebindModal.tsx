@@ -68,7 +68,7 @@ export default function AccountRebindModal({
                   >
                     连接: {accountLabel} @{' '}
                     {siteName}。请粘贴新的 Session
-                    Token，验证成功后再绑定。
+                    Token{tr('，验证成功后再绑定。')}
                   </div>
 
                   <div

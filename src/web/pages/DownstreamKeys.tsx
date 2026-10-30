@@ -1318,7 +1318,7 @@ export default function DownstreamKeys() {
         )}
       >
         <div className="info-tip" style={{ marginBottom: 0 }}>
-          本次会对已选中的 {selectedIds.length} 个密钥批量设置主分组，并追加标签。不会改动模型白名单、群组范围、额度和倍率。
+          {tr('本次会对已选中的')} {selectedIds.length} {tr('个密钥批量设置主分组，并追加标签。不会改动模型白名单、群组范围、额度和倍率。')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

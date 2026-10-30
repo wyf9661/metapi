@@ -13,7 +13,7 @@ import {
   THEME_MODE_STORAGE_KEY,
   USER_PROFILE_STORAGE_KEY,
 } from './appLocalState.js';
-import { I18nProvider, useI18n, tr } from './i18n.js';
+import { I18nProvider, useI18n, useI18nOptional, tr, translateText, type Language } from './i18n.js';
 import { resolveLoginErrorMessage } from './loginError.js';
 import { SITE_DOCS_URL, SITE_GITHUB_URL } from './docsLink.js';
 import { useAnimatedVisibility } from './components/useAnimatedVisibility.js';
@@ -73,9 +73,11 @@ function avatarColorFor(seed: string): string {
   return palette[hashString(seed || 'default') % palette.length];
 }
 
-function avatarInitialFor(name: string): string {
+function avatarInitialFor(name: string, language: Language): string {
   const trimmed = (name || '').trim();
-  if (!trimmed) return tr('管');
+  if (!trimmed) return translateText('管理员', language).slice(0, 1).toUpperCase();
+  // The stored default profile name is Chinese; show the initial of its translation.
+  if (trimmed === '管理员') return translateText(trimmed, language).slice(0, 1).toUpperCase();
   return Array.from(trimmed)[0].toUpperCase();
 }
 
@@ -301,6 +303,7 @@ function UserProfileModal({
   onSave: (nextProfile: UserProfile) => void;
   t: (text: string) => string;
 }) {
+  const language = useI18nOptional()?.language ?? 'zh';
   const [name, setName] = useState(profile.name);
   const [error, setError] = useState('');
 
@@ -363,7 +366,7 @@ function UserProfileModal({
             border: 'none',
           }}
         >
-          {avatarInitialFor(name)}
+          {avatarInitialFor(name, language)}
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('右上角头像实时预览')}</div>
       </div>
@@ -482,7 +485,7 @@ function AppShell() {
   const displayName = rawDisplayName ? (rawDisplayName === DEFAULT_PROFILE_NAME ? t('管理员') : rawDisplayName) : t('管理员');
   const resolvedThemeLabel = resolvedTheme === 'dark' ? t('深色') : t('浅色');
   const avatarColor = avatarColorFor(userProfile.name);
-  const avatarInitial = avatarInitialFor(userProfile.name);
+  const avatarInitial = avatarInitialFor(userProfile.name, language);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');

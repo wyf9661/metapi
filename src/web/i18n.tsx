@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { zhToEnSupplemental } from './i18n.supplement.js';
 
 export type Language = 'zh' | 'en';
@@ -277,13 +277,7 @@ for (const [source, target] of Object.entries(zhToEnSupplemental)) {
 const HAS_HAN_RE = /[\u3400-\u9fff]/;
 const HAN_BLOCK_RE = /[\u3400-\u9fff]+/g;
 const LATIN_OR_DIGIT_RE = /[A-Za-z0-9]/;
-const TRANSLATABLE_ATTRS = ['placeholder', 'title', 'aria-label', 'data-tooltip'] as const;
-// data-i18n-skip marks user data (site names, announcement bodies) that must
-// never be rewritten by the DOM walker.
-const SKIP_PARENT_SELECTOR = 'script, style, code, pre, kbd, samp, [data-i18n-skip]';
 const zhToEnPhrases = Object.entries(zhToEn).sort((a, b) => b[0].length - a[0].length);
-const textNodeOriginalMap = new WeakMap<Text, string>();
-const elementAttrOriginalMap = new WeakMap<Element, Map<string, string>>();
 
 const CJK_PUNCT_TO_ASCII: Record<string, string> = {
   '，': ', ',
@@ -373,142 +367,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     runtimeLanguage = language;
     document.documentElement.setAttribute('lang', language === 'zh' ? 'zh-CN' : 'en');
-  }, [language]);
-
-  // Layout effect, not effect: the first translation pass has to run before the
-  // browser paints. With useEffect the English UI painted every Chinese string
-  // once and the observer rewrote it afterwards (the flash of untranslated text).
-  useLayoutEffect(() => {
-    const root = document.body;
-    if (!root) return;
-
-    const shouldTranslateTextNode = (node: Text): boolean => {
-      const parent = node.parentElement;
-      if (!parent) return false;
-      if (parent.closest(SKIP_PARENT_SELECTOR)) return false;
-      if (parent.isContentEditable) return false;
-      const value = node.nodeValue || '';
-      if (!value.trim()) return false;
-      if (!HAS_HAN_RE.test(value) && language !== 'zh') return false;
-      return true;
-    };
-
-    const processTextNode = (node: Text) => {
-      if (!shouldTranslateTextNode(node)) return;
-      const current = node.nodeValue || '';
-      const stored = textNodeOriginalMap.get(node);
-      if (!stored) {
-        textNodeOriginalMap.set(node, current);
-      } else if (shouldReplaceStoredTranslation(current, stored, language)) {
-        textNodeOriginalMap.set(node, current);
-      }
-      const source = textNodeOriginalMap.get(node) || current;
-      const next = translateText(source, language);
-      if (next !== current) {
-        node.nodeValue = next;
-      }
-    };
-
-    const processElementAttrs = (el: Element) => {
-      if (el.matches(SKIP_PARENT_SELECTOR)) return;
-      let attrMap = elementAttrOriginalMap.get(el);
-      if (!attrMap) {
-        attrMap = new Map<string, string>();
-        elementAttrOriginalMap.set(el, attrMap);
-      }
-
-      for (const attr of TRANSLATABLE_ATTRS) {
-        const current = el.getAttribute(attr);
-        if (!current || !current.trim()) continue;
-        const stored = attrMap.get(attr);
-        if (!stored) {
-          attrMap.set(attr, current);
-        } else if (shouldReplaceStoredTranslation(current, stored, language)) {
-          attrMap.set(attr, current);
-        }
-
-        const source = attrMap.get(attr) || current;
-        const next = translateText(source, language);
-        if (next !== current) {
-          el.setAttribute(attr, next);
-        }
-      }
-    };
-
-    const walk = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        processTextNode(node as Text);
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-      const el = node as Element;
-      processElementAttrs(el);
-      for (const child of Array.from(el.childNodes)) {
-        walk(child);
-      }
-    };
-
-    walk(root);
-    if (language !== 'en') {
-      return;
-    }
-
-    let pendingRecords: MutationRecord[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    let disposed = false;
-
-    const flushPendingRecords = () => {
-      flushTimer = null;
-      if (disposed) return;
-      const recordsToProcess = pendingRecords;
-      pendingRecords = [];
-      for (const record of recordsToProcess) {
-        if (record.type === 'characterData') {
-          processTextNode(record.target as Text);
-          continue;
-        }
-
-        if (record.type === 'attributes') {
-          processElementAttrs(record.target as Element);
-          continue;
-        }
-
-        if (record.type === 'childList') {
-          for (const node of Array.from(record.addedNodes)) {
-            walk(node);
-          }
-        }
-      }
-    };
-
-    const scheduleFlush = (records: MutationRecord[]) => {
-      pendingRecords.push(...records);
-      if (flushTimer !== null) return;
-      // Coalesce bursts from React renders and frequently refreshed log pages.
-      // A short timer keeps translation out of the MutationObserver callback and
-      // prevents one recursive walk per DOM mutation.
-      flushTimer = setTimeout(flushPendingRecords, 0);
-    };
-
-    const observer = new MutationObserver((records) => {
-      scheduleFlush(records);
-    });
-
-    observer.observe(root, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: [...TRANSLATABLE_ATTRS],
-    });
-
-    return () => {
-      disposed = true;
-      if (flushTimer !== null) clearTimeout(flushTimer);
-      pendingRecords = [];
-      observer.disconnect();
-    };
   }, [language]);
 
   const setLanguage = useCallback((next: Language) => {

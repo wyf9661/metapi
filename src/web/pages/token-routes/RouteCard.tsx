@@ -291,7 +291,7 @@ function PriorityDragPreview({
             whiteSpace: 'nowrap',
           }}
         >
-          当前生效：{effectiveTokenName}
+          {tr('当前生效：')}{effectiveTokenName}
         </span>
         {channel.sourceModel ? (
           <span className="badge badge-muted" style={{ fontSize: 10 }}>
@@ -738,7 +738,7 @@ function RouteCardInner({
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
                   >
-                    冷却 {route.cooldownChannelCount}
+                    {tr('冷却')} {route.cooldownChannelCount}
                   </span>
                 ) : null}
               </span>
@@ -869,7 +869,7 @@ function RouteCardInner({
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
                   >
-                    冷却 {route.cooldownChannelCount}
+                    {tr('冷却')} {route.cooldownChannelCount}
                   </span>
                 ) : null}
                 </span>
@@ -889,7 +889,7 @@ function RouteCardInner({
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
                   >
-                    冷却 {route.cooldownChannelCount}
+                    {tr('冷却')} {route.cooldownChannelCount}
                   </span>
                 ) : null}
               </span>
@@ -998,7 +998,7 @@ function RouteCardInner({
                     }}
                     data-tooltip={`${route.cooldownChannelCount} 个通道冷却中`}
                   >
-                    冷却 {route.cooldownChannelCount}
+                    {tr('冷却')} {route.cooldownChannelCount}
                   </span>
                 ) : null}
               </span>

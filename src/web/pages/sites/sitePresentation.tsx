@@ -198,7 +198,7 @@ export function formatRemainingDuration(value?: string | null): string | null {
   const hourMs = 60 * minuteMs;
   const dayMs = 24 * hourMs;
   if (deltaMs >= dayMs) return `剩余${Math.ceil(deltaMs / dayMs)}天`;
-  if (deltaMs >= hourMs) return `剩余${Math.ceil(deltaMs / hourMs)}小时`;
+  if (deltaMs >= hourMs) return `${tr('剩余')}${Math.ceil(deltaMs / hourMs)}${tr('小时')}`;
   if (deltaMs >= minuteMs) return `剩余${Math.ceil(deltaMs / minuteMs)}分钟`;
   return `剩余${Math.max(1, Math.ceil(deltaMs / 1000))}秒`;
 }

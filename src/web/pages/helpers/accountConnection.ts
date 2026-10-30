@@ -307,7 +307,7 @@ export function formatSub2ApiUsageInline(usage: Sub2ApiAccountUsage | null): str
     if (Number.isFinite(deltaMs) && deltaMs > 0) {
       const dayMs = 24 * 60 * 60 * 1000;
       if (deltaMs >= dayMs) parts.push(`剩余${Math.ceil(deltaMs / dayMs)}天`);
-      else if (deltaMs >= 60 * 60 * 1000) parts.push(`剩余${Math.ceil(deltaMs / (60 * 60 * 1000))}小时`);
+      else if (deltaMs >= 60 * 60 * 1000) parts.push(`${tr('剩余')}${Math.ceil(deltaMs / (60 * 60 * 1000))}${tr('小时')}`);
       else if (deltaMs >= 60 * 1000) parts.push(`剩余${Math.ceil(deltaMs / (60 * 1000))}分钟`);
     } else if (Number.isFinite(deltaMs)) {
       parts.push(tr('已到期'));

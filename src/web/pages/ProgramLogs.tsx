@@ -421,7 +421,7 @@ export default function ProgramLogs() {
         totalPages={Math.max(1, Math.ceil(total / pageSize))}
         onPageChange={(next) => setPage((current) => typeof next === 'function' ? next(current) : next)}
         visible
-        rangeLabel={`显示第 ${total === 0 ? 0 : (page - 1) * pageSize + 1} - ${Math.min(page * pageSize, total)} 条，共 ${total} 条`}
+        totalItems={total}
         pageSize={pageSize}
         onPageSizeChange={(next) => {
           setPageSize(next);

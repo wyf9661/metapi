@@ -104,7 +104,7 @@ export default function DownstreamApiKeyModal({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              已选模型 {downstreamCreate.selectedModels.length} 个，已选群组 {downstreamCreate.selectedGroupRouteIds.length} 个
+              {tr('已选模型')} {downstreamCreate.selectedModels.length} {tr('个，已选群组')} {downstreamCreate.selectedGroupRouteIds.length} {tr('个')}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button

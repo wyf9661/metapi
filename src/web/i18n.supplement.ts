@@ -1611,6 +1611,21 @@ export const zhToEnSupplemental: Record<string, string> = {
   '已置顶': 'pinned',
   '已取消置顶': 'unpinned',
   '请求：': 'Requests: ',
+  '稳定版：': 'Stable: ',
+  '获取。': 'to fetch it.',
+  '已识别': 'Detected ',
+  '（今日 +': '(today +',
+  '（今日 -': '(today -',
+  '书签': 'Bookmarks',
+  '过滤范围：': 'Filter scope: ',
+  '显示第': 'Showing ',
+  '会话池': 'Session pool',
+  '并发': 'concurrent',
+  '之类的参数。': 'parameters like this.',
+  '个': 'items',
+  '剩余': 'Remaining ',
+  '冷却': 'Cooling ',
+
 
 
 

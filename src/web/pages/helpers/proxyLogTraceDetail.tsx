@@ -149,7 +149,7 @@ export function ProxyDebugAttemptDetail({ attempt }: { attempt: ProxyDebugTraceA
         </div>
         {attempt.downgradeReason ? (
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            降级原因：{attempt.downgradeReason}
+            {tr('降级原因：')}{attempt.downgradeReason}
           </div>
         ) : null}
         <pre style={debugCodeBlockStyle}>{serializedAttempt}</pre>

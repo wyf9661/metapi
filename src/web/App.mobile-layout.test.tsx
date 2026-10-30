@@ -56,6 +56,8 @@ vi.mock('./components/useAnimatedVisibility.js', () => ({
 vi.mock('./i18n.js', () => ({
   I18nProvider: ({ children }: { children: ReactNode }) => children,
   tr: (text: string) => text,
+  translateText: (text: string) => text,
+  useI18nOptional: () => ({ language: 'zh', t: (text: string) => text }),
   useI18n: () => ({
     language: 'zh',
     toggleLanguage: vi.fn(),

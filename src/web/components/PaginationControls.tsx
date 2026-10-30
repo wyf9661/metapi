@@ -4,7 +4,7 @@ import PageJumpInput from './PageJumpInput.js';
 import ModernSelect from './ModernSelect.js';
 import { MOBILE_PAGE_SIZE_OPTIONS, PAGE_SIZE_OPTIONS } from './usePersistedPageSize.js';
 import { useIsMobile } from './useIsMobile.js';
-import { tr } from '../i18n.js';
+import { tr, useI18nOptional } from '../i18n.js';
 
 type PaginationControlsProps = {
   page: number;
@@ -19,6 +19,8 @@ type PaginationControlsProps = {
   onPageSizeChange?: (next: number) => void;
   /** Optional range summary pinned to the left side of the pagination row. */
   rangeLabel?: string;
+  /** When set, the component renders the range summary itself in the active language. */
+  totalItems?: number;
   /** Override the rows-per-page choices (e.g. a page with a denser default grid). */
   pageSizeOptions?: readonly number[];
 };
@@ -33,8 +35,10 @@ export default function PaginationControls({
   pageSize,
   onPageSizeChange,
   rangeLabel,
+  totalItems,
   pageSizeOptions: pageSizeOptionsProp,
 }: PaginationControlsProps) {
+  const language = useI18nOptional()?.language ?? 'zh';
   const isMobile = useIsMobile();
   // 769–1200 的窄桌面同样放不下一整行（信息/跳转/下一页会被挤到第二行），
   // 用同一套紧凑布局：上一页 / 页码 / 下一页 同行对称，其余居中换行。
@@ -46,6 +50,14 @@ export default function PaginationControls({
   const pageSizeOptions = pageSizeOptionsProp && pageSizeOptionsProp.length > 0
     ? pageSizeOptionsProp
     : defaultPageSizeOptions;
+  const resolvedRangeLabel = totalItems == null ? rangeLabel : (() => {
+    const perPage = pageSize ?? Math.ceil(totalItems / Math.max(1, totalPages));
+    const start = totalItems === 0 ? 0 : (page - 1) * perPage + 1;
+    const end = Math.min(start + perPage - 1, totalItems);
+    return language === 'en'
+      ? `Showing ${start} - ${end} of ${totalItems}`
+      : `显示第 ${start} - ${end} 条，共 ${totalItems} 条`;
+  })();
   const pageNumbers = useMemo(() => {
     if (totalPages <= 1) return [];
     const windowSize = Math.min(totalPages, 7);
@@ -88,7 +100,7 @@ export default function PaginationControls({
   if (isCompact) {
     return (
       <div className={`${className} pagination-compact`} style={style}>
-        {rangeLabel && <div className="pagination-range">{rangeLabel}</div>}
+        {resolvedRangeLabel && <div className="pagination-range">{resolvedRangeLabel}</div>}
         {showPageNavigation && (
           <>
             <div className="pagination-compact-nav">
@@ -99,7 +111,7 @@ export default function PaginationControls({
                 onClick={() => goTo(page - 1)}
               >{tr('上一页')}</button>
               <span className="pagination-info">
-                第 {page} / {totalPages} 页
+                {language === 'en' ? `Page ${page} / ${totalPages}` : <>第 {page} / {totalPages} 页</>}
               </span>
               <button
                 type="button"
@@ -143,7 +155,7 @@ export default function PaginationControls({
 
   return (
     <div className={className} style={style}>
-      {rangeLabel && <div className="pagination-range">{rangeLabel}</div>}
+      {resolvedRangeLabel && <div className="pagination-range">{resolvedRangeLabel}</div>}
       {showPageNavigation && (
         <>
           <button
@@ -172,7 +184,7 @@ export default function PaginationControls({
             </button>
           ))}
           <span className="pagination-info">
-            第 {page} / {totalPages} 页
+            {language === 'en' ? `Page ${page} / ${totalPages}` : <>第 {page} / {totalPages} 页</>}
           </span>
           <PageJumpInput totalPages={totalPages} onJump={goTo} />
           <button

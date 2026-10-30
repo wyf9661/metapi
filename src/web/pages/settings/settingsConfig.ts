@@ -27,7 +27,7 @@ export const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) =>
   const hour = index + 1;
   return {
     value: String(hour),
-    label: `${hour} 小时`,
+    label: `${hour} ${tr('小时')}`,
   };
 });
 
