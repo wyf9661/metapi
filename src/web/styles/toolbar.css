@@ -508,7 +508,7 @@
   .modal-content {
     margin: 12px;
     max-width: calc(100vw - 24px);
-    border-radius: var(--radius-lg);
+    border-radius: 14px;
   }
 
   /* --- User Dropdown --- */

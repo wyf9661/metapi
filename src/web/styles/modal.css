@@ -20,14 +20,19 @@
 
 .modal-content {
   background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  /* nested-radius: dialog shell sits one step above interactive elements (6-8px) */
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--color-border-light), 0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.14);
   width: min(90vw, 500px);
   max-width: 500px;
   max-height: calc(100vh - 32px);
   margin: auto;
   overflow-y: auto;
   animation: scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-theme="dark"] .modal-content {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 .modal-content.is-closing {
@@ -88,11 +93,21 @@
 }
 
 .modal-footer {
-  padding: 0 24px 20px;
+  /* sticky so long forms keep their actions in view, mirrors the sticky header */
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg-card);
+  box-shadow: 0 -1px 0 var(--color-border-light);
+  padding: 12px 24px 20px;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+/* footer buttons match form control height (inputs are ~41px) so the action row doesn't read shrunken */
+.modal-footer .btn {
+  min-height: 38px;
 }
 
 .site-created-summary,
