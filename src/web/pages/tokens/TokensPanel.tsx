@@ -1251,10 +1251,10 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                       </>
                     )}
                   >
-                    <MobileField label="账号" value={token.account?.username || `account-${token.accountId}`} />
-                    <MobileField label="分组" value={token.tokenGroup || 'default'} />
+                    <MobileField label={tr('账号')} value={token.account?.username || `account-${token.accountId}`} />
+                    <MobileField label={tr('分组')} value={token.tokenGroup || 'default'} />
                     <MobileField
-                      label="状态"
+                      label={tr('状态')}
                       value={(
                         <StatusText badgeClass={isPending ? 'badge-warning' : (token.enabled ? 'badge-success' : 'badge-muted')} style={{ fontSize: 11 }}>
                           {isPending ? '待补全' : (token.enabled ? '启用' : '禁用')}
@@ -1264,12 +1264,12 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                     {isExpanded ? (
                       <div className="mobile-card-extra">
                         <MobileField
-                          label="令牌值"
+                          label={tr('令牌值')}
                           stacked
                           value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, wordBreak: 'break-all' }}>{token.tokenMasked || '***'}</span>}
                         />
                         <MobileField
-                          label="来源站点"
+                          label={tr('来源站点')}
                           value={token.site?.url ? (
                             <a
                               href={token.site.url}
@@ -1288,10 +1288,10 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange, siteId:
                           )}
                         />
                         <MobileField
-                          label="默认"
+                          label={tr('默认')}
                           value={token.isDefault ? <StatusText tone="warning" style={{ fontSize: 11 }}>{tr('默认')}</StatusText> : '-'}
                         />
-                        <MobileField label="更新时间" value={formatDateTimeLocal(token.updatedAt)} />
+                        <MobileField label={tr('更新时间')} value={formatDateTimeLocal(token.updatedAt)} />
                         <div className="mobile-card-actions">
                           {!isPending && !token.isDefault && (
                             <button

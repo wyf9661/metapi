@@ -379,14 +379,14 @@ export default function ProbeLogs() {
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
               placeholder={tr('开始时间')}
-              label="开始"
+              label={tr('开始')}
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
               placeholder={tr('结束时间')}
-              label="结束"
+              label={tr('结束')}
             />
             <div className="probe-filter-total">共 {total} 条</div>
           </div>
@@ -449,14 +449,14 @@ export default function ProbeLogs() {
               max={endTime || undefined}
               onChange={(v) => { setStartTime(v); setPage(1); updateSearchParams('startTime', v); }}
               placeholder={tr('开始时间')}
-              label="开始"
+              label={tr('开始')}
             />
             <DateTimeInput
               value={endTime}
               min={startTime || undefined}
               onChange={(v) => { setEndTime(v); setPage(1); updateSearchParams('endTime', v); }}
               placeholder={tr('结束时间')}
-              label="结束"
+              label={tr('结束')}
             />
             <div style={{ marginLeft: 'auto' }}>
               <button
@@ -485,12 +485,12 @@ export default function ProbeLogs() {
                       <button type="button" className="btn btn-link btn-link-primary" onClick={() => setSelectedLog(log)}>{tr('查看详情')}</button>
                     }
                   >
-                    <MobileField label="时间" value={fmtDateTime(log.createdAt)} />
-                    <MobileField label="站点/账号" value={`${log.siteName || `站点 #${log.siteId}`} · ${log.accountUsername || `账号 #${log.accountId}`}`} />
-                    <MobileField label="分类" value={CATEGORY_LABELS[log.questionCategory] || '-'} />
-                    <MobileField label="延迟" value={formatLatency(log.latencyMs)} />
+                    <MobileField label={tr('时间')} value={fmtDateTime(log.createdAt)} />
+                    <MobileField label={tr('站点/账号')} value={`${log.siteName || `站点 #${log.siteId}`} · ${log.accountUsername || `账号 #${log.accountId}`}`} />
+                    <MobileField label={tr('分类')} value={CATEGORY_LABELS[log.questionCategory] || '-'} />
+                    <MobileField label={tr('延迟')} value={formatLatency(log.latencyMs)} />
                     <MobileField label="Token" value={log.tokensUsed || '-'} />
-                    <MobileField label="问题" value={log.questionText} stacked />
+                    <MobileField label={tr('问题')} value={log.questionText} stacked />
                   </MobileCard>
                 ))}
               </div>

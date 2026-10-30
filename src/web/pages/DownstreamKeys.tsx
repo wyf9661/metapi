@@ -1065,12 +1065,12 @@ export default function DownstreamKeys() {
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 18px', alignItems: 'center' }}>
-          <SummaryMetric label="可见密钥" value={String(visibleItems.length)} />
-          <SummaryMetric label="启用中" value={String(totals.enabled)} />
-          <SummaryMetric label="已选中" value={String(selectedIds.length)} />
-          <SummaryMetric label="请求数" value={totals.requests.toLocaleString()} />
-          <SummaryMetric label="累计成本" value={formatMoney(totals.cost)} />
-          <SummaryMetric label="筛选状态" value={statusOptions.find((item) => item.value === status)?.label || '全部状态'} />
+          <SummaryMetric label={tr('可见密钥')} value={String(visibleItems.length)} />
+          <SummaryMetric label={tr('启用中')} value={String(totals.enabled)} />
+          <SummaryMetric label={tr('已选中')} value={String(selectedIds.length)} />
+          <SummaryMetric label={tr('请求数')} value={totals.requests.toLocaleString()} />
+          <SummaryMetric label={tr('累计成本')} value={formatMoney(totals.cost)} />
+          <SummaryMetric label={tr('筛选状态')} value={statusOptions.find((item) => item.value === status)?.label || '全部状态'} />
         </div>
       </div>
 
@@ -1166,7 +1166,7 @@ export default function DownstreamKeys() {
                   )}
                 >
                   <MobileField
-                    label="密钥"
+                    label={tr('密钥')}
                     value={(
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-muted)' }}>{row.keyMasked}</span>
@@ -1175,15 +1175,15 @@ export default function DownstreamKeys() {
                     )}
                     stacked
                   />
-                  {row.description ? <MobileField label="备注" value={row.description} stacked /> : null}
-                  <MobileField label="主分组" value={row.groupName || '未分组'} />
-                  <MobileField label="标签" value={summarizeTags(row.tags || [])} stacked />
-                  <MobileField label="模型" value={summarizeModelLimit(row.supportedModels || [])} stacked />
-                  <MobileField label="群组" value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
-                  <MobileField label="倍率" value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
-                  <MobileField label="额度" value={[row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `日请求 ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
-                  <MobileField label="用量" value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
-                  <MobileField label="最近使用" value={formatIso(row.lastUsedAt)} stacked />
+                  {row.description ? <MobileField label={tr('备注')} value={row.description} stacked /> : null}
+                  <MobileField label={tr('主分组')} value={row.groupName || '未分组'} />
+                  <MobileField label={tr('标签')} value={summarizeTags(row.tags || [])} stacked />
+                  <MobileField label={tr('模型')} value={summarizeModelLimit(row.supportedModels || [])} stacked />
+                  <MobileField label={tr('群组')} value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
+                  <MobileField label={tr('倍率')} value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
+                  <MobileField label={tr('额度')} value={[row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString(), row.maxRpm ? `${row.maxRpm} RPM` : null, row.maxDailyRequests != null ? `日请求 ${row.dailyUsedRequests || 0}/${row.maxDailyRequests}` : null, row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`].filter(Boolean).join(' / ')} stacked />
+                  <MobileField label={tr('用量')} value={`${(row.rangeUsage?.totalRequests || 0).toLocaleString()} 请求 · ${formatCompactTokens(row.rangeUsage?.totalTokens || 0)}`} stacked />
+                  <MobileField label={tr('最近使用')} value={formatIso(row.lastUsedAt)} stacked />
                 </MobileCard>
               );
             })}

@@ -2353,7 +2353,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         }
                       >
                         <MobileField
-                          label="运行健康状态"
+                          label={tr('运行健康状态')}
                           value={
                             <div
                               style={{
@@ -2382,7 +2382,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }
                         />
                         <MobileField
-                          label="余额"
+                          label={tr('余额')}
                           value={
                             <div
                               style={{
@@ -2412,7 +2412,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                         {isExpanded ? (
                           <div className="mobile-card-extra">
                             <MobileField
-                              label="站点"
+                              label={tr('站点')}
                               value={
                                 <SiteBadgeLink
                                   siteId={a.site?.id}
@@ -2423,7 +2423,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               }
                             />
                             <MobileField
-                              label="签到"
+                              label={tr('签到')}
                               value={
                                 capabilities.canCheckin ? (
                                   <StatusToggle
@@ -2441,7 +2441,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               }
                             />
                             <MobileField
-                              label="账号状态"
+                              label={tr('账号状态')}
                               value={
                                 a.status === 'expired'
                                   ? '已过期'
@@ -2454,7 +2454,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               if (sub2ApiLabel) {
                                 return (
                                   <MobileField
-                                    label="订阅用量"
+                                    label={tr('订阅用量')}
                                     value={sub2ApiLabel}
                                   />
                                 );
@@ -2462,7 +2462,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               return null;
                             })()}
                             <MobileField
-                              label="提示"
+                              label={tr('提示')}
                               stacked
                               value={hintMessage}
                             />

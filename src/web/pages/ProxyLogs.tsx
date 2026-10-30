@@ -876,14 +876,14 @@ export default function ProxyLogs() {
         max={toInput || undefined}
         onChange={(v) => { setFromInput(v); setPage(1); }}
         placeholder={tr('开始时间')}
-        label="开始"
+        label={tr('开始')}
       />
       <DateTimeInput
         value={toInput}
         min={fromInput || undefined}
         onChange={(v) => { setToInput(v); setPage(1); }}
         placeholder={tr('结束时间')}
-        label="结束"
+        label={tr('结束')}
       />
       <div className="toolbar-search" style={{ maxWidth: 280 }}>
         <svg
@@ -1183,15 +1183,15 @@ export default function ProxyLogs() {
           }}
         >
           <CompactSummaryMetric
-            label="状态"
+            label={tr('状态')}
             value={debugSettings.proxyDebugTraceEnabled ? '已开启' : '未开启'}
           />
           <CompactSummaryMetric
-            label="最近追踪"
+            label={tr('最近追踪')}
             value={`${debugTraces.length} 条`}
           />
           <CompactSummaryMetric
-            label="最新时间"
+            label={tr('最新时间')}
             value={
               latestDebugTrace
                 ? formatDateTimeLocal(latestDebugTrace.createdAt)
@@ -1292,19 +1292,19 @@ export default function ProxyLogs() {
                     }
                   >
                     <MobileField
-                      label="模型"
+                      label={tr('模型')}
                       value={trace.requestedModel || '-'}
                     />
                     <MobileField
-                      label="下游路径"
+                      label={tr('下游路径')}
                       value={trace.downstreamPath || '-'}
                     />
                     <MobileField
-                      label="上游路径"
+                      label={tr('上游路径')}
                       value={trace.finalUpstreamPath || '-'}
                     />
                     <MobileField
-                      label="客户端"
+                      label={tr('客户端')}
                       value={trace.clientKind || '-'}
                     />
                   </MobileCard>
@@ -1680,11 +1680,11 @@ export default function ProxyLogs() {
                   {isExpanded ? (
                     <div className="mobile-card-extra">
                       <MobileField
-                        label="时间"
+                        label={tr('时间')}
                         value={formatDateTimeLocal(log.createdAt)}
                       />
                       <MobileField
-                        label="站点"
+                        label={tr('站点')}
                         value={
                           <SiteBadgeLink
                             siteId={siteIdByName.get(
@@ -1698,37 +1698,37 @@ export default function ProxyLogs() {
                         }
                       />
                       {detailLog.username ? (
-                        <MobileField label="账号" value={detailLog.username} />
+                        <MobileField label={tr('账号')} value={detailLog.username} />
                       ) : null}
                       {detailLog.tokenName ? (
                         <MobileField
-                          label="令牌"
+                          label={tr('令牌')}
                           value={detailLog.tokenGroup
                             ? `${detailLog.tokenName}（${detailLog.tokenGroup}）`
                             : detailLog.tokenName}
                         />
                       ) : null}
                       {streamModeLabel ? (
-                        <MobileField label="模式" value={streamModeLabel} />
+                        <MobileField label={tr('模式')} value={streamModeLabel} />
                       ) : null}
                       <MobileField
-                        label="推理强度"
+                        label={tr('推理强度')}
                         value={detailLog.reasoningEffort
                           ? detailLog.reasoningEffort.charAt(0).toUpperCase() + detailLog.reasoningEffort.slice(1)
                           : '-'}
                       />
                       {firstByteLabel && detailLog.isStream === true ? (
                         <MobileField
-                          label="首字"
+                          label={tr('首字')}
                           value={firstByteLabel.replace(/^首字\s*/, '')}
                         />
                       ) : null}
                       <MobileField
-                        label="重试"
+                        label={tr('重试')}
                         value={log.retryCount > 0 ? log.retryCount : 0}
                       />
                       <MobileField
-                        label="用量来源"
+                        label={tr('用量来源')}
                         value={
                           formatProxyLogUsageSource(
                             detailLog.usageSource ?? pathMeta.usageSource,
@@ -1737,13 +1737,13 @@ export default function ProxyLogs() {
                       />
                       {(detailLog.cacheReadTokens ?? 0) > 0 ? (
                         <MobileField
-                          label="缓存 Tokens"
+                          label={tr('缓存 Tokens')}
                           value={detailLog.cacheReadTokens!.toLocaleString()}
                         />
                       ) : null}
                       {(detailLog.cacheCreationTokens ?? 0) > 0 ? (
                         <MobileField
-                          label="缓存创建 Tokens"
+                          label={tr('缓存创建 Tokens')}
                           value={detailLog.cacheCreationTokens!.toLocaleString()}
                         />
                       ) : null}
@@ -1753,26 +1753,26 @@ export default function ProxyLogs() {
                           are visible on a phone. */}
                       {pathMeta.siteLabel ? (
                         <MobileField
-                          label="上游站点"
+                          label={tr('上游站点')}
                           value={pathMeta.siteLabel}
                         />
                       ) : null}
                       {pathMeta.upstreamStatus ? (
                         <MobileField
-                          label="上游状态码"
+                          label={tr('上游状态码')}
                           value={pathMeta.upstreamStatus}
                         />
                       ) : null}
                       {pathMeta.downstreamPath ? (
                         <MobileField
-                          label="下游路径"
+                          label={tr('下游路径')}
                           stacked
                           value={<code className="mobile-path-code">{pathMeta.downstreamPath}</code>}
                         />
                       ) : null}
                       {pathMeta.upstreamPath ? (
                         <MobileField
-                          label="上游路径"
+                          label={tr('上游路径')}
                           stacked
                           value={<code className="mobile-path-code">{pathMeta.upstreamPath}</code>}
                         />
@@ -1791,14 +1791,14 @@ export default function ProxyLogs() {
                         </div>
                       )}
                       <MobileField
-                        label="客户端详情"
+                        label={tr('客户端详情')}
                         value={renderProxyLogClientCell(detailLog, {
                           includeGeneric: true,
                         })}
                       />
                       {downstreamKeySummary ? (
                         <MobileField
-                          label="密钥"
+                          label={tr('密钥')}
                           value={downstreamKeySummary.replace(/^密钥:\s*/, '')}
                         />
                       ) : null}

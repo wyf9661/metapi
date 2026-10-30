@@ -2033,14 +2033,14 @@ export default function TokenRoutes() {
                     </>
                   )}
                 >
-                  <MobileField label="模型" value={route.modelPattern} stacked />
-                  <MobileField label="通道" value={route.channelCount} />
-                  <MobileField label="状态" value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
+                  <MobileField label={tr('模型')} value={route.modelPattern} stacked />
+                  <MobileField label={tr('通道')} value={route.channelCount} />
+                  <MobileField label={tr('状态')} value={isReadOnlyRoute ? tr('未生成') : (route.enabled ? tr('启用') : tr('禁用'))} />
                   {explicitGroupRoute && (
-                    <MobileField label="模式" value={tr('群组聚合')} />
+                    <MobileField label={tr('模式')} value={tr('群组聚合')} />
                   )}
                   {!exactRoute && !explicitGroupRoute && (
-                    <MobileField label="模式" value={tr('通配符路由')} />
+                    <MobileField label={tr('模式')} value={tr('通配符路由')} />
                   )}
                 </MobileCard>
                 {isExpanded && (

@@ -371,13 +371,13 @@ export default function CheckinLog() {
                   }
                 >
                   <MobileField
-                    label="时间"
+                    label={tr('时间')}
                     value={formatCheckinLogTime(
                       log.checkin_logs?.createdAt || log.createdAt,
                     )}
                   />
                   <MobileField
-                    label="站点"
+                    label={tr('站点')}
                     value={
                       log.sites?.url ? (
                         <a
@@ -404,7 +404,7 @@ export default function CheckinLog() {
                     }
                   />
                   <MobileField
-                    label="分类"
+                    label={tr('分类')}
                     value={
                       reason ? (
                         <StatusPill tone="muted" data-tooltip={reason.detailHint}>
@@ -416,18 +416,18 @@ export default function CheckinLog() {
                     }
                   />
                   <MobileField
-                    label="奖励"
+                    label={tr('奖励')}
                     value={log.checkin_logs?.reward || '-'}
                   />
                   {isExpanded ? (
                     <div className="mobile-card-extra">
                       <MobileField
-                        label="信息"
+                        label={tr('信息')}
                         stacked
                         value={log.checkin_logs?.message || log.message}
                       />
                       <MobileField
-                        label="建议"
+                        label={tr('建议')}
                         stacked
                         value={reason?.actionHint || '-'}
                       />

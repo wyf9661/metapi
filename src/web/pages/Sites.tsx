@@ -2062,7 +2062,7 @@ export default function Sites() {
                     )}
                   >
                     <MobileField
-                      label="状态"
+                      label={tr('状态')}
                       value={(
                         <StatusPill badgeClass={site.status === 'disabled' ? 'badge-muted' : 'badge-success'} style={{ fontSize: 11 }}>
                           {site.status === 'disabled' ? '禁用' : '启用'}
@@ -2070,7 +2070,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField
-                      label="平台"
+                      label={tr('平台')}
                       value={(
                         <span className={`badge ${platformBadgeClass(site.platform)}`} style={{ fontSize: 11 }}>
                           {site.platform || '-'}
@@ -2078,7 +2078,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField
-                      label="余额"
+                      label={tr('余额')}
                       value={(
                         <SiteBalanceDisplay
                           balance={site.totalBalance}
@@ -2090,7 +2090,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField
-                      label="健康"
+                      label={tr('健康')}
                       value={(
                         <StatusPill
                           badgeClass={site.healthState?.state === 'healthy'
@@ -2115,9 +2115,9 @@ export default function Sites() {
                         </StatusPill>
                       )}
                     />
-                    <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
+                    <MobileField label={tr('权重')} value={(site.globalWeight || 1).toFixed(2)} />
                     <MobileField
-                      label="连接"
+                      label={tr('连接')}
                       value={(
                         <span
                           className="sites-connection-summary"
@@ -2130,7 +2130,7 @@ export default function Sites() {
                     {isExpanded ? (
                       <div className="mobile-card-extra">
                         <MobileField
-                          label="主站点 URL"
+                          label={tr('主站点 URL')}
                           stacked
                           value={site.url ? (
                             <a
@@ -2152,7 +2152,7 @@ export default function Sites() {
                         />
                         {getConfiguredSiteApiEndpoints(site).length > 0 ? (
                           <MobileField
-                            label="API 请求地址"
+                            label={tr('API 请求地址')}
                             stacked
                             value={(
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -2175,7 +2175,7 @@ export default function Sites() {
                           />
                         ) : null}
                         <MobileField
-                          label="创建时间"
+                          label={tr('创建时间')}
                           value={formatDateTimeLocal(site.createdAt)}
                         />
                         <div className="mobile-card-actions">

@@ -327,11 +327,11 @@ export default function ProgramLogs() {
                     )
                   )}
                 >
-                  <MobileField label="时间" value={formatDateTimeLocal(row.createdAt)} />
-                  <MobileField label="类型" value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
-                  <MobileField label="级别" value={<StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>{level.label}</StatusText>} />
-                  <MobileField label="状态" value={<StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>{eventStatus.label}</StatusText>} />
-                  <MobileField label="内容" value={row.message || '-'} stacked />
+                  <MobileField label={tr('时间')} value={formatDateTimeLocal(row.createdAt)} />
+                  <MobileField label={tr('类型')} value={<span className="badge badge-muted" style={{ fontSize: 11 }}>{row.type || '-'}</span>} />
+                  <MobileField label={tr('级别')} value={<StatusText badgeClass={level.cls} style={{ fontSize: 11 }}>{level.label}</StatusText>} />
+                  <MobileField label={tr('状态')} value={<StatusText badgeClass={eventStatus.cls} style={{ fontSize: 11 }}>{eventStatus.label}</StatusText>} />
+                  <MobileField label={tr('内容')} value={row.message || '-'} stacked />
                 </MobileCard>
               );
             })}
