@@ -1794,7 +1794,7 @@ export default function Sites() {
                 <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{tr('开启刷新后自动探测')}</span>
               </label>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', opacity: probeEnabled ? 1 : 0.5 }}>
-                {([['single', '指定模型'] , ['all', '全部模型']] as const).map(([val, label]) => (
+                {([['single', tr('指定模型')] , ['all', tr('全部模型')]] as const).map(([val, label]) => (
                   <label
                     key={val}
                     style={{

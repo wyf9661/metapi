@@ -439,7 +439,7 @@ export default function ImportExport() {
     }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
-      : window.confirm('导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？');
+      : window.confirm(tr('导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？'));
     if (!confirmed) {
       return;
     }
@@ -508,7 +508,7 @@ export default function ImportExport() {
     }
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
-      : window.confirm('从 WebDAV 导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？');
+      : window.confirm(tr('从 WebDAV 导入会覆盖备份中的连接/路由/策略配置或系统设置，但会保留本机日志、公告、缓存和统计，确认继续？'));
     if (!confirmed) return;
     setWebdavAction('import');
     try {

@@ -94,7 +94,7 @@ type SyncableAccount = {
   } | null;
 };
 
-const ACCOUNT_SELECT_SEARCH_PLACEHOLDER = '筛选账号（名称 / 站点）';
+const ACCOUNT_SELECT_SEARCH_PLACEHOLDER = tr('筛选账号（名称 / 站点）');
 
 const isAccountSyncable = (account: any) =>
   resolveAccountCredentialMode(account) === 'session'

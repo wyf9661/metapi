@@ -734,7 +734,7 @@ export default function ProxyLogs() {
   const handleClearDebugTraces = useCallback(async () => {
     if (debugPanelSaving) return;
     const confirmed = globalThis.confirm?.(
-      '确定删除全部代理调试追踪？删除后编号会从 1 重新开始。',
+      tr('确定删除全部代理调试追踪？删除后编号会从 1 重新开始。'),
     );
     if (confirmed === false) return;
 
@@ -2199,7 +2199,7 @@ export default function ProxyLogs() {
                                         detailLog.modelActual !==
                                           detailLog.modelRequested && (
                                           <>
-                                            {' -> '}实际模型:{' '}
+                                            {' -> tr('}实际模型:{') '}
                                             <strong
                                               style={{
                                                 color:
@@ -2345,7 +2345,7 @@ export default function ProxyLogs() {
                                               color: 'var(--color-text-muted)',
                                             }}
                                           >
-                                            {' 推测'}
+                                            {tr(' 推测')}
                                           </span>
                                         ) : null}
                                       </div>
@@ -2449,12 +2449,12 @@ export default function ProxyLogs() {
                                         detailLog.promptTokens,
                                       )}{' '}
                                       tokens
-                                      {' + '}输出{' '}
+                                      {' + tr('}输出{') '}
                                       {formatProxyLogTokenValue(
                                         detailLog.completionTokens,
                                       )}{' '}
                                       tokens
-                                      {' = '}总计{' '}
+                                      {'='} {tr('总计')} {': '}
                                       {formatProxyLogTokenValue(
                                         detailLog.totalTokens,
                                       )}{' '}

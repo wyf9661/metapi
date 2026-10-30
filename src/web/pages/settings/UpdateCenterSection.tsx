@@ -150,7 +150,7 @@ export default function UpdateCenterSection() {
 
   const handleOtaRollback = useCallback(async () => {
     if (typeof window !== 'undefined' && typeof window.confirm === 'function'
-      && !window.confirm('确认回滚到更新前版本？更新后一天内有效，回滚会重启服务。')) return;
+      && !window.confirm(tr('确认回滚到更新前版本？更新后一天内有效，回滚会重启服务。'))) return;
     setOtaBusy(true);
     try {
       await api.rollbackUpdateCenterOta();

@@ -27,15 +27,15 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
   const handleSubmit = async () => {
     setError('');
     if (!oldToken || !newToken || !confirmToken) {
-      setError('请填写所有字段');
+      setError(tr('请填写所有字段'));
       return;
     }
     if (newToken !== confirmToken) {
-      setError('两次输入的新 Token 不一致');
+      setError(tr('两次输入的新 Token 不一致'));
       return;
     }
     if (newToken.length < 8) {
-      setError('新 Token 至少 8 个字符');
+      setError(tr('新 Token 至少 8 个字符'));
       return;
     }
 

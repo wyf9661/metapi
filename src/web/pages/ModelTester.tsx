@@ -119,7 +119,7 @@ export default function ModelTester() {
 
   const listModels = useCallback(async () => {
     if (!baseUrl.trim()) {
-      setListError('请填写 Base URL');
+      setListError(tr('请填写 Base URL'));
       return;
     }
 
@@ -147,7 +147,7 @@ export default function ModelTester() {
 
       if (nextModels.length === 0) {
         setModel('');
-        setListError('上游返回了空模型列表');
+        setListError(tr('上游返回了空模型列表'));
         return;
       }
 
@@ -164,7 +164,7 @@ export default function ModelTester() {
 
   const probeModel = useCallback(async () => {
     if (!baseUrl.trim() || !model.trim() || !models.includes(model)) {
-      setProbeError('请先拉取模型列表并选择模型');
+      setProbeError(tr('请先拉取模型列表并选择模型'));
       return;
     }
 

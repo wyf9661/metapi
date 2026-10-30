@@ -363,7 +363,7 @@ export default function TokenRoutes() {
           };
           const task = taskResponse?.task;
           if (!task) {
-            throw new Error('路由选中概率任务不存在');
+            throw new Error(tr('路由选中概率任务不存在'));
           }
 
           const status = String(task.status || '').trim();
@@ -378,7 +378,7 @@ export default function TokenRoutes() {
 
           setLoadingDecision(false);
           if (status === 'succeeded') {
-            toastRef.current.success('路由选择概率已刷新');
+            toastRef.current.success(tr('路由选择概率已刷新'));
           } else {
             toastRef.current.error(String(task.message || task.error || tr('刷新路由选择概率失败')));
           }
@@ -494,7 +494,7 @@ export default function TokenRoutes() {
       };
       const taskId = String(response?.jobId || '').trim();
       if (!taskId) {
-        throw new Error('刷新任务未返回 taskId');
+        throw new Error(tr('刷新任务未返回 taskId'));
       }
 
       toast.info(response?.message || tr('已开始后台刷新路由选中概率，可稍后返回查看'));

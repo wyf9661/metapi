@@ -276,7 +276,7 @@ export default function CheckinLog() {
             <>
               <span className="spinner spinner-sm" />{tr('触发中...')}</>
           ) : (
-            '运行所有签到'
+            tr('运行所有签到')
           )}
         </button>
       }

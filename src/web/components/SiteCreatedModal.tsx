@@ -14,7 +14,7 @@ type Props = {
 export default function SiteCreatedModal({
   siteName,
   initialSegment = 'session',
-  sessionLabel = '添加账号（用户名密码登录）',
+  sessionLabel = tr('添加账号（用户名密码登录）'),
   onChoice,
   onClose,
 }: Props) {

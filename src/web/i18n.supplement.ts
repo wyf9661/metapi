@@ -1586,6 +1586,12 @@ export const zhToEnSupplemental: Record<string, string> = {
   '上游返回': 'Upstream returned',
   '通用': 'General',
   '待上传': 'Awaiting upload',
+  '总计': 'Total',
+  '图片': 'Images',
+  '音频': 'Audio',
+  '文档会以内联数据注入': 'Documents are injected inline',
+  '附件': 'Attachments',
+
 
 
 

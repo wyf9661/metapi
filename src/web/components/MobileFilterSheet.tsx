@@ -12,7 +12,7 @@ type MobileFilterSheetProps = {
 export default function MobileFilterSheet({
   open,
   onClose,
-  title = '筛选',
+  title = tr('筛选'),
   children,
 }: MobileFilterSheetProps) {
   return (

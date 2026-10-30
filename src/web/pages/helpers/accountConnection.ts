@@ -1,3 +1,4 @@
+import { tr } from '../../i18n.js';
 export function resolveAccountCredentialMode(account: any): 'session' | 'apikey' {
   const rawMode = String(account?.credentialMode || '').trim().toLowerCase();
   if (rawMode === 'apikey') return 'apikey';
@@ -309,7 +310,7 @@ export function formatSub2ApiUsageInline(usage: Sub2ApiAccountUsage | null): str
       else if (deltaMs >= 60 * 60 * 1000) parts.push(`剩余${Math.ceil(deltaMs / (60 * 60 * 1000))}小时`);
       else if (deltaMs >= 60 * 1000) parts.push(`剩余${Math.ceil(deltaMs / (60 * 1000))}分钟`);
     } else if (Number.isFinite(deltaMs)) {
-      parts.push('已到期');
+      parts.push(tr('已到期'));
     }
   }
   return parts.length > 0 ? parts.join(' · ') : null;

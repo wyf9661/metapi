@@ -556,10 +556,10 @@ export function buildProxyDebugSettingsPayload(
 }
 
 export function formatProxyDebugCaptureSummary(settings: ProxyDebugSettingsState) {
-  const parts = ['路由决策'];
-  if (settings.proxyDebugCaptureHeaders) parts.push('请求/响应头');
-  if (settings.proxyDebugCaptureBodies) parts.push('请求/响应体');
-  if (settings.proxyDebugCaptureStreamChunks) parts.push('流式分片');
+  const parts = [tr('路由决策')];
+  if (settings.proxyDebugCaptureHeaders) parts.push(tr('请求/响应头'));
+  if (settings.proxyDebugCaptureBodies) parts.push(tr('请求/响应体'));
+  if (settings.proxyDebugCaptureStreamChunks) parts.push(tr('流式分片'));
   return parts.join('、');
 }
 

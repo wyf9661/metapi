@@ -936,7 +936,7 @@ export default function DownstreamKeys() {
       return;
     }
 
-    await batchRun('批量删除', target.ids);
+    await batchRun(tr('批量删除'), target.ids);
   };
 
   const addTagFilter = (raw: string) => {
@@ -960,7 +960,7 @@ export default function DownstreamKeys() {
       toast.info(tr('请至少填写一个批量标签'));
       return;
     }
-    await batchRun('批量归类', selectedIds);
+    await batchRun(tr('批量归类'), selectedIds);
   };
 
   const filterControls = (

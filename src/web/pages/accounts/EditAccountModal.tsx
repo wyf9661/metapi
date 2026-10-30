@@ -201,7 +201,7 @@ export default function EditAccountModal({
                 保存中...
               </>
             ) : (
-              '保存修改'
+              tr('保存修改')
             )}
           </button>
         </>

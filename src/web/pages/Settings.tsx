@@ -814,7 +814,7 @@ export default function Settings() {
   };
 
   const handleClearCache = async () => {
-    if (!window.confirm('确认清理模型缓存并重建路由？')) return;
+    if (!window.confirm(tr('确认清理模型缓存并重建路由？'))) return;
     setClearingCache(true);
     try {
       const res = await api.clearRuntimeCache();
@@ -1853,11 +1853,11 @@ export default function Settings() {
             <div className="anim-collapse-inner" style={{ paddingTop: 2 }}>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
               {([
-                ['baseWeightFactor', '基础权重因子'],
-                ['valueScoreFactor', '价值分因子'],
-                ['costWeight', '成本权重'],
-                ['balanceWeight', '余额权重'],
-                ['usageWeight', '使用频次权重'],
+                ['baseWeightFactor', tr('基础权重因子')],
+                ['valueScoreFactor', tr('价值分因子')],
+                ['costWeight', tr('成本权重')],
+                ['balanceWeight', tr('余额权重')],
+                ['usageWeight', tr('使用频次权重')],
               ] as Array<[keyof RoutingWeights, string]>).map(([key, label]) => (
                 <div key={key}>
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{label}</div>

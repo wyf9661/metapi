@@ -183,7 +183,7 @@ export default function AccountRebindModal({
                       >
                         <div className="alert-title">
                           {rebindVerifyResult.message ||
-                            'Token 无效或类型不正确'}
+                            tr('Token 无效或类型不正确')}
                         </div>
                       </div>
                     )}
@@ -203,7 +203,7 @@ export default function AccountRebindModal({
                           {tr('验证中...')}
                         </>
                       ) : (
-                        '验证 Token'
+                        tr('验证 Token')
                       )}
                     </button>
                     <button
@@ -227,7 +227,7 @@ export default function AccountRebindModal({
                             }}
                           />{tr('绑定中...')}</>
                       ) : (
-                        '确认重新绑定'
+                        tr('确认重新绑定')
                       )}
                     </button>
                   </div>

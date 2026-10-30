@@ -245,28 +245,28 @@ onCopyStoredDebugValue: (label: string, value: unknown) => void;
 
       <div style={{ display: 'grid', gap: 10 }}>
         {renderStoredDebugDetails(
-          '候选 endpoint',
+          tr('候选 endpoint'),
           traceDetail.endpointCandidatesJson,
           {
             copyLabel: tr('候选 endpoint'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
-          '原始下游请求头',
+          tr('原始下游请求头'),
           traceDetail.requestHeadersJson,
           {
             copyLabel: tr('原始下游请求头'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
-          '原始下游请求体',
+          tr('原始下游请求体'),
           traceDetail.requestBodyJson,
           {
             copyLabel: tr('原始下游请求体'),
           }, onCopyStoredDebugValue,
         )}
         {renderStoredDebugDetails(
-          '最终响应',
+          tr('最终响应'),
           traceDetail.finalResponseBodyJson,
           {
             copyLabel: tr('最终响应'),

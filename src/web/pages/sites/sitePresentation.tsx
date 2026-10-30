@@ -78,7 +78,7 @@ export function SiteOutboundFlags(props: {
     <span className="sites-name-flags">
       {hasProxy ? (
         <span className="sites-name-flag">
-          <HoverPopover content="已配置出站代理">
+          <HoverPopover content={tr('已配置出站代理')}>
             <GlobeIcon size={12} />
           </HoverPopover>
         </span>

@@ -165,7 +165,7 @@ export function buildFixedTokenOptionLabel(
 ): string {
   let label = `固定使用：${token.name}`;
   if (options.includeDefaultTag && token.isDefault) {
-    label += '（当前账号默认）';
+    label += tr('（当前账号默认）');
   }
   if (options.includeSourceModel && token.sourceModel) {
     label += ` [${token.sourceModel}]`;

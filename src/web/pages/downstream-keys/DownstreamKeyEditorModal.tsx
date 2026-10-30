@@ -492,7 +492,7 @@ export default function DownstreamKeyEditorModal({
               <textarea
                 value={form.siteWeightMultipliersText}
                 onChange={(e) => onChange((prev) => ({ ...prev, siteWeightMultipliersText: e.target.value }))}
-                placeholder={'例如：{\n  "1": 1.2,\n  "7": 0.8\n}'}
+                placeholder={tr('例如：{\n  "1": 1.2,\n  "7": 0.8\n}')}
                 style={{ ...inputStyle, minHeight: 96, resize: 'vertical', fontFamily: 'var(--font-mono)' }}
               />
               <div className="downstream-key-modal-help">用于对特定站点做分发倍率微调；留空或 `{}` 表示走默认倍率。</div>

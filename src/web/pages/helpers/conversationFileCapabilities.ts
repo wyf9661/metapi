@@ -25,19 +25,19 @@ const isSupportedMode = (mode: ConversationFileTransportMode): boolean => mode !
 function buildSupportedTypeLabel(capability: ConversationFileCapability): string {
   const labels: string[] = [];
   if (isSupportedMode(capability.documentMode)) labels.push('PDF / TXT / Markdown / JSON');
-  if (isSupportedMode(capability.imageMode)) labels.push('图片');
-  if (isSupportedMode(capability.audioMode)) labels.push('音频');
+  if (isSupportedMode(capability.imageMode)) labels.push(tr('图片'));
+  if (isSupportedMode(capability.audioMode)) labels.push(tr('音频'));
   return labels.join(' / ');
 }
 
 function buildTransportNotes(capability: ConversationFileCapability): string[] {
   const notes: string[] = [];
-  if (capability.documentMode === 'inline_only') notes.push('文档会以内联数据注入');
+  if (capability.documentMode === 'inline_only') notes.push(tr('文档会以内联数据注入'));
   if (capability.imageMode === 'native' && capability.documentMode === 'inline_only') {
-    notes.push('图片会按图片部件发送');
+    notes.push(tr('图片会按图片部件发送'));
   }
   if (capability.audioMode === 'native' && capability.documentMode === 'inline_only') {
-    notes.push('音频会按音频部件发送');
+    notes.push(tr('音频会按音频部件发送'));
   }
   return notes;
 }

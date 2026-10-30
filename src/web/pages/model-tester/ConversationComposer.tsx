@@ -127,7 +127,7 @@ export default function ConversationComposer({
                       <button
                         type="button"
                         onClick={() => onRemoveConversationFile(file.localId)}
-                        aria-label={`移除附件 ${file.name || file.localId || '附件'}`}
+                        aria-label={`移除附件 ${file.name || file.localId || tr('附件')}`}
                         style={{
                           border: 'none',
                           background: 'transparent',

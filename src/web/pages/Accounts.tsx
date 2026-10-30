@@ -95,7 +95,7 @@ const ACCOUNT_SEGMENTS: Array<{
   },
 ];
 
-const SITE_SELECT_SEARCH_PLACEHOLDER = '筛选站点（名称 / 平台 / URL）';
+const SITE_SELECT_SEARCH_PLACEHOLDER = tr('筛选站点（名称 / 平台 / URL）');
 
 function createLoginForm() {
   return { siteId: 0, username: '', password: '' };
@@ -621,8 +621,8 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         toast.success(tr('已添加为 API Key 账号（可用于代理转发）'));
       } else {
         const parts: string[] = [];
-        if (result.usernameDetected) parts.push('用户名已自动识别');
-        if (result.apiTokenFound) parts.push('API Key 已自动获取');
+        if (result.usernameDetected) parts.push(tr('用户名已自动识别'));
+        if (result.apiTokenFound) parts.push(tr('API Key 已自动获取'));
         const extra = parts.length ? `（${parts.join('，')}）` : '';
         toast.success(`账号已添加${extra}`);
       }
@@ -1078,7 +1078,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
     await withLoading(
       `delete-${target.accountId}`,
       () => api.deleteAccount(target.accountId!),
-      '已删除',
+      tr('已删除'),
     );
   };
 
@@ -1299,7 +1299,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       withLoading(
                         'checkin-all',
                         () => api.triggerCheckinAll(),
-                        '已触发全部签到',
+                        tr('已触发全部签到'),
                       )
                     }
                     disabled={actionLoading['checkin-all']}
@@ -1384,7 +1384,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                   await withLoading(
                     'checkin-all',
                     () => api.triggerCheckinAll(),
-                    '已触发全部签到',
+                    tr('已触发全部签到'),
                   );
                 }}
                 disabled={actionLoading['checkin-all']}
@@ -1884,7 +1884,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           <>
                             <span className="spinner spinner-sm" />{tr('验证中...')}</>
                         ) : (
-                          '验证 Token'
+                          tr('验证 Token')
                         )}
                       </button>
                       <button
@@ -1907,7 +1907,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               }}
                             />{tr('添加中...')}</>
                         ) : (
-                          '添加连接'
+                          tr('添加连接')
                         )}
                       </button>
                     </div>
@@ -1990,7 +1990,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                             }}
                           />{tr('登录并添加...')}</>
                       ) : (
-                        '登录并添加'
+                        tr('登录并添加')
                       )}
                     </button>
                   </div>
@@ -2199,7 +2199,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                     <div className="alert alert-error animate-scale-in">
                       <div className="alert-title">
                         {normalizeVerifyFailureMessage(verifyResult.message) ||
-                          'Token 无效或已过期'}
+                          tr('Token 无效或已过期')}
                       </div>
                       <div
                         style={{
@@ -2230,9 +2230,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                       <>
                         <span className="spinner spinner-sm" />{tr('验证中...')}</>
                     ) : isBatchApiKeyInput ? (
-                      '批量添加时校验'
+                      tr('批量添加时校验')
                     ) : (
-                      '验证 API Key'
+                      tr('验证 API Key')
                     )}
                   </button>
                   <button
@@ -2254,9 +2254,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                           }}
                         />{tr('添加中...')}</>
                     ) : isBatchApiKeyInput ? (
-                      '批量添加连接'
+                      tr('批量添加连接')
                     ) : (
-                      '添加连接'
+                      tr('添加连接')
                     )}
                   </button>
                 </div>
@@ -2475,9 +2475,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`pin-toggle-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : a.isPinned ? (
-                                  '取消置顶'
+                                  tr('取消置顶')
                                 ) : (
-                                  '置顶'
+                                  tr('置顶')
                                 )}
                               </button>
                               {capabilities.canRefreshBalance && (
@@ -2486,7 +2486,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `refresh-${a.id}`,
                                       () => api.refreshBalance(a.id),
-                                      '余额已刷新',
+                                      tr('余额已刷新'),
                                     )
                                   }
                                   disabled={actionLoading[`refresh-${a.id}`]}
@@ -2495,7 +2495,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`refresh-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    '刷新'
+                                    tr('刷新')
                                   )}
                                 </button>
                               )}
@@ -2505,7 +2505,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `checkin-${a.id}`,
                                       () => api.triggerCheckin(a.id),
-                                      '签到完成',
+                                      tr('签到完成'),
                                     )
                                   }
                                   disabled={actionLoading[`checkin-${a.id}`]}
@@ -2514,7 +2514,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`checkin-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    '签到'
+                                    tr('签到')
                                   )}
                                 </button>
                               )}
@@ -2539,7 +2539,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`delete-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : (
-                                  '删除'
+                                  tr('删除')
                                 )}
                               </button>
                             </div>
@@ -2701,9 +2701,9 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`pin-toggle-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : a.isPinned ? (
-                                  '取消置顶'
+                                  tr('取消置顶')
                                 ) : (
-                                  '置顶'
+                                  tr('置顶')
                                 )}
                               </button>
                               {capabilities.canRefreshBalance && (
@@ -2712,7 +2712,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `refresh-${a.id}`,
                                       () => api.refreshBalance(a.id),
-                                      '余额已刷新',
+                                      tr('余额已刷新'),
                                     )
                                   }
                                   disabled={actionLoading[`refresh-${a.id}`]}
@@ -2721,7 +2721,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`refresh-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    '刷新'
+                                    tr('刷新')
                                   )}
                                 </button>
                               )}
@@ -2736,7 +2736,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                     withLoading(
                                       `checkin-${a.id}`,
                                       () => api.triggerCheckin(a.id),
-                                      '签到完成',
+                                      tr('签到完成'),
                                     )
                                   }
                                   disabled={actionLoading[`checkin-${a.id}`]}
@@ -2745,7 +2745,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   {actionLoading[`checkin-${a.id}`] ? (
                                     <span className="spinner spinner-sm" />
                                   ) : (
-                                    '签到'
+                                    tr('签到')
                                   )}
                                 </button>
                               )}
@@ -2774,7 +2774,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                 {actionLoading[`delete-${a.id}`] ? (
                                   <span className="spinner spinner-sm" />
                                 ) : (
-                                  '删除'
+                                  tr('删除')
                                 )}
                               </button>
                             </div>

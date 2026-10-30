@@ -15,10 +15,10 @@ type DeleteConfirmModalProps = {
 
 export default function DeleteConfirmModal({
   open,
-  title = '确认删除',
+  title = tr('确认删除'),
   description,
-  confirmText = '确认删除',
-  cancelText = '取消',
+  confirmText = tr('确认删除'),
+  cancelText = tr('取消'),
   loading = false,
   onConfirm,
   onClose,

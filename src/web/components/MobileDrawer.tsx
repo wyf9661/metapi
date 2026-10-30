@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { tr } from '../i18n.js';
 
 type MobileDrawerProps = {
   open: boolean;
@@ -15,7 +16,7 @@ function MobileDrawer({
   onClose,
   children,
   title,
-  closeLabel = '关闭导航',
+  closeLabel = tr('关闭导航'),
   side = 'left',
 }: MobileDrawerProps) {
   const [shouldRender, setShouldRender] = useState(open);
