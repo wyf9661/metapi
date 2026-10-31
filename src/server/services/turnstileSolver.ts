@@ -43,7 +43,8 @@ export async function getTurnstileSolverSettings(): Promise<TurnstileSolverSetti
       const parsed = JSON.parse(row.value);
       if (parsed && typeof parsed === 'object') {
         const enabled = parsed.enabled !== false;
-        const baseUrl = String(parsed.baseUrl || '').trim();
+        // Trailing slash breaks every `${baseUrl}/solve` call (double slash → 404).
+        const baseUrl = String(parsed.baseUrl || '').trim().replace(/\/+$/, '');
         // apiKey 可留空 —— 自建求解器（如 turnstile-solver 容器）通常无鉴权，
         // 云端求解服务才需要 key。
         const apiKey = String(parsed.apiKey || '').trim();
@@ -110,6 +111,14 @@ export async function solveTurnstileToken(
   // 2) 回退到 createTask + getTaskResult（CapSolver/标准格式）
   try {
     const result = await tryAsyncSolve(baseUrl, apiKey, params, timeoutMs, signal);
+    if (result) return result;
+  } catch {
+    // 降级到查询式任务接口
+  }
+
+  // 3) GET /turnstile → GET /result?id=（部分自建求解服务只暴露这种形状）
+  try {
+    const result = await tryTaskResultSolve(baseUrl, apiKey, params, timeoutMs, signal);
     if (result) return result;
   } catch {
     // 完全失败
@@ -218,6 +227,49 @@ async function tryAsyncSolve(
       if (pollData.status === 'ready') {
         const tok = pollData.solution?.token;
         if (tok) return { success: true, token: tok, userAgent: pollData.solution?.userAgent, message: 'solved via async' };
+      }
+    } catch { continue; }
+  }
+  return null;
+}
+
+// Some self-hosted solvers expose only `GET /turnstile?url=&sitekey=` →
+// `{taskId}` + `GET /result?id=`, keyed by X-API-Key. 404 on the first call
+// means the provider doesn't speak it, so this lane stays cheap for others.
+async function tryTaskResultSolve(
+  baseUrl: string, apiKey: string, params: SolveParams,
+  timeoutMs: number, signal?: AbortSignal,
+): Promise<SolveResult | null> {
+  const { fetch } = await import('undici');
+  const headers: Record<string, string> = { 'X-API-Key': apiKey, 'User-Agent': DEFAULT_UA };
+  const q = new URLSearchParams({ url: params.pageUrl, sitekey: params.sitekey });
+  if (params.action) q.set('action', params.action);
+
+  const created = await fetch(`${baseUrl}/turnstile?${q.toString()}`, {
+    headers, signal: abortSignals(...[AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
+  });
+  if (created.status === 404) return null;
+  const createdData: any = await created.json().catch(() => null);
+  const taskId: string | undefined = createdData?.taskId;
+  if (!taskId) {
+    if (createdData?.errorId) return { success: false, message: `turnstile task failed: ${createdData.errorCode || createdData.errorDescription || 'unknown'}` };
+    return null;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(1000);
+    if (signal?.aborted) return null;
+    try {
+      const res = await fetch(`${baseUrl}/result?id=${encodeURIComponent(taskId)}`, {
+        headers, signal: AbortSignal.timeout(Math.max(1000, deadline - Date.now())),
+      });
+      if (res.status !== 200) continue;
+      const data: any = await res.json();
+      if (data?.errorId) return { success: false, message: `result failed: ${data.errorCode || data.errorDescription || 'unknown'}` };
+      const solution = data?.solution ?? data;
+      if (solution?.token) {
+        return { success: true, token: solution.token, userAgent: solution.userAgent || solution.user_agent, message: 'solved via /turnstile' };
       }
     } catch { continue; }
   }
