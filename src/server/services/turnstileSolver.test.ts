@@ -79,7 +79,8 @@ describe('getTurnstileSolverSettings', () => {
     const settings = await getTurnstileSolverSettings();
     expect(settings).toEqual({
       enabled: true,
-      baseUrl: 'https://solver.example.com/',
+      // trailing slash is stripped: `${baseUrl}/solve` would otherwise be `//solve`
+      baseUrl: 'https://solver.example.com',
       apiKey: 'sk-test',
       timeoutSeconds: 90,
     });
@@ -225,6 +226,38 @@ describe('solveTurnstileToken', () => {
     expect(requests.map((r) => r.url)).toContain('/createTask');
     expect(requests.map((r) => r.url)).toContain('/getTaskResult');
   }, 15000);
+
+  it('falls back to the GET /turnstile → /result flow when neither /solve nor createTask exists', async () => {
+    let polled = 0;
+    handler = (req, res) => {
+      if ((req.url || '').startsWith('/turnstile?')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ errorId: 0, taskId: 't-1' }));
+        return;
+      }
+      if ((req.url || '').startsWith('/result?id=')) {
+        polled += 1;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(polled > 1
+          ? { errorId: 0, solution: { token: 'task-result-token', userAgent: 'UA/1.0' } }
+          : { errorId: 0, status: 'processing' }));
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end('{}');
+    };
+
+    const result = await solveTurnstileToken(settings(), {
+      pageUrl: 'https://target.example/sign-in',
+      sitekey: '0x4AAAAAAEM5z6JyQL_QS07g',
+    });
+
+    expect(result).toMatchObject({ success: true, token: 'task-result-token', userAgent: 'UA/1.0' });
+    const created = requests.find((r) => (r.url || '').startsWith('/turnstile?'));
+    expect(created).toBeTruthy();
+    expect(created!.headers['x-api-key']).toBe('sk-test');
+    expect(decodeURIComponent(created!.url!)).toContain('url=https://target.example/sign-in');
+  }, 20000);
 
   it('reports failure when every solving attempt fails', async () => {
     handler = (req, res) => {
