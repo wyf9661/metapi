@@ -136,3 +136,22 @@ export function finalizeToolCalls(assembler: ToolCallAssembly): AssembledToolCal
     };
   });
 }
+
+/**
+ * True when any non-empty argument payload is not valid JSON. A relay that
+ * fragmented one call across separate slots leaves exactly these half-JSON
+ * strings behind: undeliverable, and the attempt must fail over rather than
+ * hand the client an unexecutable call. `custom_tool_call` input is free text
+ * and is never passed here.
+ */
+export function hasMalformedToolCallArguments(argumentValues: Iterable<unknown>): boolean {
+  for (const value of argumentValues) {
+    if (typeof value !== 'string' || !value.trim()) continue;
+    try {
+      JSON.parse(value);
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}

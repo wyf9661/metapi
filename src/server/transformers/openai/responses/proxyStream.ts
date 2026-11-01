@@ -12,6 +12,7 @@ import {
   serializeResponsesUpstreamFinalAsStream,
 } from './streamBridge.js';
 import { config } from '../../../config.js';
+import { hasMalformedToolCallArguments } from '../../shared/toolCallAssembler.js';
 
 
 type StreamReader = {
@@ -61,8 +62,10 @@ function hasReasoningAggregateOutput(state: ReturnType<typeof createOpenAiRespon
 // Empty-content gate. Reasoning items are not deliverable output: a
 // completion that only produced reasoning never delivered a final answer, so
 // it fails here (with a distinct message) just like a fully empty completion,
-// and the attempt can still fail over. Returns the failure message, or null
-// when the payload is fine.
+// and the attempt can still fail over. A visible function_call whose arguments
+// never parse is equally undeliverable (a damaged relay split one call across
+// slots), so it fails too. Returns the failure message, or null when the
+// payload is fine.
 function shouldFailEmptyResponsesCompletion(input: {
   payload: unknown;
   state: ReturnType<typeof createOpenAiResponsesAggregateState>;
@@ -76,8 +79,22 @@ function shouldFailEmptyResponsesCompletion(input: {
   const responsePayload = isRecord(input.payload) && isRecord(input.payload.response)
     ? input.payload.response
     : null;
-  if (hasVisibleAggregateOutput(input.state)) return null;
-  if (responsePayload && hasVisibleResponsesPayloadOutput(responsePayload)) return null;
+  const aggregateMalformed = hasMalformedToolCallArguments(
+    input.state.outputItems
+      .filter((item) => isRecord(item) && String(item.type || '').toLowerCase() === 'function_call')
+      .map((item) => (item as Record<string, unknown>).arguments),
+  );
+  const payloadMalformed = !!responsePayload && Array.isArray(responsePayload.output)
+    && hasMalformedToolCallArguments(
+      responsePayload.output
+        .filter((item) => isRecord(item) && String(item.type || '').toLowerCase() === 'function_call')
+        .map((item) => (item as Record<string, unknown>).arguments),
+    );
+  if (hasVisibleAggregateOutput(input.state) || (responsePayload && hasVisibleResponsesPayloadOutput(responsePayload))) {
+    return aggregateMalformed || payloadMalformed
+      ? 'Upstream returned malformed tool call arguments'
+      : null;
+  }
   const reasoningOnly = hasReasoningAggregateOutput(input.state)
     || (responsePayload ? hasReasoningResponsesPayloadOutput(responsePayload) : false);
   if (reasoningOnly) return 'Upstream returned empty content (reasoning only)';

@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { pullSseDataEvents } from './proxyUsageParser.js';
+import { hasMalformedToolCallArguments } from '../transformers/shared/toolCallAssembler.js';
 
 type FailureResult = {
   status: number;
@@ -167,6 +168,69 @@ function detectHasUpstreamOutput(rawText: string): boolean {
   }
 }
 
+// Tool-call argument strings from a payload in either shape: final (chat
+// `message.tool_calls[].function.arguments`, responses `function_call` items)
+// or delta (appended into a slot keyed by its index/id, so fragments of one
+// healthy call reassemble while a relay-damaged split stays broken).
+function collectToolCallArguments(payload: unknown, slots: Map<string, string>): void {
+  if (!isRecord(payload)) return;
+  const obj = payload as any;
+  const take = (key: string, value: unknown) => {
+    if (typeof value !== 'string') return;
+    slots.set(key, (slots.get(key) || '') + value);
+  };
+  const choices = Array.isArray(obj.choices) ? obj.choices : [];
+  for (const choice of choices) {
+    for (const source of [choice?.message?.tool_calls, choice?.delta?.tool_calls]) {
+      if (!Array.isArray(source)) continue;
+      const final = source === choice?.message?.tool_calls;
+      source.forEach((toolCall: any, position: number) => {
+        // Deltas slot by `index` (later fragments carry no id); final messages slot by id.
+        const key = final
+          ? `f:${String(toolCall?.id || position)}`
+          : `d:${toolCall?.index ?? position}`;
+        take(key, typeof toolCall?.function?.arguments === 'string' ? toolCall.function.arguments : toolCall?.arguments);
+      });
+    }
+  }
+  if (Array.isArray(obj.output)) {
+    for (const item of obj.output) {
+      if (!isRecord(item)) continue;
+      const type = String((item as any).type || '').toLowerCase();
+      if (type === 'function_call') take(String((item as any).id || 'output'), (item as any).arguments);
+    }
+  }
+  for (const toolCall of Array.isArray(obj.tool_calls) ? obj.tool_calls : []) {
+    const key = String(toolCall?.id ?? toolCall?.index ?? 0);
+    take(key, typeof toolCall?.function?.arguments === 'string' ? toolCall.function.arguments : toolCall?.arguments);
+  }
+}
+
+function detectHasMalformedToolCall(rawText: string): boolean {
+  const text = typeof rawText === 'string' ? rawText : '';
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const payloads: unknown[] = [];
+  try {
+    payloads.push(JSON.parse(trimmed));
+  } catch {
+    const pulled = pullSseDataEvents(text);
+    for (const event of pulled.events) {
+      const payload = event.trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        payloads.push(JSON.parse(payload));
+      } catch {
+        // Non-JSON event frame: no tool-call signal to read.
+      }
+    }
+  }
+  if (payloads.length === 0) return false;
+  const slots = new Map<string, string>();
+  for (const payload of payloads) collectToolCallArguments(payload, slots);
+  return hasMalformedToolCallArguments(slots.values());
+}
+
 function hasCompletionReasoningFromChoice(choice: any): boolean {
   if (hasNonEmptyString(choice?.reasoning_content)) return true;
   if (hasNonEmptyString(choice?.reasoning)) return true;
@@ -260,6 +324,16 @@ export function detectProxyFailure(input: {
         reason: reasoningOnly
           ? 'Upstream returned empty content (reasoning only)'
           : 'Upstream returned empty content',
+      };
+    }
+
+    // Visible but unexecutable: a damaged relay split one tool call into slots
+    // that never reassemble into valid JSON. Same channel-level class as the
+    // empty-content gate so sibling channels stay usable.
+    if (detectHasMalformedToolCall(rawText)) {
+      return {
+        status: 502,
+        reason: 'Upstream returned malformed tool call arguments',
       };
     }
   }
