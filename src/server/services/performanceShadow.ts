@@ -140,16 +140,32 @@ export function listPerformanceShadowAttempts(
  * arrived above 8s.
  *
  * So the ordering is done here, by replaying the attempt series:
- *  - escalate one *additive* rung once the sliding window holds enough timeouts
- *    (interleaved fast answers no longer reset the counter);
+ *  - escalate once the sliding window holds enough timeouts (interleaved fast
+ *    answers no longer reset the counter), jumping to DOUBLE the window —
+ *    widened immediately when a success anchors higher;
  *  - hold the raised window for a run of attempts, so a single fast answer
  *    cannot undo it — the site is jittering, not fast again;
- *  - step back down only after the hold expires AND the site has answered fast
- *    repeatedly, i.e. escalation is immediate and decay is slow.
- * Additive rungs are deliberate. A multiplicative ratchet (x1.5 per trigger)
- * reaches the ceiling within a handful of triggers — measured on the same day's
- * production series, it pinned 12 attempts at the 120s ceiling, at which point
- * the ceiling is the de-facto window and there is no strategy left.
+ *  - release only after the hold expires AND the site has answered fast
+ *    repeatedly, dropping to the site's own P90 x headroom of the successes
+ *    observed since the escalation (capped by the current window, never a
+ *    release upward), i.e. escalation is immediate and decay is slow.
+ *
+ * Doubling from below replaces the +4s additive ladder. A censored timeout
+ * only proves T >= the window that cut it, so a fixed step pays one failed
+ * request per step and the step distance is pure guesswork: production
+ * 2026-11-02 measured p90 TTFT at 22.6s and p95 at 35.1s (120s ceiling), so
+ * reaching that tail from the 8s floor cost ~7 sacrificial timeouts per
+ * bucket, spread over hours on low-traffic keys — while each one also banked
+ * a cooldown on the channel, which is what surfaced as "the site never gets
+ * routed to". A half-gap jump (8 -> 64s) was rejected too: on a genuinely
+ * dead channel that is a ~1 minute free wait on the second probe, and dead
+ * channels are cooldown/failover's job, not the window's. Doubling keeps
+ * every dead-channel probe small (16/32/64) while the success anchor still
+ * lands live slow channels on their real tail in one jump. x1.5 (the old
+ * ratchet experiment) pinned 12 attempts at the ceiling because its steps
+ * were small enough to keep stepping; the P90-anchored release means an
+ * overshoot decays in one step to the site's observed tail, not one rung per
+ * 8 fast answers.
  */
 export function replayFirstByteWindowPolicy(input: {
   attempts: PerformanceShadowAttempt[];
@@ -162,10 +178,15 @@ export function replayFirstByteWindowPolicy(input: {
   let holdRemaining = 0;
   let fastRun = 0;
   let maxSuccessMs = 0;
+  // Successes observed since the newest escalation — the release anchor below
+  // may only use evidence this wide window itself produced, otherwise a slow
+  // success from the pre-escalation era keeps the window pinned forever.
+  const sinceEscalation: number[] = [];
   const recent: PerformanceShadowOutcome[] = [];
   for (const attempt of input.attempts) {
     if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
       maxSuccessMs = Math.max(maxSuccessMs, attempt.firstByteLatencyMs);
+      sinceEscalation.push(attempt.firstByteLatencyMs);
     }
     recent.push(attempt.outcome);
     if (recent.length > FIRST_BYTE_WINDOW_TRIGGER_WINDOW) recent.shift();
@@ -177,13 +198,20 @@ export function replayFirstByteWindowPolicy(input: {
     if (attempt.outcome === 'timeout' && timeoutsInWindow >= FIRST_BYTE_WINDOW_TRIGGER_TIMEOUTS) {
       // The incumbent window is the suspect: give the site one attempt wide
       // enough to prove itself, but never wider than the policy ceiling.
+      // Exponential from below (x2): a dead channel climbs 16/32/64 instead
+      // of eating a 64s+ wait on its second probe, and a live slow channel
+      // rides the success anchor (maxSuccess x headroom) to wide coverage in
+      // ONE jump — the evidence decides the step, and a timeout from a
+      // channel that has never answered is only ever a doubling.
       const anchored = Math.max(
+        windowMs * 2,
         windowMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS,
         maxSuccessMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER,
       );
       windowMs = Math.min(ceilingMs, Math.max(floorMs, Math.round(anchored)));
       holdRemaining = FIRST_BYTE_WINDOW_HOLD_ATTEMPTS;
       fastRun = 0;
+      sinceEscalation.length = 0;
       continue;
     }
     if (holdRemaining > 0) {
@@ -196,7 +224,19 @@ export function replayFirstByteWindowPolicy(input: {
       && attempt.firstByteLatencyMs < windowMs * FIRST_BYTE_WINDOW_DECAY_FAST_RATIO) {
       fastRun += 1;
       if (fastRun >= FIRST_BYTE_WINDOW_DECAY_FAST_ATTEMPTS) {
-        windowMs = Math.max(floorMs, windowMs - FIRST_BYTE_WINDOW_LADDER_STEP_MS);
+        // Release to the site's own tail: P90 of the successes this window
+        // itself observed, with the estimator's headroom. Still-slow successes
+        // keep the width (a bimodal relay must keep catching its slow mode);
+        // a recovered link lands one jump above its fast mode, not one ladder
+        // rung per 8 answers. Capped by the current window — decay only goes
+        // down — and falls back to the old additive step when no success is
+        // available to anchor on.
+        const sorted = [...sinceEscalation].sort((a, b) => a - b);
+        const releaseMs = sorted.length > 0
+          ? sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * 0.9))]!
+            * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER
+          : windowMs - FIRST_BYTE_WINDOW_LADDER_STEP_MS;
+        windowMs = Math.max(floorMs, Math.min(windowMs, Math.round(releaseMs)));
         fastRun = 0;
       }
       continue;
@@ -216,7 +256,7 @@ export const FIRST_BYTE_WINDOW_FLOOR_LOOKBACK = 20;
  * Consecutive fast answers that retire a lifted floor.
  *
  * The lift is one-way by construction: it reads a censored timeout as
- * "T >= budget" and raises the floor one rung above the window that cut it.
+ * "T >= budget" and raises the floor to double the window that cut it.
  * Since that window is the floor, each further timeout raises the floor again —
  * on a link that has recovered there is nothing left to lower it except the
  * censored rows sliding out of the lookback, which on a low-traffic bucket
@@ -234,10 +274,16 @@ export const FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS = 6;
  * answering in 2s nine times out of ten and 9s the tenth shows only 2s
  * successes while the window sits at 8s, so their P90 never proves the tail
  * exists. A censored timeout is the missing evidence — it says T >= its budget.
- * An ISOLATED timeout (preceded by a success) therefore lifts the floor one
- * ladder rung above the budget it was cut at. A run of consecutive timeouts
- * does not: that is a dead channel, not a jittery one, and ratcheting there
- * would pin the window at the ceiling and make every failure slow.
+ * An ISOLATED timeout (preceded by a success) therefore lifts the floor to
+ * DOUBLE the budget it was cut at — the same evidence-scaled escalation the
+ * policy ladder uses. The old +4s rung here matched the original additive
+ * ladder, and production showed that ladder is what fails: MetapiMesh sat at
+ * the 8s floor for ~1h after deploy because isolated censored timeouts were
+ * each re-lifting it by one 4s rung (8 -> 10 -> 12 -> 16s), the identical
+ * "one failed request per 4 seconds" tax the escalation was fixed for.
+ * A run of consecutive timeouts does not lift at all: that is a dead channel,
+ * not a jittery one, and ratcheting there would pin the window at the ceiling
+ * and make every failure slow.
  *
  * The lift is released again after a run of fast answers (see
  * FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS), so a recovered link does not
@@ -262,7 +308,11 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
     const attempt = recent[index]!;
     if (attempt.outcome !== 'timeout' || attempt.budgetMs === null) continue;
     if (recent[index - 1]!.outcome !== 'success') continue;
-    const candidate = attempt.budgetMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS;
+    // Same evidence-scaled step as the policy ladder: a censored timeout
+    // proves T >= budget, and doubling reaches the real tail in 1-2 probes.
+    // The +4s floor-only case keeps progress when the budget is at the floor
+    // itself (8s -> 16s beats 8s -> 12s -> 16s at the same probe count).
+    const candidate = Math.max(attempt.budgetMs * 2, attempt.budgetMs + FIRST_BYTE_WINDOW_LADDER_STEP_MS);
     if (candidate >= censoredFloorMs) {
       censoredFloorMs = candidate;
       lastCensoredIndex = index;
@@ -390,9 +440,9 @@ export function estimateFirstByteWindowMs(input: {
   }
   if (maxSuccessMs > 0) {
     points.add(clampWindow(maxSuccessMs * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER));
-    // One ladder rung above the slowest healthy answer — the point the policy
-    // lands on when it escalates from this sample set — so both paths agree on
-    // where "wider" means.
+    // One ladder rung above the slowest healthy answer — a cheap "wider" point
+    // for the curve to score; the sequencing policy itself jumps half the gap
+    // to the ceiling rather than landing here.
     points.add(clampWindow(Math.max(maxSuccessMs, adaptiveFloorMs) + FIRST_BYTE_WINDOW_LADDER_STEP_MS));
   }
   const candidates = [...points].sort((a, b) => a - b);

@@ -160,8 +160,8 @@ describe('adaptive first-byte floor', () => {
       { outcome: 'success', ttftMs: 2_000 },
       { outcome: 'success', ttftMs: 2_000 },
     ]);
-    // The timeout is evidence the tail is >= 8s; one ladder rung above it.
-    expect(floorOf(8_000)).toBe(12_000);
+    // The timeout is evidence the tail is >= 8s; the lift doubles it.
+    expect(floorOf(8_000)).toBe(16_000);
   });
 
   it('does not ratchet on a run of consecutive timeouts', () => {
@@ -175,7 +175,7 @@ describe('adaptive first-byte floor', () => {
     ]);
     // Only the first timeout is isolated; a dead channel must not push the
     // window toward the ceiling where every failure waits longer.
-    expect(floorOf(8_000)).toBe(12_000);
+    expect(floorOf(8_000)).toBe(16_000);
   });
 
   it('keeps the static floor for a fast, steady site', () => {

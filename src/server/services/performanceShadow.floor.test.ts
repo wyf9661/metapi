@@ -34,8 +34,9 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
       timeout(8_000, B + 4),
       ...run(3, (i) => success(2_000, B + 5 + i)),
     ];
-    // One censored sample at 8s is evidence the tail is at least that long.
-    expect(floorOf(attempts)).toBe(12_000);
+    // One censored sample at 8s is evidence the tail is at least that long:
+    // the lift doubles it (the old +4s rung cost one failed request per step).
+    expect(floorOf(attempts)).toBe(16_000);
   });
 
   it('releases the lift after the site answers fast for a sustained run', () => {
@@ -94,7 +95,7 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
     ];
     // Only the first timeout is isolated; a dead channel must not push the
     // window toward the ceiling where every failure waits longer.
-    expect(floorOf(attempts)).toBe(12_000);
+    expect(floorOf(attempts)).toBe(16_000);
   });
 
   it('re-lifts when a later isolated timeout lands after the fast run', () => {
@@ -106,7 +107,7 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
     ];
     // The run released the lift, but the newest evidence is again a timeout:
     // the site is jittering, not fast.
-    expect(floorOf(attempts)).toBe(12_000);
+    expect(floorOf(attempts)).toBe(16_000);
   });
 
   it('does not treat a timeout after an error as isolated evidence', () => {

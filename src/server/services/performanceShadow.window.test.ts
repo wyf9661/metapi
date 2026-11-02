@@ -5,6 +5,7 @@ import {
   FIRST_BYTE_WINDOW_MIN_SAMPLES,
   listPerformanceShadowAttempts,
   recordPerformanceShadowAttempt,
+  replayFirstByteWindowPolicy,
 } from './performanceShadow.js';
 
 const KEY = { routeId: 1, siteId: 7, modelName: 'deepseek-v4.1-flash', isStream: true };
@@ -251,5 +252,64 @@ describe('performanceShadow survival-curve window', () => {
     expect(window!).toBeGreaterThan(20_000);
     expect(window!).toBeGreaterThanOrEqual(27_000);
     expect(window!).toBeLessThanOrEqual(CEILING);
+  });
+
+  // Regression: production 2026-11-02. Measured TTFT p90 = 22.6s, p95 = 35.1s
+  // (120s ceiling). The +4s additive ladder needed ~7 sacrificial timeouts to
+  // reach that tail from the floor, spread over hours on a low-traffic key,
+  // and every one of them banked a channel cooldown — which surfaced as the
+  // site never being routed to. The half-gap jump must land above the real
+  // tail within 2-3 probes.
+  it('reaches a slow mode within three probes instead of one 4s rung per timeout', () => {
+    seedSuccesses([2_000, 2_400, 2_800, 3_100, 2_600, 3_000]);
+    for (let i = 0; i < 5; i += 1) {
+      recordPerformanceShadowAttempt({
+        key: KEY,
+        outcome: 'timeout',
+        budgetMs: FLOOR,
+        nowMs: BASE_NOW - 100 + i,
+      });
+    }
+    const window = estimate();
+    expect(window).not.toBeNull();
+    // The old additive ladder landed at ~25s after five timeouts; doubling
+    // must already be past the observed production p95 (35.1s) by probe 3.
+    expect(window!).toBeGreaterThanOrEqual(60_000);
+    expect(window!).toBeLessThanOrEqual(CEILING);
+  });
+
+  // The dead channel is cooldown/failover's job, not the window's: its second
+  // probe must be a doubling (16s), not a half-gap jump (64s of free wait on
+  // a request that can never succeed).
+  it('keeps a never-answered channel on small doubling probes', () => {
+    const deadWindow = replayFirstByteWindowPolicy({
+      attempts: [
+        { atMs: BASE_NOW - 2, outcome: 'timeout', firstByteLatencyMs: null, budgetMs: 8_000 },
+        { atMs: BASE_NOW - 1, outcome: 'timeout', firstByteLatencyMs: null, budgetMs: 8_000 },
+      ],
+      floorMs: 8_000,
+      ceilingMs: 120_000,
+    });
+    expect(deadWindow).toBe(16_000);
+  });
+
+  it('collapses a probe overshoot back to the floor in one release, not ~10 rungs', () => {
+    seedSuccesses([2_000, 2_400, 2_800, 3_100, 2_600, 3_000]);
+    for (let i = 0; i < 5; i += 1) {
+      recordPerformanceShadowAttempt({
+        key: KEY,
+        outcome: 'timeout',
+        budgetMs: FLOOR,
+        nowMs: BASE_NOW - 900 + i,
+      });
+    }
+    const raised = estimate();
+    expect(raised!).toBeGreaterThan(40_000);
+
+    // Hold (10) + release run (8): a genuinely fast site is back at the floor
+    // after ONE release cycle — the additive ladder needed ~10 cycles for a
+    // doubled-up probe.
+    seedSuccesses(Array.from({ length: 18 }, () => 1_500), BASE_NOW - 800);
+    expect(estimate()!).toBeLessThanOrEqual(FLOOR + 4_000);
   });
 });
