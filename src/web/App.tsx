@@ -427,7 +427,7 @@ export const sidebarGroups = [
 const topNavItems = [
   { label: '控制台', to: '/' },
   { label: '模型广场', to: '/models' },
-  { label: '模型检测', to: '/playground' },
+  { label: '模型检测', to: '/model-check' },
   { label: '关于', to: '/about' },
 ];
 
@@ -916,7 +916,8 @@ function AppShell() {
                 <Route path="/notify" element={<NotificationSettings />} />
                 <Route path="/settings/notify" element={<Navigate to="/notify" replace />} />
                 <Route path="/models" element={<Models />} />
-                <Route path="/playground" element={<ModelTester />} />
+                <Route path="/model-check" element={<ModelTester />} />
+                <Route path="/playground" element={<Navigate to="/model-check" replace />} />
                 <Route path="/about" element={<About />} />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
