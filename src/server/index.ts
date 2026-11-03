@@ -340,7 +340,12 @@ app.addHook('onSend', async (request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'DENY');
   reply.header('Referrer-Policy', 'no-referrer');
-  reply.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'" + (process.env.NODE_ENV === 'development' ? ' ws: wss:' : ''));
+  // base-uri/object-src/frame-ancestors are explicit rather than inherited:
+  // object-src falls back to default-src ('self') and frame-ancestors is
+  // already covered by X-Frame-Options, so the one that actually adds
+  // protection is base-uri 'none' (no injected <base href> can retarget the
+  // app's relative URLs). The app ships no <base>, <object> or <embed>.
+  reply.header('Content-Security-Policy', "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'" + (process.env.NODE_ENV === 'development' ? ' ws: wss:' : ''));
   const isIconProxyPath = urlPath === '/api/site-favicon' || urlPath === '/api/brand-icon';
   if (urlPath.startsWith('/api/') && !isIconProxyPath) {
     reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
