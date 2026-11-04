@@ -683,14 +683,17 @@ describe('RouteCard', () => {
 
     expect(collapsedGroup).toContain('群组聚合');
     expect(collapsedWildcard).toContain('通配符路由');
+    expect(collapsedExact).toContain('精确模型');
     expect(collapsedExact).not.toContain('群组聚合');
     expect(collapsedExact).not.toContain('通配符路由');
     expect(expandedGroup).toContain('群组聚合');
     expect(expandedWildcard).toContain('通配符路由');
+    expect(expandedExact).toContain('精确模型');
     expect(expandedExact).not.toContain('群组聚合');
     expect(expandedExact).not.toContain('通配符路由');
     expect(compactGroup).toContain('群组聚合');
     expect(compactWildcard).toContain('通配符路由');
+    expect(compactExact).toContain('精确模型');
     expect(compactExact).not.toContain('群组聚合');
     expect(compactExact).not.toContain('通配符路由');
   });
