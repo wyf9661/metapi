@@ -620,28 +620,12 @@ async function doRefreshModelsForAccount(
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
 
-  // Snapshot current availability BEFORE discovery so any failed refresh can
-  // restore the previous list. Clearing first and failing without a rollback
-  // wiped an account's whole model set on one transient upstream timeout
-  // (2026-09-09 CAIC: a single 60s first-byte timeout left the account with
-  // zero routable models until the next full pass hours later). A stale but
-  // working list beats an empty one; the next successful refresh replaces it.
-  const previousAccountTokens = await db.select()
-    .from(schema.accountTokens)
-    .where(eq(schema.accountTokens.accountId, accountId))
-    .all();
-  const previousModelAvailability = await db.select()
-    .from(schema.modelAvailability)
-    .where(and(
-      eq(schema.modelAvailability.accountId, accountId),
-      eq(schema.modelAvailability.isManual, false),
-    ))
-    .all();
-  const previousTokenModelAvailability = (await Promise.all(previousAccountTokens.map(async (token: any) => db.select()
-    .from(schema.tokenModelAvailability)
-    .where(eq(schema.tokenModelAvailability.tokenId, token.id))
-    .all()))).flat();
-
+  // A failed refresh leaves the account with no discovered models. That is the
+  // honest state and it is what the UI shows: restoring the previous list made
+  // a dead site look healthy until the next whatever-request failed, and hid
+  // "this site stopped answering /v1/models" behind a plausible model list.
+  // Manual models are never touched (isManual rows are excluded below), and the
+  // next successful refresh repopulates everything.
   const clearExistingAvailability = async () => {
     await db.delete(schema.modelAvailability)
       .where(and(
@@ -660,20 +644,6 @@ async function doRefreshModelsForAccount(
       await db.delete(schema.tokenModelAvailability)
         .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
         .run();
-    }
-  };
-
-  const restorePreviousAvailability = async () => {
-    await clearExistingAvailability();
-    if (previousModelAvailability.length > 0) {
-      await db.insert(schema.modelAvailability).values(
-        previousModelAvailability.map((item: typeof previousModelAvailability[number]) => { const { id: _id, ...row } = item; return row; }),
-      ).onConflictDoNothing().run();
-    }
-    if (previousTokenModelAvailability.length > 0) {
-      await db.insert(schema.tokenModelAvailability).values(
-        previousTokenModelAvailability.map(({ id: _id, ...row }) => row),
-      ).onConflictDoNothing().run();
     }
   };
 
@@ -772,7 +742,6 @@ async function doRefreshModelsForAccount(
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
     });
-    await restorePreviousAvailability();
     return buildFailedRefreshResult({
       accountId,
       errorCode,
@@ -931,7 +900,6 @@ async function doRefreshModelsForAccount(
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
     });
-    await restorePreviousAvailability();
     return buildFailedRefreshResult({
       accountId,
       errorCode,

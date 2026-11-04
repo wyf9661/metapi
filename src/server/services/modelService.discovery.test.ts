@@ -632,7 +632,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
   });
 
-  it('preserves existing availability when allowInactive refresh fails', async () => {
+  it('clears existing availability when allowInactive refresh fails', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('upstream unavailable'));
 
@@ -688,31 +688,23 @@ describe('refreshModelsForAccount credential discovery', () => {
       discoveredByCredential: false,
     });
 
+    // A failed refresh reports the truth: nothing was discovered, so nothing is
+    // left claiming availability (the rollback that kept the stale list is gone).
     const modelRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(modelRows).toHaveLength(1);
-    expect(modelRows[0]).toMatchObject({
-      accountId: account.id,
-      modelName: 'gpt-4.1',
-      available: true,
-    });
+    expect(modelRows).toHaveLength(0);
 
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
       .all();
-    expect(tokenRows).toHaveLength(1);
-    expect(tokenRows[0]).toMatchObject({
-      tokenId: token.id,
-      modelName: 'gpt-4.1',
-      available: true,
-    });
+    expect(tokenRows).toHaveLength(0);
   });
 
-  it('preserves existing availability when a scheduled (non-allowInactive) refresh fails', async () => {
-    // Regression: a transient upstream timeout during the scheduled full pass
-    // used to wipe the account's whole model set because the snapshot/restore
-    // only ran for allowInactive manual refreshes (2026-09-09 CAIC).
+  it('clears existing availability when a scheduled (non-allowInactive) refresh fails', async () => {
+    // A scheduled pass must behave exactly like a manual one: no discovery, no
+    // availability. Keeping the snapshot only for manual refreshes left the two
+    // paths disagreeing about what "refresh failed" means.
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('upstream unavailable'));
 
@@ -771,22 +763,12 @@ describe('refreshModelsForAccount credential discovery', () => {
     const modelRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(modelRows).toHaveLength(1);
-    expect(modelRows[0]).toMatchObject({
-      accountId: account.id,
-      modelName: 'gpt-4.1',
-      available: true,
-    });
+    expect(modelRows).toHaveLength(0);
 
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
       .all();
-    expect(tokenRows).toHaveLength(1);
-    expect(tokenRows[0]).toMatchObject({
-      tokenId: token.id,
-      modelName: 'gpt-4.1',
-      available: true,
-    });
+    expect(tokenRows).toHaveLength(0);
   });
 
   it('does not scan masked_pending placeholders as token credentials', async () => {
@@ -933,7 +915,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(manualRow?.isManual).toBe(true);
   });
 
-  it('preserves manual models when refresh fails and restores previous availability', async () => {
+  it('leaves the discovered list empty when refresh fails, keeping manual models', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockResolvedValue([]);
 
@@ -978,10 +960,10 @@ describe('refreshModelsForAccount credential discovery', () => {
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
 
-    // Both manual model and restored synced model should exist
+    // The failed refresh must not resurrect the previous list: the UI shows what
+    // the site actually returned, and the next success repopulates it.
     const modelNames = rows.map((r: any) => r.modelName).sort();
-    expect(modelNames).toContain('my-custom-model');
-    expect(modelNames).toContain('gpt-4.1');
+    expect(modelNames).toEqual(['my-custom-model']);
 
     const manualRow = rows.find((r: any) => r.modelName === 'my-custom-model');
     expect(manualRow?.isManual).toBe(true);
