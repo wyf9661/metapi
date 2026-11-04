@@ -56,6 +56,11 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
  * pausing would only add latency to failures that will not self-heal.
  */
 export function isRecoveringTransientFailure(status: number, upstreamErrorText?: string | null): boolean {
+  // A full per-minute bucket is a capacity state with its own wait-and-resend
+  // path (resolveMinuteRateLimitRetryWaitMs). Treating it as a recovering
+  // transient would additionally burn the generic grace retry on the same
+  // channel, so the request waits twice for the same window.
+  if (classifyProxyFailure({ status, errorText: upstreamErrorText }).class === 'minute_rate_limit') return false;
   // A 200-with-empty-body ('Upstream returned empty content') is a persisted
   // channel defect — the relay answers instantly with nothing — not an edge
   // block that clears within seconds. Same-channel grace/in-place retries only
@@ -93,6 +98,35 @@ export function resolveFailoverBackoffMs(
 export function sleepMs(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Extra wall-clock a request may spend waiting for a full minute bucket. */
+export const MINUTE_RATE_LIMIT_MAX_WAIT_MS = 15_000;
+/** Wait used when the rejection carries no reset hint (one bucket window). */
+export const MINUTE_RATE_LIMIT_DEFAULT_WAIT_MS = 5_000;
+
+/**
+ * How long to wait before resending on the SAME channel after a short-window
+ * rate limit. The upstream hint wins (it is the only party that knows when the
+ * bucket refills); without one we assume a few seconds. Bounded by the request's
+ * own wait budget and allowed exactly once: a bucket that is still full after
+ * the wait is upstream state, and another site is then the better answer.
+ */
+export function resolveMinuteRateLimitRetryWaitMs(input: {
+  alreadyRetried: boolean;
+  waitedMs: number;
+  upstreamRetryAfterMs?: number | null;
+  budgetMs?: number;
+}): number {
+  if (input.alreadyRetried) return 0;
+  const budgetMs = Math.max(0, Math.trunc(input.budgetMs ?? MINUTE_RATE_LIMIT_MAX_WAIT_MS));
+  const remainingMs = budgetMs - Math.max(0, Math.trunc(input.waitedMs || 0));
+  if (remainingMs <= 0) return 0;
+  const hintMs = typeof input.upstreamRetryAfterMs === 'number' && Number.isFinite(input.upstreamRetryAfterMs)
+    && input.upstreamRetryAfterMs > 0
+    ? Math.trunc(input.upstreamRetryAfterMs)
+    : MINUTE_RATE_LIMIT_DEFAULT_WAIT_MS;
+  return Math.min(hintMs, remainingMs);
 }
 
 /**

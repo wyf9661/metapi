@@ -605,3 +605,58 @@ describe('proxyChannelCoordinator', () => {
     })).toBe(10753);
   });
 });
+
+describe('minute rate limit capacity gate', () => {
+  beforeEach(() => {
+    resetProxyChannelCoordinatorState();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-04T04:00:00.000Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('makes every request for the same site+model wait for the shared window', async () => {
+    const first = proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+      key: '333:gpt-6.1-sol',
+      waitMs: 5_000,
+      budgetMs: 15_000,
+    });
+    const second = proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+      key: '333:gpt-6.1-sol',
+      waitMs: 0,
+      budgetMs: 15_000,
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await first).toBeGreaterThanOrEqual(5_000);
+    // The second one queues behind the first: it cannot fire at the same instant.
+    let secondSettled = false;
+    void second.then(() => { secondSettled = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(secondSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(secondSettled).toBe(true);
+  });
+
+  it('does not make other models or sites wait', async () => {
+    proxyChannelCoordinator.awaitMinuteRateLimitWindow({ key: '333:gpt-6.1-sol', waitMs: 5_000, budgetMs: 15_000 })
+      .catch(() => {});
+    const other = proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+      key: '333:gpt-6-astra',
+      waitMs: 0,
+      budgetMs: 15_000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(other).resolves.toBe(0);
+  });
+
+  it('gives up at the budget instead of holding the request forever', async () => {
+    const waiting = proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+      key: '333:gpt-6.1-sol',
+      waitMs: 60_000,
+      budgetMs: 15_000,
+    });
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(waiting).resolves.toBe(15_000);
+  });
+});

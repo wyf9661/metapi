@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { config } from '../../config.js';
 import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../../proxy-core/internalTransportMarker.js';
 import { resetUpstreamEndpointRuntimeState } from '../../services/upstreamEndpointRuntimeMemory.js';
+import { proxyChannelCoordinator } from '../../services/proxyChannelCoordinator.js';
 
 const fetchMock = vi.fn();
 const selectChannelMock = vi.fn();
@@ -76,6 +77,17 @@ vi.mock('../../services/proxyRetryPolicy.js', () => ({
   shouldRetryProxyRequest: () => false,
   shouldAbortSameSiteEndpointFallback: () => false,
   RETRYABLE_TIMEOUT_PATTERNS: [/(request timed out|connection timed out|read timeout|\btimed out\b)/i],
+  // Real arithmetic for the per-minute bucket wait (the decision itself is
+  // covered by proxyRetryPolicy.test.ts).
+  MINUTE_RATE_LIMIT_MAX_WAIT_MS: 15_000,
+  MINUTE_RATE_LIMIT_DEFAULT_WAIT_MS: 5_000,
+  resolveMinuteRateLimitRetryWaitMs: ({ alreadyRetried, waitedMs, upstreamRetryAfterMs, budgetMs }: any) => {
+    if (alreadyRetried) return 0;
+    const budget = Math.max(0, Math.trunc(budgetMs ?? 15_000)) - Math.max(0, Math.trunc(waitedMs || 0));
+    if (budget <= 0) return 0;
+    const hint = typeof upstreamRetryAfterMs === 'number' && upstreamRetryAfterMs > 0 ? upstreamRetryAfterMs : 5_000;
+    return Math.min(hint, budget);
+  },
 }));
 
 vi.mock('../../services/proxyUsageFallbackService.js', () => ({
@@ -179,6 +191,73 @@ describe('chat proxy stream behavior', () => {
   afterAll(async () => {
     if (app) {
       await app.close();
+    }
+  });
+
+  it('waits for a full per-minute bucket and resends on the same channel instead of failing over', async () => {
+    // Production shape: the relay answers 502 with the shared pool's token
+    // rate-limit message, then serves the same channel once the window passes.
+    // The same-site protocol cascade runs first; once it is exhausted the request
+    // must WAIT + resend on this channel, not spend a failover candidate.
+    const waitSpy = vi.spyOn(proxyChannelCoordinator, 'awaitMinuteRateLimitWindow').mockResolvedValue(5_000);
+    const limited = () => new Response(JSON.stringify({
+      error: { message: 'Your requests to upstream-gpt for upstream-gpt in eastus2 have exceeded token rate limit.' },
+    }), { status: 502, headers: { 'content-type': 'application/json' } });
+    const serve = () => new Response(JSON.stringify({
+      id: 'chatcmpl-after-wait',
+      object: 'chat.completion',
+      created: 1_706_000_000,
+      model: 'upstream-gpt',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'served after the window' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 5, completion_tokens: 4, total_tokens: 9 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    try {
+      fetchMock.mockReset();
+      // 1st round: every protocol endpoint of that channel is rate limited.
+      fetchMock.mockImplementationOnce(limited).mockImplementationOnce(limited).mockImplementationOnce(limited);
+      // 2nd round (after the wait): the same channel serves.
+      fetchMock.mockImplementation(serve);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        payload: { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] },
+      });
+
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json()?.choices?.[0]?.message?.content).toBe('served after the window');
+      expect(waitSpy).toHaveBeenCalledTimes(1);
+      expect(waitSpy.mock.calls[0]?.[0]).toMatchObject({ key: expect.stringContaining(':upstream-gpt'), waitMs: 5_000 });
+      // Nothing about this failure changes the chosen channel.
+      expect(selectChannelMock).toHaveBeenCalledTimes(1);
+      expect(selectNextChannelMock).not.toHaveBeenCalled();
+      expect(recordSuccessMock).toHaveBeenCalledTimes(1);
+    } finally {
+      waitSpy.mockRestore();
+    }
+  });
+
+  it('waits at most once and then hands the request to the normal failover', async () => {
+    const waitSpy = vi.spyOn(proxyChannelCoordinator, 'awaitMinuteRateLimitWindow').mockResolvedValue(5_000);
+    const limited = () => new Response(JSON.stringify({
+      error: { message: 'Your requests to upstream-gpt for upstream-gpt in eastus2 have exceeded token rate limit.' },
+    }), { status: 502, headers: { 'content-type': 'application/json' } });
+    try {
+      fetchMock.mockReset();
+      fetchMock.mockImplementation(limited);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        payload: { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] },
+      });
+
+      // One wait for the window, then no more: a still-full bucket is upstream
+      // state and the request must be answered instead of blocking on it.
+      expect(waitSpy).toHaveBeenCalledTimes(1);
+      expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    } finally {
+      waitSpy.mockRestore();
     }
   });
 

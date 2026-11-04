@@ -460,7 +460,7 @@ function updateModelConnectivityFromProxyLog(input: ProxyLogInsertInput): void {
 
   const status = String(input.status || '').toLowerCase();
   if (status !== 'success' && status !== 'failed') return;
-  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus)) return;
+  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus, input.errorMessage)) return;
 
   const modelName = String(input.modelActual || input.modelRequested || '').trim();
   if (!modelName) return;
@@ -486,7 +486,7 @@ async function applyModelConnectivityUpdate(input: ProxyLogInsertInput): Promise
 
   // Only transport-level failures say anything about reachability; 4xx/429 are
   // request-shape or policy rejections already handled by the channel cooldown.
-  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus)) return;
+  if (status === 'failed' && !isHardConnectivityFailure(status, input.httpStatus, input.errorMessage)) return;
 
   const modelName = String(input.modelActual || input.modelRequested || '').trim();
   if (!modelName) return;

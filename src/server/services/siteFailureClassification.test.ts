@@ -9,6 +9,7 @@ import {
   isWafBlockedRuntimeFailure,
   matchesAnyPattern,
   resolveSiteRuntimeFailurePenalty,
+  shouldExcludeSiteForRequestFailure,
   SITE_TRANSIENT_FAILURE_PATTERNS,
   classifyProxyFailure,
   buildProxyFailureDisposition,
@@ -18,6 +19,38 @@ import {
 import { config } from '../config.js';
 
 describe('siteFailureClassification', () => {
+  it('classifies a short-window rate limit as capacity, even when wrapped in 5xx', () => {
+    // "Your requests to gpt-6.1-sol ... in eastus2 have exceeded token rate limit."
+    const real = 'Your requests to gpt-6.1-sol for gpt-6.1-sol in eastus2 have exceeded token rate limit.';
+    const disposition = buildProxyFailureDisposition({ status: 502, errorText: real, modelName: 'gpt-6.1-sol' });
+    expect(disposition).toMatchObject({
+      class: 'minute_rate_limit',
+      retryChannel: true,
+      retrySameChannelAfterWait: true,
+      // Recorded as a short congestion cooldown, but the site's health score
+      // keeps its normal path (penalty lowered above) — capacity is not outage.
+      cooldownScope: 'channel_model',
+    });
+    // Not a site outage: the sibling account on the same site is the cheapest
+    // recovery, so the site must stay usable and the session keeps its affinity.
+    expect(shouldExcludeSiteForRequestFailure({ status: 502, errorText: real })).toBe(false);
+    expect(disposition.clearSticky).toBe(false);
+    expect(disposition.clearLastSuccess).toBe(false);
+    expect(isLowValueFailoverFailureClass('minute_rate_limit')).toBe(false);
+  });
+
+  it('keeps quota, credential and plain 5xx states out of the short-window class', () => {
+    for (const [status, errorText] of [
+      [502, 'Bad gateway'],
+      [401, 'invalid api key'],
+      [429, 'quota exceeded'],
+      [400, 'This model\'s maximum context length is 128000 tokens'],
+      [429, 'usage_limit_reached'],
+    ] as const) {
+      expect(classifyProxyFailure({ status, errorText }).class).not.toBe('minute_rate_limit');
+    }
+  });
+
   it('builds one disposition for retry and health mutation consumers', () => {
     expect(buildProxyFailureDisposition({
       status: 400,

@@ -8,6 +8,7 @@ import {
 import { readRuntimeResponseText, type ReadRuntimeResponseTextOptions } from '../executors/types.js';
 import { fetchWithObservedFirstByte, isObservedFirstByteTimeoutResponse } from '../firstByteTimeout.js';
 import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
+import { parseUpstreamRetryHint } from '../../services/upstreamRetryAfter.js';
 import { mergeParamOverrideIntoBody } from '../../services/siteParamOverride.js';
 import {
   buildUpstreamUrl,
@@ -70,6 +71,8 @@ export type EndpointFlowResult =
     status: number;
     errText: string;
     rawErrText?: string;
+    /** Reset hint (Retry-After / *-ratelimit-*-reset) of the failing response. */
+    retryAfterMs?: number | null;
   };
 
 export type ExecuteEndpointFlowInput = {
@@ -138,6 +141,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
   let finalStatus = 0;
   let finalErrText = 'unknown error';
   let finalRawErrText: string | undefined;
+  // The last failing response's reset hint: parsed once here because the response
+  // headers are gone by the time the failure reaches the retry decision.
+  let finalRetryAfterMs: number | null = null;
   const readFailureBody = (response: Awaited<ReturnType<typeof fetch>>) => (
     readRuntimeResponseText(response, input.bodyReadOptions).catch((error) => {
       // An idle upstream error body may still fall back; a disconnected caller
@@ -149,6 +155,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
 
   for (let endpointIndex = 0; endpointIndex < endpointCount; endpointIndex += 1) {
     input.bodyReadOptions?.signal?.throwIfAborted();
+    finalRetryAfterMs = null;
     const endpoint = input.endpointCandidates[endpointIndex] as UpstreamEndpoint;
     const request = input.buildRequest(endpoint, endpointIndex);
     if (input.requestOverrideRules) {
@@ -250,6 +257,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       finalStatus = response.status || 408;
       finalErrText = errText;
       finalRawErrText = rawErrText;
+      finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
       // Timeouts are site/origin latency. Surfaces pass shouldAbortRemainingEndpoints
       // from the shared taxonomy so production aborts cascade; callers without a
       // hook keep legacy fall-through for protocol recovery experiments/tests.
@@ -303,6 +311,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     input.bodyReadOptions?.signal?.throwIfAborted();
     rawErrText = baseContext.rawErrText;
     response = baseContext.response;
+    finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
     let errText = withUpstreamPath(
       baseContext.request.path,
       summarizeUpstreamError(response.status, rawErrText),
@@ -377,6 +386,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       finalStatus = response.status;
       finalErrText = errText;
       finalRawErrText = rawErrText;
+      finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
       break;
     }
     const shouldAbortRemainingEndpoints = !isLastEndpoint && !!input.shouldAbortRemainingEndpoints?.({
@@ -387,6 +397,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       finalStatus = response.status;
       finalErrText = errText;
       finalRawErrText = rawErrText;
+      finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
       break;
     }
     const shouldDowngrade = !isLastEndpoint && !!input.shouldDowngrade?.(baseContext);
@@ -401,6 +412,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     finalStatus = response.status;
     finalErrText = errText;
     finalRawErrText = rawErrText;
+    finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
     break;
   }
 
@@ -409,5 +421,6 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     status: finalStatus || 502,
     errText: finalErrText || 'unknown error',
     rawErrText: finalRawErrText,
+    retryAfterMs: finalRetryAfterMs,
   };
 }

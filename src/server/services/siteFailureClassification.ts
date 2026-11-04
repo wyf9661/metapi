@@ -64,6 +64,7 @@ export type ProxyFailureClass =
   | 'ambiguous_client'
   | 'endpoint_pool_down'
   | 'local_capacity'
+  | 'minute_rate_limit'
   | 'unknown';
 
 export type ProxyFailureDecision = {
@@ -280,9 +281,28 @@ export function matchesAnyPattern(patterns: RegExp[], input?: string | null): bo
   return patterns.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Short-window (per-minute) capacity rejection — the site's RPM/TPM bucket is
+ * full for this window. Upstreams wrap it in 429, but also in 5xx (a relay
+ * forwarding a shared model pool answers 502), so the text decides, not the
+ * status. Kept narrow: quota/credit exhaustion, credential death and
+ * long-window usage limits are different states with different recoveries.
+ */
+const MINUTE_RATE_LIMIT_PATTERNS: RegExp[] = [
+  /exceeded\s+(?:token|request|requests|rpm|tpm)\s+rate\s+limit/i,
+  /(?:requests?|tokens?)\s+per\s+(?:minute|min)\s+(?:limit\s+)?(?:exceeded|reached)/i,
+  /(?:rpm|tpm)\s+(?:limit\s+)?(?:exceeded|reached)/i,
+  /rate\s+limit\s+exceeded.*(?:per\s+minute|retry\s+after)/i,
+];
+
+export function isMinuteRateLimitFailure(context: SiteRuntimeFailureContext = {}): boolean {
+  return matchesAnyPattern(MINUTE_RATE_LIMIT_PATTERNS, context.errorText);
+}
+
 export function isUsageLimitRateLimitFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const status = typeof context.status === 'number' ? context.status : 0;
   if (status !== 429) return false;
+  if (isMinuteRateLimitFailure(context)) return false;
   return matchesAnyPattern(USAGE_LIMIT_RATE_LIMIT_PATTERNS, context.errorText);
 }
 
@@ -340,6 +360,12 @@ export function isWafBlockedRuntimeFailure(context: SiteRuntimeFailureContext = 
 export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureContext = {}): number {
   const status = typeof context.status === 'number' ? context.status : 0;
   const errorText = (context.errorText || '').trim();
+
+  if (isMinuteRateLimitFailure({ status, errorText })) {
+    // A full per-minute bucket is capacity, not site health: penalising it like
+    // a 5xx demotes a perfectly good site for the rest of the scoring window.
+    return 0.2;
+  }
 
   if (isUsageLimitRateLimitFailure({ status, errorText })) {
     return 0.4;
@@ -574,6 +600,19 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
       cascadeEndpoint: false,
       cooldownWeight: 0.2,
       cooldownScope: 'none',
+    };
+  }
+
+  if (isMinuteRateLimitFailure(ctx)) {
+    return {
+      class: 'minute_rate_limit',
+      // Same-channel wait first (disposition.retrySameChannelAfterWait); the
+      // channel keeps serving, so a repeat must NOT end the request before the
+      // sibling/new-site channel gets its turn.
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 0.2,
+      cooldownScope: 'channel_model',
     };
   }
 
@@ -919,6 +958,12 @@ export type ProxyFailureDisposition = ProxyFailureDecision & {
   incrementFailure: boolean;
   clearSticky: boolean;
   clearLastSuccess: boolean;
+  /**
+   * Wait + resend on the SAME channel once before failover. Only short-window
+   * capacity rejections set it: the channel is healthy, its minute bucket is
+   * full, and switching sites forfeits a working upstream for a few seconds.
+   */
+  retrySameChannelAfterWait?: boolean;
 };
 
 export function buildProxyFailureDisposition(
@@ -940,15 +985,20 @@ export function buildProxyFailureDisposition(
   // losing whatever prompt cache the original channel held.
   const clearSticky = incrementFailure
     && retryAction !== 'cascade_endpoint'
-    && decision.class !== 'timeout';
+    && decision.class !== 'timeout'
+    // Capacity, not death: waiting on the same channel must not release the
+    // session, or the retried conversation loses its prompt cache for nothing.
+    && decision.class !== 'minute_rate_limit';
   const clearLastSuccess = decision.class === 'credential_invalid'
-    || (retryAction === 'failover_channel' && incrementFailure);
+    || (retryAction === 'failover_channel' && incrementFailure
+      && decision.class !== 'minute_rate_limit');
   return {
     ...decision,
     retryAction,
     incrementFailure,
     clearSticky,
     clearLastSuccess,
+    ...(decision.class === 'minute_rate_limit' ? { retrySameChannelAfterWait: true } : {}),
   };
 }
 
@@ -975,6 +1025,9 @@ export function shouldAbortSameSiteEndpointForFailure(context: SiteRuntimeFailur
  */
 export function isLowValueFailoverFailureClass(failureClass: ProxyFailureClass): boolean {
   if (failureClass === 'waf_blocked') return false;
+  // A rate-limited channel is exactly the one another site can serve right now,
+  // so repeating it must not stop the cascade early.
+  if (failureClass === 'minute_rate_limit') return false;
   return failureClass === 'credential_invalid'
     || failureClass === 'model_unsupported'
     || failureClass === 'quota_or_credit'
@@ -996,6 +1049,10 @@ export function shouldExcludeSiteForRequestFailure(context: SiteRuntimeFailureCo
   // no channel and the client gets a 502 instead. Classify it as channel-scoped
   // and let the router move to the next channel of the same site.
   if (isEmptyContentFailureText(context.errorText)) return false;
+  // A full per-minute bucket is shared by the model's pool, so a sibling
+  // account on the same site is the one that CAN serve right now. Never drop the
+  // whole site for it: the sibling is the cheapest recovery we have.
+  if (classifyProxyFailure(context).class === 'minute_rate_limit') return false;
   const decision = classifyProxyFailure(context);
   if (decision.class === 'waf_blocked'
     || decision.class === 'credential_invalid'

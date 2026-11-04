@@ -69,10 +69,13 @@ import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { mapUpstreamErrorForClient } from '../../shared/siteProtocolProfile.js';
 import { tokenRouter } from '../../services/tokenRouter.js';
-import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce } from '../../services/proxyRetryPolicy.js';
+import { buildProxyFailureDisposition } from '../../services/siteFailureClassification.js';
+import { parseUpstreamRetryHint } from '../../services/upstreamRetryAfter.js';
+import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce, resolveMinuteRateLimitRetryWaitMs, MINUTE_RATE_LIMIT_MAX_WAIT_MS } from '../../services/proxyRetryPolicy.js';
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
+  buildMinuteRateLimitKey,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
   clearSurfaceChannelAffinity,
@@ -258,6 +261,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
     let graceRetriedOnce = false;
     // 空内容（含 pure-thinking 截断）：同站同账号原地重试一次，失败才切站。
     let emptyContentRetriedOnce = false;
+    // 分钟级限流：同渠道等窗口后重发一次（见 chatSurface 的同一决策）。
+    let minuteRateLimitRetriedOnce = false;
+    let minuteRateLimitWaitedMs = 0;
+    // 限流等待前先交回渠道槽位，见 chatSurface 的同一处理。
+    let currentChannelLease: { release(): void } | null = null;
+    const releaseCurrentLease = () => {
+      currentChannelLease?.release();
+      currentChannelLease = null;
+    };
     const lastRetryFailure = {
       current: null as ReturnType<typeof finalizeRetryAsUpstreamFailure> | null,
     };
@@ -306,6 +318,8 @@ export async function handleOpenAiResponsesSurfaceRequest(
         | ReturnType<typeof finalizeRetryAsUpstreamFailure>
         | ReturnType<typeof finalizeRetryAsExecutionFailure>;
       upstreamPath: string | null;
+      /** Upstream reset hint for this failure (Retry-After / ratelimit-reset). */
+      retryAfterMs?: number | null;
       /** The generic catch path never memoised its retry failure; keep that. */
       rememberFailure?: boolean;
     }): Promise<'retried' | 'terminal'> => {
@@ -314,7 +328,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
       const terminalFailureOutcome = args.failureOutcome.action === 'retry'
         ? (
           canFailoverToNextChannel(reply)
-          && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason))
+          && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason) || (args.failureOutcome.minuteRateLimitRetry === true && !minuteRateLimitRetriedOnce))
             ? null
             : args.finalizeTerminalRetry()
         )
@@ -322,6 +336,29 @@ export async function handleOpenAiResponsesSurfaceRequest(
       if (!terminalFailureOutcome) {
         if (!isRecoveringTransientFailure(args.status, args.reason)) {
           allFailuresRecovering = false;
+        }
+        // 分钟级限流：先等窗口，再用同一渠道重发一次；不换站、不退亲和。
+        // 只看动作不够（普通重试也是同一个动作），必须同时确认失败类别。
+        if (args.failureOutcome.action === 'retry' && args.failureOutcome.minuteRateLimitRetry === true
+          && buildProxyFailureDisposition({ status: args.status, errorText: args.reason }).class === 'minute_rate_limit') {
+          const requestKey = buildMinuteRateLimitKey(args.selected);
+          const waitMs = resolveMinuteRateLimitRetryWaitMs({
+            alreadyRetried: minuteRateLimitRetriedOnce,
+            waitedMs: minuteRateLimitWaitedMs,
+            upstreamRetryAfterMs: args.retryAfterMs ?? null,
+            budgetMs: MINUTE_RATE_LIMIT_MAX_WAIT_MS,
+          });
+          if (waitMs > 0 && requestKey) {
+            minuteRateLimitRetriedOnce = true;
+            inPlaceRetryChannel = args.selected;
+            releaseCurrentLease();
+            minuteRateLimitWaitedMs += await proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+              key: requestKey,
+              waitMs,
+              budgetMs: MINUTE_RATE_LIMIT_MAX_WAIT_MS - minuteRateLimitWaitedMs,
+            });
+            return 'retried';
+          }
         }
         // Grace window: stay on the same channel for a configurable grace
         // period on transient-recovering failures (WAF/429/5xx) before
@@ -967,6 +1004,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         return reply;
       }
       const channelLease = leaseResult.lease;
+      currentChannelLease = channelLease;
 
       try {
         const endpointResult = await runWithSiteApiEndpointPool(selected.site, async (target) => {
@@ -975,6 +1013,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             const upstreamFailure = new SiteApiEndpointRequestError(result.errText || 'unknown error', {
               status: result.status || 502,
               rawErrText: result.rawErrText || result.errText || 'unknown error',
+              retryAfterMs: result.retryAfterMs ?? null,
             }) as SiteApiEndpointRequestError & { siteApiEndpointUpstreamFailure?: boolean };
             upstreamFailure.siteApiEndpointUpstreamFailure = true;
             throw upstreamFailure;
@@ -999,7 +1038,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
               parsedUsage,
               upstreamUsagePresent,
               upstreamHeaders: upstream.headers,
-              requestStartedAtMs: startTime,
+requestStartedAtMs: startTime,
               isStream: true,
               firstByteLatencyMs,
               latencyMs: latency,
@@ -1152,12 +1191,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
             const latency = Date.now() - startTime;
             const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	            if (failure) {
-	              clearSurfaceChannelAffinity({
-	                stickySessionKey,
-	                selected,
-	                requestedModel,
-	                downstreamApiKeyId,
-	              });
+	              // 限流是容量状态：退亲和会把重试赶到别的站，见 chatSurface 同一判断。
+	              if (buildProxyFailureDisposition({ status: failure.status, errorText: failure.reason, modelName }).clearSticky) {
+	                clearSurfaceChannelAffinity({
+	                  stickySessionKey,
+	                  selected,
+	                  requestedModel,
+	                  downstreamApiKeyId,
+	                });
+	              }
 	              const failureOutcome = await failureToolkit.handleDetectedFailure({
 	                selected,
             requestedModel,
@@ -1170,13 +1212,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
                 totalTokens: parsedUsage.totalTokens,
                 upstreamPath: successfulUpstreamPath,
                 upstreamHeaders: upstream.headers,
-	              });
+	              rateLimitWaitMs: minuteRateLimitWaitedMs,
+});
 	              if (await continueAttemptOrTerminate({
 	                selected,
 	                failureOutcome,
 	                status: failure.status,
 	                reason: failure.reason,
-	                finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
+	                retryAfterMs: parseUpstreamRetryHint(upstream.headers).retryAfterMs,
+finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
 	                upstreamPath: successfulUpstreamPath,
 	              }) === 'retried') continue;
 	              return reply;
@@ -1358,12 +1402,14 @@ export async function handleOpenAiResponsesSurfaceRequest(
         const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
         const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
 	        if (failure) {
-	          clearSurfaceChannelAffinity({
-	            stickySessionKey,
-	            selected,
-	            requestedModel,
-	            downstreamApiKeyId,
-	          });
+	          if (buildProxyFailureDisposition({ status: failure.status, errorText: failure.reason, modelName }).clearSticky) {
+	            clearSurfaceChannelAffinity({
+	              stickySessionKey,
+	              selected,
+	              requestedModel,
+	              downstreamApiKeyId,
+	            });
+	          }
 	          const failureOutcome = await failureToolkit.handleDetectedFailure({
 	            selected,
             requestedModel,
@@ -1376,13 +1422,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
             totalTokens: parsedUsage.totalTokens,
             upstreamPath: successfulUpstreamPath,
             upstreamHeaders: upstream.headers,
-	          });
+	          rateLimitWaitMs: minuteRateLimitWaitedMs,
+});
 	          if (await continueAttemptOrTerminate({
 	            selected,
 	            failureOutcome,
 	            status: failure.status,
 	            reason: failure.reason,
-	            finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
+	            retryAfterMs: parseUpstreamRetryHint(upstream.headers).retryAfterMs,
+finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
 	            upstreamPath: successfulUpstreamPath,
 	          }) === 'retried') continue;
 	          return reply;
@@ -1406,7 +1454,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
             parsedUsage,
             upstreamUsagePresent,
             upstreamHeaders: upstream.headers,
-            requestStartedAtMs: startTime,
+requestStartedAtMs: startTime,
             isStream: false,
             firstByteLatencyMs,
             latencyMs: latency,
@@ -1473,12 +1521,15 @@ export async function handleOpenAiResponsesSurfaceRequest(
           isStream,
           latencyMs: Date.now() - startTime,
           retryCount,
+          // 重置提示只能靠错误对象带过来：响应头在这一层已经没了。
+          rateLimitWaitMs: minuteRateLimitWaitedMs,
         });
             if (await continueAttemptOrTerminate({
               selected,
               failureOutcome,
               status: endpointFailureStatus || 502,
               reason: err?.message || null,
+              retryAfterMs: typeof err?.retryAfterMs === 'number' ? err.retryAfterMs : null,
               retryFailureReason: err?.message || 'unknown error',
               finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err?.message || 'unknown error'),
               upstreamPath: null,

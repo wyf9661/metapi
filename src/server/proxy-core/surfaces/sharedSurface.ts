@@ -58,7 +58,7 @@ type SurfaceFailureResponse = {
 };
 
 type SurfaceFailureOutcome =
-  | { action: 'retry'; excludeSiteId?: number | null; inPlace?: boolean }
+  | { action: 'retry'; excludeSiteId?: number | null; inPlace?: boolean; minuteRateLimitRetry?: boolean }
   | SurfaceFailureResponse;
 
 type SurfaceSuccessSelectedChannel = SurfaceSelectedChannel & {
@@ -580,6 +580,30 @@ export async function recordSurfaceSuccess(input: {
   };
 }
 
+/**
+ * Capacity-gate key for a short-window rate limit. The bucket belongs to the
+ * upstream pool serving (site, actual model) — not to a downstream session — so
+ * every request for that pair queues behind the same window.
+ */
+export function buildMinuteRateLimitKey(selected: {
+  site?: { id?: number | null; url?: string | null; name?: string | null } | null;
+  actualModel?: string | null;
+}): string | null {
+  const siteId = selected.site?.id;
+  const siteKey = typeof siteId === 'number' && Number.isFinite(siteId) && siteId > 0
+    ? String(Math.trunc(siteId))
+    // Fall back to the site identity the call site actually carries; the gate
+    // only has to be stable for the same upstream, not parseable.
+    : String(selected.site?.url || selected.site?.name || '').trim().toLowerCase();
+  const model = String(selected.actualModel || '').trim().toLowerCase();
+  if (!siteKey || !model) return null;
+  return `${siteKey}:${model}`;
+}
+
+function buildMinuteRateLimitLogSuffix(waitMs: number): string {
+  return ` [rate-limit-wait:${Math.max(0, Math.trunc(waitMs))}ms]`;
+}
+
 export function createSurfaceFailureToolkit(input: {
   warningScope: SurfaceWarningScope;
   downstreamPath: string;
@@ -751,6 +775,12 @@ export function createSurfaceFailureToolkit(input: {
       }
       return null;
     }
+    // A full per-minute bucket: resend on the same channel once after waiting for
+    // the window. Not an excluded site and not counted toward the low-value
+    // streak — the channel is healthy, this request just lost a race for quota.
+    if (disposition.retrySameChannelAfterWait === true) {
+      return { action: 'retry' as const, excludeSiteId: null, minuteRateLimitRetry: true };
+    }
     if (!disposition.retryChannel) return null;
     // Advance the low-value streak only for failures of FRESH channel
     // attempts. Same-channel in-place grace retries keep retryCount
@@ -821,6 +851,13 @@ export function createSurfaceFailureToolkit(input: {
       retryCount: number;
       /** The failed response's headers, when the caller still has them. */
       upstreamHeaders?: { get(name: string): string | null } | null;
+      /**
+       * Milliseconds this attempt already spent waiting for the channel's
+       * per-minute window. Recorded in the failure log so an operator can tell
+       * "waited and retried" apart from "a slow rejection", without letting the
+       * log parser add extra retries for the same text.
+       */
+      rateLimitWaitMs?: number;
     }): Promise<SurfaceFailureOutcome> {
       const rawErrText = args.rawErrText || args.errText;
       const disposition = buildProxyFailureDisposition({
@@ -851,7 +888,9 @@ export function createSurfaceFailureToolkit(input: {
         isStream: args.isStream ?? null,
         firstByteLatencyMs: args.firstByteLatencyMs ?? null,
         latencyMs: args.latencyMs,
-        errorMessage: args.errText,
+        errorMessage: disposition.class === 'minute_rate_limit' && (args.rateLimitWaitMs ?? 0) > 0
+          ? `${args.errText}${buildMinuteRateLimitLogSuffix(args.rateLimitWaitMs!)}`
+          : args.errText,
         retryCount: args.retryCount,
       });
       if (isTokenExpiredError({ status: args.status, message: args.errText })) {
@@ -907,6 +946,12 @@ export function createSurfaceFailureToolkit(input: {
       upstreamPath?: string | null;
       /** The failed response's headers, when the caller still has them. */
       upstreamHeaders?: { get(name: string): string | null } | null;
+      /**
+       * Milliseconds this attempt already spent waiting for the channel's
+       * per-minute window (0 on the first rejection). Logged so an operator can
+       * tell "waited, retried, still limited" from a plain slow rejection.
+       */
+      rateLimitWaitMs?: number;
     }): Promise<SurfaceFailureOutcome> {
       const disposition = buildProxyFailureDisposition({
         status: args.failure.status,
@@ -948,7 +993,9 @@ export function createSurfaceFailureToolkit(input: {
         isStream: args.isStream ?? null,
         firstByteLatencyMs: args.firstByteLatencyMs ?? null,
         latencyMs: args.latencyMs,
-        errorMessage: args.failure.reason,
+        errorMessage: disposition.class === 'minute_rate_limit' && (args.rateLimitWaitMs ?? 0) > 0
+          ? `${args.failure.reason}${buildMinuteRateLimitLogSuffix(args.rateLimitWaitMs!)}`
+          : args.failure.reason,
         retryCount: args.retryCount,
         promptTokens: args.promptTokens,
         completionTokens: args.completionTokens,
