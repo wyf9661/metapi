@@ -153,7 +153,9 @@
 /* ===== Route Card Grid (multi-column) ===== */
 .route-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  /* 2 columns at 1440px, not 3: with the mode label and the channel chips a
+     400px lane wraps into a third line and every card reads as crowded. */
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
   gap: 10px;
   align-items: start;
 }

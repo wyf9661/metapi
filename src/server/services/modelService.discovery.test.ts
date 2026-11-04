@@ -632,7 +632,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     });
   });
 
-  it('clears existing availability when allowInactive refresh fails', async () => {
+  it('keeps existing availability when a transient allowInactive refresh fails', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockRejectedValue(new Error('upstream unavailable'));
 
@@ -688,20 +688,78 @@ describe('refreshModelsForAccount credential discovery', () => {
       discoveredByCredential: false,
     });
 
-    // A failed refresh reports the truth: nothing was discovered, so nothing is
-    // left claiming availability (the rollback that kept the stale list is gone).
+    // A transient verdict keeps the rows so traffic survives the metadata blip;
+    // the account health write is what marks them as a previous result.
+    const modelRows = await db.select().from(schema.modelAvailability)
+      .where(eq(schema.modelAvailability.accountId, account.id))
+      .all();
+    expect(modelRows).toHaveLength(1);
+    expect(modelRows[0]).toMatchObject({ modelName: 'gpt-4.1', available: true });
+
+    const tokenRows = await db.select().from(schema.tokenModelAvailability)
+      .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+      .all();
+    expect(tokenRows).toHaveLength(1);
+  });
+
+  it('clears existing availability when the credential itself is rejected', async () => {
+    // 401/403 is the one verdict where the old list no longer describes what the
+    // account may route, so it must not be kept.
+    getApiTokenMock.mockResolvedValue(null);
+    getModelsMock.mockRejectedValue(new Error('HTTP 401: invalid token'));
+
+    const site = await db.insert(schema.sites).values({
+      name: 'site-revoked-key',
+      url: 'https://site-revoked-key.example.com',
+      platform: 'new-api',
+      status: 'active',
+    }).returning().get();
+
+    const account = await db.insert(schema.accounts).values({
+      siteId: site.id,
+      username: 'revoked-user',
+      accessToken: 'session-token',
+      apiToken: null,
+      status: 'active',
+      extraConfig: JSON.stringify({ credentialMode: 'session' }),
+    }).returning().get();
+
+    const token = await db.insert(schema.accountTokens).values({
+      accountId: account.id,
+      name: 'default',
+      token: 'sk-revoked',
+      source: 'manual',
+      enabled: true,
+      isDefault: true,
+      valueStatus: 'ready' as any,
+    }).returning().get();
+
+    await db.insert(schema.modelAvailability).values({
+      accountId: account.id,
+      modelName: 'gpt-4.1',
+      available: true,
+      isManual: false,
+    }).run();
+    await db.insert(schema.tokenModelAvailability).values({
+      tokenId: token.id,
+      modelName: 'gpt-4.1',
+      available: true,
+    }).run();
+
+    const result = await refreshModelsForAccount(account.id);
+
+    expect(result).toMatchObject({ status: 'failed', errorCode: 'unauthorized' });
     const modelRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
     expect(modelRows).toHaveLength(0);
-
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
       .all();
     expect(tokenRows).toHaveLength(0);
   });
 
-  it('clears existing availability when a scheduled (non-allowInactive) refresh fails', async () => {
+  it('keeps existing availability when a scheduled (non-allowInactive) refresh fails', async () => {
     // A scheduled pass must behave exactly like a manual one: no discovery, no
     // availability. Keeping the snapshot only for manual refreshes left the two
     // paths disagreeing about what "refresh failed" means.
@@ -763,12 +821,12 @@ describe('refreshModelsForAccount credential discovery', () => {
     const modelRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(modelRows).toHaveLength(0);
+    expect(modelRows).toHaveLength(1);
 
     const tokenRows = await db.select().from(schema.tokenModelAvailability)
       .where(eq(schema.tokenModelAvailability.tokenId, token.id))
       .all();
-    expect(tokenRows).toHaveLength(0);
+    expect(tokenRows).toHaveLength(1);
   });
 
   it('does not scan masked_pending placeholders as token credentials', async () => {
@@ -915,7 +973,7 @@ describe('refreshModelsForAccount credential discovery', () => {
     expect(manualRow?.isManual).toBe(true);
   });
 
-  it('leaves the discovered list empty when refresh fails, keeping manual models', async () => {
+  it('keeps the discovered list when a refresh fails for a transient reason', async () => {
     getApiTokenMock.mockResolvedValue(null);
     getModelsMock.mockResolvedValue([]);
 
@@ -960,10 +1018,10 @@ describe('refreshModelsForAccount credential discovery', () => {
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
 
-    // The failed refresh must not resurrect the previous list: the UI shows what
-    // the site actually returned, and the next success repopulates it.
+    // Transient failure: the previous list stays (routing keeps working) and the
+    // manual model is untouched.
     const modelNames = rows.map((r: any) => r.modelName).sort();
-    expect(modelNames).toEqual(['my-custom-model']);
+    expect(modelNames).toEqual(['gpt-4.1', 'my-custom-model']);
 
     const manualRow = rows.find((r: any) => r.modelName === 'my-custom-model');
     expect(manualRow?.isManual).toBe(true);

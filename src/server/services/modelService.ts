@@ -620,12 +620,31 @@ async function doRefreshModelsForAccount(
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
 
-  // A failed refresh leaves the account with no discovered models. That is the
-  // honest state and it is what the UI shows: restoring the previous list made
-  // a dead site look healthy until the next whatever-request failed, and hid
-  // "this site stopped answering /v1/models" behind a plausible model list.
-  // Manual models are never touched (isManual rows are excluded below), and the
-  // next successful refresh repopulates everything.
+  // A failed refresh must not silently look like a successful one, but it also
+  // must not destroy a working routing table: only a confirmed credential
+  // failure (401/403) makes the discovered list meaningless and clears it.
+  // Every other verdict (timeout, shield page, empty list, 5xx) keeps the
+  // previous rows so traffic keeps flowing; the account is marked degraded with
+  // source 'model-discovery', which the selection engine reads to demote it and
+  // the UI reads to label the list as a previous result.
+  const snapshotAvailability = async () => ({
+    models: await db.select()
+      .from(schema.modelAvailability)
+      .where(and(
+        eq(schema.modelAvailability.accountId, accountId),
+        eq(schema.modelAvailability.isManual, false),
+      ))
+      .all(),
+    tokens: (await Promise.all(
+      (await db.select({ id: schema.accountTokens.id })
+        .from(schema.accountTokens)
+        .where(eq(schema.accountTokens.accountId, accountId))
+        .all()).map(async (token: any) => db.select()
+        .from(schema.tokenModelAvailability)
+        .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+        .all()),
+    )).flat(),
+  });
   const clearExistingAvailability = async () => {
     await db.delete(schema.modelAvailability)
       .where(and(
@@ -644,6 +663,28 @@ async function doRefreshModelsForAccount(
       await db.delete(schema.tokenModelAvailability)
         .where(inArray(schema.tokenModelAvailability.tokenId, tokenIds))
         .run();
+    }
+  };
+
+  const restorePreviousAvailabilityUnlessCredentialFailure = async (
+    errorCode: ModelRefreshErrorCode,
+    previous: Awaited<ReturnType<typeof snapshotAvailability>>,
+  ) => {
+    // A revoked/invalid key means the discovered list no longer describes what
+    // this account can route, so it must go. Everything else keeps the list:
+    // those rows are what keeps traffic alive through a metadata blip, and the
+    // account health write below is what stops them from looking current.
+    if (errorCode === 'unauthorized') return;
+    if (previous.models.length === 0 && previous.tokens.length === 0) return;
+    if (previous.models.length > 0) {
+      await db.insert(schema.modelAvailability).values(
+        previous.models.map(({ id: _id, ...row }: any) => row),
+      ).onConflictDoNothing().run();
+    }
+    if (previous.tokens.length > 0) {
+      await db.insert(schema.tokenModelAvailability).values(
+        previous.tokens.map(({ id: _id, ...row }: any) => row),
+      ).onConflictDoNothing().run();
     }
   };
 
@@ -670,6 +711,7 @@ async function doRefreshModelsForAccount(
   // Only wipe the previous availability once we know this refresh will run:
   // the skip paths above must not leave the account with zero models (and
   // therefore zero routes) until the next full pass.
+  const previousAvailability = await snapshotAvailability();
   await clearExistingAvailability();
 
   if (!adapter) {
@@ -736,6 +778,7 @@ async function doRefreshModelsForAccount(
     const rawMessage = (err as { message?: string })?.message || '模型获取失败';
     const errorCode = classifyModelDiscoveryError(rawMessage);
     const errorMessage = rawMessage;
+    await restorePreviousAvailabilityUnlessCredentialFailure(errorCode, previousAvailability);
     await setAccountRuntimeHealth(account.id, {
       state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,
@@ -894,6 +937,7 @@ async function doRefreshModelsForAccount(
     const firstMessage = failureMessages[0] || '';
     const errorCode = firstMessage ? classifyModelDiscoveryError(firstMessage) : 'empty_models';
     const errorMessage = buildModelFailureMessage(errorCode, firstMessage, site.platform);
+    await restorePreviousAvailabilityUnlessCredentialFailure(errorCode, previousAvailability);
     await setAccountRuntimeHealth(account.id, {
       state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,

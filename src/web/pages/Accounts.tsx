@@ -887,6 +887,7 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         ...runtimeHealthMap.unhealthy,
         label: tr('已过期'),
         reason: account.runtimeHealth?.reason || tr('连接凭证已过期，请更新凭证'),
+        modelListStale: false,
       };
     }
     const capabilities = resolveAccountCapabilities(account);
@@ -905,7 +906,12 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
         : state === 'unhealthy'
           ? tr('最近健康检查失败')
           : tr('尚未获取运行健康信息'));
-    return { state, reason, ...cfg };
+    // A failed model discovery keeps the previous rows server-side; label them
+    // as a previous result instead of letting the list pass for current.
+    const modelListStale =
+      account.runtimeHealth?.source === 'model-discovery' &&
+      (state === 'unhealthy' || state === 'degraded');
+    return { state, reason, modelListStale, ...cfg };
   };
 
   const resolveAccountCapabilities = (account: any) => {
@@ -2375,6 +2381,15 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                               >
                                 {health.reason}
                               </span>
+                              {health.modelListStale && (
+                                <StatusText
+                                  tone="warning"
+                                  style={{ fontSize: 11 }}
+                                  data-tooltip={health.reason}
+                                >
+                                  {tr('刷新失败，显示上次结果')}
+                                </StatusText>
+                              )}
                             </div>
                           }
                         />
@@ -2626,6 +2641,16 @@ export default function Accounts({ siteId: filterSiteId }: AccountsProps = {}) {
                                   >
                                     {health.reason}
                                   </span>
+                                  {health.modelListStale && (
+                                    <StatusText
+                                      tone="warning"
+                                      style={{ fontSize: 11 }}
+                                      data-tooltip={health.reason}
+                                      title={health.reason}
+                                    >
+                                      {tr('刷新失败，显示上次结果')}
+                                    </StatusText>
+                                  )}
                                 </div>
                               );
                             })()}

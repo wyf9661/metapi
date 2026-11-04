@@ -216,12 +216,12 @@ describe('accounts api key recovery', { timeout: 15_000 }, () => {
       apiToken: 'sk-new-invalid-key',
     });
 
-    // The failed discovery does not resurrect the previous list; the pre-existing
+    // A transient discovery failure keeps the previous list; the pre-existing
     // channel row is left alone (nothing rebuilds routes during this update).
     const availabilityRows = await db.select().from(schema.modelAvailability)
       .where(eq(schema.modelAvailability.accountId, account.id))
       .all();
-    expect(availabilityRows).toHaveLength(0);
+    expect(availabilityRows).toHaveLength(1);
 
     const routeChannels = await db.select().from(schema.routeChannels).all();
     expect(routeChannels).toContainEqual(expect.objectContaining({

@@ -85,6 +85,30 @@ export default function AccountModelsModal({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* The rows below may be a previous result: the list row already says
+              so, but opening the modal is exactly where it would be misread. */}
+          {(() => {
+            const health = modelModal.account?.runtimeHealth;
+            const stale = health?.source === 'model-discovery'
+              && (health.state === 'unhealthy' || health.state === 'degraded');
+            if (!stale) return null;
+            return (
+              <div
+                data-tooltip={health.reason || undefined}
+                style={{
+                  fontSize: 11,
+                  color: 'var(--color-warning)',
+                  border: '1px solid color-mix(in srgb, var(--color-warning) 40%, transparent)',
+                  background: 'color-mix(in srgb, var(--color-warning) 8%, transparent)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '6px 8px',
+                }}
+              >
+                {tr('刷新失败，显示上次结果')}
+                {health.reason ? `：${health.reason}` : ''}
+              </div>
+            );
+          })()}
           <div
             style={{
               display: 'flex',
@@ -93,7 +117,7 @@ export default function AccountModelsModal({
               flexWrap: 'wrap',
               padding: '6px 8px',
               border: '1px solid var(--color-border-light)',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-sm)',
             }}
           >
             <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('上游新增模型：')}</span>

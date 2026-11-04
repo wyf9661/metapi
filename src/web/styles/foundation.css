@@ -29,14 +29,18 @@
   --color-danger-soft: oklch(0.938 0.060 25);
   --color-info: oklch(0.540 0.148 255);
   --color-info-soft: oklch(0.935 0.058 255);
+  /* Two radii, not four: controls and chips at 6px, surfaces at 10px. md/lg/xl
+     are aliases so existing call sites collapse onto the same two steps. */
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 10px;
   --radius-lg: 10px;
-  --radius-xl: 12px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --radius-xl: 10px;
+  /* Shadows are tinted with the text hue instead of pure black, so elevation
+     reads as the surface getting deeper rather than as soot on warm paper. */
+  --shadow-sm: 0 1px 2px color-mix(in oklab, var(--color-text-primary) 7%, transparent);
+  --shadow-md: 0 2px 8px color-mix(in oklab, var(--color-text-primary) 10%, transparent);
+  --shadow-lg: 0 6px 20px color-mix(in oklab, var(--color-text-primary) 14%, transparent);
+  --shadow-card: 0 1px 2px color-mix(in oklab, var(--color-text-primary) 7%, transparent);
   --topbar-height: 56px;
   --sidebar-width: 220px;
   --sidebar-collapsed-width: 64px;
@@ -73,10 +77,10 @@
   --color-danger-soft: oklch(0.338 0.068 25);
   --color-info: oklch(0.700 0.138 255);
   --color-info-soft: oklch(0.308 0.062 255);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.45);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px color-mix(in oklab, var(--color-text-primary) 18%, transparent);
+  --shadow-md: 0 2px 8px color-mix(in oklab, var(--color-text-primary) 24%, transparent);
+  --shadow-lg: 0 6px 20px color-mix(in oklab, var(--color-text-primary) 32%, transparent);
+  --shadow-card: 0 1px 2px color-mix(in oklab, var(--color-text-primary) 18%, transparent);
 }
 
 /* ===== Base ===== */
