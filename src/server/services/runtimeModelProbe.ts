@@ -18,8 +18,28 @@ import type { schema } from '../db/index.js';
 import { getRandomProbeQuestion, type ProbeQuestion } from './probeQuestionBank.js';
 import { db } from '../db/index.js';
 import { probeLogs } from '../db/schema.js';
+import { and, desc, eq } from 'drizzle-orm';
 
 export type RuntimeModelProbeStatus = 'supported' | 'unsupported' | 'inconclusive' | 'skipped';
+
+/** Consecutive timed-out probes after which a model is treated as unreachable.
+ *  A single timeout is noise; a site that has not answered the last three probes
+ *  is a dead channel and must leave the routing pool instead of burning a
+ *  first-byte window on every request. */
+export const PROBE_TIMEOUT_UNSUPPORTED_STREAK = 3;
+
+/** Latest-first probe statuses → does the tail prove the model is unreachable? */
+export function isProbeTimeoutStreakUnsupported(
+  recentStatuses: Array<string | null | undefined>,
+  threshold: number = PROBE_TIMEOUT_UNSUPPORTED_STREAK,
+): boolean {
+  let streak = 0;
+  for (const status of recentStatuses) {
+    if (status !== 'timeout') break;
+    streak += 1;
+  }
+  return streak >= Math.max(1, threshold);
+}
 
 export type RuntimeModelProbeResult = {
   status: RuntimeModelProbeStatus;
@@ -876,10 +896,30 @@ export async function probeRuntimeModel(input: {
       errorMessage,
     }).catch((err: unknown) => console.error('[probe-log] Failed to insert probe log:', err));
 
+    const recentProbeStatuses = isTimeout
+      ? await db
+        .select({ status: probeLogs.status })
+        .from(probeLogs)
+        .where(and(
+          eq(probeLogs.accountId, input.account.id),
+          eq(probeLogs.modelName, input.modelName),
+        ))
+        .orderBy(desc(probeLogs.createdAt), desc(probeLogs.id))
+        .limit(PROBE_TIMEOUT_UNSUPPORTED_STREAK)
+        .all()
+        .then((rows) => rows.map((row) => row.status))
+        .catch(() => [] as Array<string | null>)
+      : [];
+    // Three silent probes in a row are a dead channel, not a transient stall:
+    // returning 'inconclusive' here is what kept 0%-success models routable.
+    const unsupportedByTimeout = isTimeout && isProbeTimeoutStreakUnsupported(recentProbeStatuses);
+
     return {
-      status: 'inconclusive',
+      status: unsupportedByTimeout ? 'unsupported' : 'inconclusive',
       latencyMs,
-      reason: errorMessage,
+      reason: unsupportedByTimeout
+        ? `${errorMessage}（连续 ${PROBE_TIMEOUT_UNSUPPORTED_STREAK} 次探测超时）`
+        : errorMessage,
     };
   }
 }

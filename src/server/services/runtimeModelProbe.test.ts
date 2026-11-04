@@ -42,6 +42,17 @@ vi.mock('../db/index.js', () => ({
         return chain;
       },
     }),
+    // The timeout branch reads the recent probe history; an empty history keeps
+    // the verdict 'inconclusive', which is what these cases assert.
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({ all: async () => [] }),
+          }),
+        }),
+      }),
+    }),
   },
 }));
 
