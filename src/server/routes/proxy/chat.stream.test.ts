@@ -4949,6 +4949,64 @@ describe('chat proxy stream behavior', () => {
     expect(recordFailureMock).not.toHaveBeenCalled();
   });
 
+  it('retries the SAME channel on /v1/responses when the relay rejects `none` with the newer wording', async () => {
+    // Production shape: a Codex-only relay answers the responses face with
+    // "Unsupported value: 'none' is not supported ... Supported values are: ..."
+    // — no "effort" in the text. The verdict is about the body, so the retry
+    // must stay on the same channel AND the same face; falling back to
+    // /v1/chat/completions gets a 403 from the same relay.
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { name: 'codex-only', url: 'https://upstream.example.com', platform: 'sub2api' },
+      account: { id: 33, username: 'demo-user' },
+      tokenName: 'default',
+      tokenValue: 'sk-demo',
+      actualModel: 'gpt-6-astra',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: {
+          message: "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', 'max'.",
+          type: 'invalid_request_error',
+        },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl-none-wording-ok',
+        object: 'chat.completion',
+        created: 1_706_000_000,
+        model: 'gpt-6-astra',
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: 'ok after the none field was dropped' },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-6-astra',
+        reasoning_effort: 'none',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('ok after the none field was dropped');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [firstUrl, firstOptions] = fetchMock.mock.calls[0] as [string, any];
+    const [secondUrl, secondOptions] = fetchMock.mock.calls[1] as [string, any];
+    // Same face both times — never the chat face.
+    expect(firstUrl).toContain('/v1/responses');
+    expect(secondUrl).toContain('/v1/responses');
+    expect(JSON.parse(firstOptions.body).reasoning.effort).toBe('none');
+    expect(JSON.parse(secondOptions.body).reasoning).toBeUndefined();
+    // Request-shape verdict: no failure marks, no cooldowns, no failover.
+    expect(recordFailureMock).not.toHaveBeenCalled();
+  });
+
   it('falls back to normal failover after the effort floor is rejected in place', async () => {
     selectChannelMock
       .mockReturnValueOnce({

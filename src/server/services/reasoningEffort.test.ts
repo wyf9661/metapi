@@ -195,6 +195,12 @@ describe('isReasoningEffortRejection', () => {
     expect(isReasoningEffortRejection(null)).toBe(false);
   });
 
+  it('recognises the `unsupported value` wording used by newer relays', () => {
+    expect(isReasoningEffortRejection(
+      "Upstream returned HTTP 400: Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', 'max'.",
+    )).toBe(true);
+  });
+
   it('matches reasoning effort references with space or hyphen variants', () => {
     expect(isReasoningEffortRejection('reasoning effort value rejected')).toBe(true);
     expect(isReasoningEffortRejection('reasoning-effort is unsupported')).toBe(true);
@@ -206,6 +212,21 @@ describe('isNoneReasoningEffortRejection', () => {
     expect(isNoneReasoningEffortRejection(
       'Upstream returned HTTP 400: This model does not support `reasoning_effort` value `none`.',
     )).toBe(true);
+  });
+
+  it.each([
+    "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.",
+    "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high'.",
+  ])('matches an enumerated effort rejection: %s', (error) => {
+    expect(isNoneReasoningEffortRejection(error)).toBe(true);
+  });
+
+  it.each([
+    "Unsupported value: 'none' for response_format. Supported values are: 'text', 'json_object'.",
+    "Unsupported value: 'nonetheless'. Supported values are: 'low', 'medium', 'high'.",
+    "Unsupported value: 'none'. Supported values are: 'low', 'auto'.",
+  ])('does not strip effort for an unrelated rejection: %s', (error) => {
+    expect(isNoneReasoningEffortRejection(error)).toBe(false);
   });
 
   it('does not match ladder rejections or unrelated text', () => {

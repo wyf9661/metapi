@@ -123,10 +123,11 @@ function preferredEndpointOrder(
   //   OpenAI/Codex family → /v1/responses   (the Codex-client face)
   //   Claude family       → /v1/messages    (the Claude Code face)
   //   everything else     → /v1/chat/completions (the universal face)
-  // Runtime memory may still demote the leading face per model (and per
-  // site) when the upstream only serves these models on another one, so a
-  // relay with GPT on responses *and* GLM on chat serves both from the first
-  // call without a site-wide lock.
+  // The leading face is NOT pinned: a site that genuinely lacks it answers
+  // 404/405/415/501, and that is the only evidence that warrants another
+  // face. A content-level 400 is a verdict on the request body, so it must
+  // never move the traffic to another face — see
+  // upstreamEndpointRuntimeMemory.shouldBlockEndpointByError.
   if (preferMessagesForClaudeModel) {
     return ['messages', 'chat', 'responses'];
   }
@@ -136,14 +137,7 @@ function preferredEndpointOrder(
   return ['chat', 'messages', 'responses'];
 }
 
-/**
- * OpenAI/Codex-family detection for endpoint ordering. These are the models a
- * Responses-native upstream serves on /v1/responses, so they lead with the
- * /v1/responses face. The leading face is never pinned: runtime endpoint
- * evidence (e.g. a 404 from an upstream that only serves chat) may demote it —
- * the same rule chat-only families follow (glm / gemini / deepseek / qwen …,
- * see new-api PR #5209).
- */
+/** Detect OpenAI/Codex model names, including provider-prefixed aliases. */
 function isOpenAiFamilyModel(modelName?: string): boolean {
   const raw = asTrimmedString(modelName).toLowerCase();
   if (!raw) return false;

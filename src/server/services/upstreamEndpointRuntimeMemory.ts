@@ -4,6 +4,7 @@ import type { DownstreamFormat } from '../transformers/shared/normalized.js';
 import { asTrimmedString } from '../shared/trimString.js';
 import {
 
+  hasEndpointMismatchHint,
   inferSuggestedEndpointFromUpstreamError,
   inferRequiredEndpointFromProtocolError,
   isEndpointDispatchDeniedError,
@@ -11,6 +12,7 @@ import {
   isThinkingModePassbackError,
   isUnsupportedMediaTypeError,
 } from '../transformers/shared/endpointCompatibility.js';
+import { isReasoningEffortRejection } from './reasoningEffort.js';
 
 export type UpstreamEndpointRuntimeEndpoint = 'chat' | 'messages' | 'responses';
 export type UpstreamEndpointRuntimePreference = DownstreamFormat | 'responses';
@@ -233,6 +235,9 @@ function shouldBlockEndpointByError(
   status: number,
   errorText?: string | null,
 ): boolean {
+  // An effort-value rejection is a request-shape verdict (the body carried a
+  // value the relay refuses), not proof that this site lacks the face.
+  if (isReasoningEffortRejection(errorText)) return false;
   if (isEndpointDispatchDeniedError(status, errorText)) return true;
   // Site-wide WAF/edge rejections are not endpoint protocol failures — do not
   // block the endpoint (would only cause a useless fallback that is also WAF'd).
@@ -245,15 +250,7 @@ function shouldBlockEndpointByError(
   if (status === 400 && isThinkingModePassbackError(errorText)) {
     return true;
   }
-  // A 400 from a responses endpoint is a content-level rejection of the
-  // OpenAI-responses representation of this request. The chat/messages forms
-  // of the same request may be accepted by the same upstream, so cool down
-  // responses for this site+model and let the candidate list fall back to the
-  // remaining endpoints. Endpoint-agnostic: applies to any upstream whose
-  // responses implementation is stricter than the OpenAI spec.
-  if (endpoint === 'responses' && status === 400) {
-    return true;
-  }
+  // The face itself is absent (no such path on this relay).
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
   if (isUnsupportedMediaTypeError(status, errorText)) return true;
 
@@ -261,6 +258,15 @@ function shouldBlockEndpointByError(
   const requiredEndpoint = inferRequiredEndpointFromProtocolError(rawText);
   if (requiredEndpoint) {
     return endpoint !== requiredEndpoint;
+  }
+
+  // A 400 is the relay's verdict on THIS request body — it says nothing about
+  // whether the face exists. Only endpoint-level wording (an unknown path, an
+  // unsupported endpoint) proves the face is gone; anything else must keep
+  // the traffic on the face it belongs to, or a relay that rejects one body
+  // would silently move the model to another face (and another protocol).
+  if (status === 400) {
+    return hasEndpointMismatchHint(rawText);
   }
 
   return isEndpointDowngradeError(status, errorText);
