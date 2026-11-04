@@ -25,7 +25,9 @@ import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import {
   clampBuiltBodyToEffortCeiling,
   isEffortRejectionRetryable,
+  isThinkingPassbackRetryable,
   recoverForEffortRejection,
+  recoverForThinkingPassback,
 } from './effortRecovery.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
@@ -692,7 +694,7 @@ export async function handleChatSurfaceRequest(
         shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
           ctx.response.status,
           ctx.rawErrText || ctx.errText,
-        ),
+        ) || isThinkingPassbackRetryable(ctx.response.status, ctx.rawErrText || ctx.errText),
         onAttemptFailure: async (ctx) => {
           // A 400 that names the effort means the value we forwarded is not in
           // this upstream's accepted ladder: relays that only take
@@ -713,7 +715,20 @@ export async function handleChatSurfaceRequest(
             // learning must use its effort, not the source's client value.
             rejectedBody: ctx.request.body,
           });
-          const memoryWrite = recordUpstreamEndpointFailure({
+          // Prior-turn thinking cannot be echoed by an OpenAI-shaped client, so
+          // the same 400 follows every channel and every face. Continue without
+          // thinking instead: the retry keeps the channel and the face.
+          recoverForThinkingPassback({
+            status: ctx.response.status,
+            errText: ctx.rawErrText || ctx.errText,
+            bodies: [resolvedOpenAiBody],
+            rejectedBody: ctx.request.body,
+          });
+          const thinkingPassback = isThinkingPassbackRetryable(
+            ctx.response.status,
+            ctx.rawErrText || ctx.errText,
+          );
+          const memoryWrite = thinkingPassback ? null : recordUpstreamEndpointFailure({
             ...endpointRuntimeContext,
             endpoint: ctx.request.endpoint,
             status: ctx.response.status,

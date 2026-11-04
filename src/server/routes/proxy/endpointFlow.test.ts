@@ -111,6 +111,36 @@ describe('executeEndpointFlow', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['responses', 'messages', 'chat'] as const)('does not let overrides restore rejected none on the %s retry', async (endpoint) => {
+    const { isEffortRejectionRetryable, recoverForEffortRejection } = await import('../../proxy-core/surfaces/effortRecovery.js');
+    const slots = endpoint === 'responses'
+      ? { reasoning: { effort: 'none', summary: 'auto' } }
+      : endpoint === 'messages' ? { output_config: { effort: 'none' } } : { reasoning_effort: 'none' };
+    const source: Record<string, unknown> = { model: 'fixture-model', ...slots };
+    const errorText = "Unsupported value: 'none' is not supported. Supported values are: 'low', 'medium', 'high'.";
+    fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({ error: { message: errorText } }), { status: 400 })))
+      .mockResolvedValueOnce(toUndiciResponse(new Response('{"ok":true}')));
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: [endpoint],
+      paramOverride: JSON.stringify(slots),
+      buildRequest: () => ({ ...requestFor('/v1/' + endpoint), endpoint, body: structuredClone(source) }),
+      shouldRetryInPlace: (ctx: any) => isEffortRejectionRetryable(ctx.response.status, ctx.rawErrText),
+      onAttemptFailure: (ctx: any) => recoverForEffortRejection({
+        status: ctx.response.status, errText: ctx.rawErrText, siteId: 1, endpoint,
+        bodies: [source], rejectedBody: ctx.request.body,
+      }),
+    });
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe(fetchMock.mock.calls[0][0]);
+    const body = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.reasoning?.effort).toBeUndefined();
+    expect(body.output_config?.effort).toBeUndefined();
+    if (endpoint === 'responses') expect(body.reasoning?.summary).toBe('auto');
+  });
+
   it('returns the first successful upstream response', async () => {
     fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({ ok: true }), {
       status: 200,

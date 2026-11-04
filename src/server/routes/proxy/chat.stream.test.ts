@@ -4780,7 +4780,7 @@ describe('chat proxy stream behavior', () => {
     expect(targetUrl).toContain('/v1/messages');
   });
 
-  it('falls back to /v1/chat/completions when catalog only declares openai and the responses endpoint fails', async () => {
+  it('does not switch GPT to chat for an opaque 400 even with a generic openai catalog', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
         {
@@ -4828,15 +4828,10 @@ describe('chat proxy stream behavior', () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body?.choices?.[0]?.message?.content).toContain('fallback to chat from openai-only catalog');
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [firstUrl] = fetchMock.mock.calls[0] as [string, any];
-    const [secondUrl] = fetchMock.mock.calls[1] as [string, any];
-    expect(firstUrl).toContain('/v1/responses');
-    expect(secondUrl).toContain('/v1/chat/completions');
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain('openai_error');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/v1/responses');
   });
 
   it('retries the SAME channel with a downgraded effort instead of failing over on an effort rejection', async () => {
@@ -5007,7 +5002,82 @@ describe('chat proxy stream behavior', () => {
     expect(recordFailureMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to normal failover after the effort floor is rejected in place', async () => {
+  it.each([
+    ['/v1/chat/completions', 'gpt-6-astra', '/v1/responses'],
+    ['/v1/messages', 'claude-opus-4-6', '/v1/messages'],
+    ['/v1/responses', 'gpt-6-astra', '/v1/responses'],
+  ])('corrects none in place through %s for %s', async (downstreamPath, model, upstreamPath) => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { id: 98, name: 'fixture-relay', url: 'https://upstream.example.com', platform: 'sub2api' },
+      account: { id: 33, username: 'fixture-user' }, tokenValue: 'sk-test', actualModel: model,
+    });
+    const error = { error: { message: `Unsupported value: 'none' is not supported with the '${model}' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.`, type: 'invalid_request_error' } };
+    const payload = downstreamPath === '/v1/responses'
+      ? { model, input: 'inspect this fixture', reasoning: { effort: 'none' }, stream: false }
+      : { model, messages: [{ role: 'user', content: 'inspect this fixture' }], max_tokens: 128, reasoning_effort: 'none', stream: false };
+    const success = upstreamPath === '/v1/messages'
+      ? { id: 'msg-fixture', type: 'message', role: 'assistant', model, content: [{ type: 'text', text: 'fixture accepted' }], stop_reason: 'end_turn', usage: { input_tokens: 5, output_tokens: 3 } }
+      : { id: 'resp-fixture', object: 'response', status: 'completed', model, output: [{ id: 'msg-fixture', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'fixture accepted' }] }], usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 } };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(error), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const response = await app.inject({ method: 'POST', url: downstreamPath, payload });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('fixture accepted');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(selectChannelMock).toHaveBeenCalledTimes(1);
+    expect(selectNextChannelMock).not.toHaveBeenCalled();
+    for (const [url] of fetchMock.mock.calls) expect(String(url)).toContain(upstreamPath);
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody.reasoning_effort).toBeUndefined();
+    expect(retryBody.reasoning?.effort).toBeUndefined();
+    expect(retryBody.output_config?.effort).toBeUndefined();
+  });
+
+  it('continues without thinking when the relay demands the prior reasoning back', async () => {
+    selectChannelMock.mockReturnValue({
+      channel: { id: 11, routeId: 22 },
+      site: { id: 259, name: 'fixture-relay', url: 'https://upstream.example.com', platform: 'sub2api' },
+      account: { id: 270, username: 'fixture-user' },
+      tokenName: 'default', tokenValue: 'sk-test', actualModel: 'deepseek-v4.1-flash',
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'The `reasoning_text` in the thinking mode must be passed back to the API. (request_id: fixture)', type: 'invalid_request_error' },
+      }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'chatcmpl-think-off', object: 'chat.completion', created: 1_706_000_000, model: 'deepseek-v4.1-flash',
+        choices: [{ index: 0, message: { role: 'assistant', content: 'continued without thinking' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'deepseek-v4.1-flash',
+        reasoning_effort: 'max',
+        thinking: { type: 'enabled', budget_tokens: 2048 },
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'prior answer' },
+          { role: 'user', content: 'continue' },
+        ],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('continued without thinking');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(selectChannelMock).toHaveBeenCalledTimes(1);
+    expect(selectNextChannelMock).not.toHaveBeenCalled();
+    for (const [url] of fetchMock.mock.calls) expect(String(url)).toContain('/v1/chat/completions');
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody.reasoning_effort).toBeUndefined();
+    expect(retryBody.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('returns persistent effort rejection after one same-protocol retry', async () => {
     selectChannelMock
       .mockReturnValueOnce({
         channel: { id: 11, routeId: 22 },
@@ -5061,17 +5131,14 @@ describe('chat proxy stream behavior', () => {
       },
     });
 
-    expect(response.statusCode, response.body).toBe(200);
-    expect(response.body).toContain('ok from failover channel');
-    // Site A: rejected low (its ladder starts at medium) — the in-place retry
-    // clamps to medium, which it also rejects (second 400), so the request
-    // moves on. Site B: succeeds with the clamped value.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.body).toContain('unknown effort');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(selectChannelMock).toHaveBeenCalledTimes(1);
+    for (const [url] of fetchMock.mock.calls) expect(String(url)).toContain('/v1/responses');
     const [, firstOptions] = fetchMock.mock.calls[0] as [string, any];
     const [, secondOptions] = fetchMock.mock.calls[1] as [string, any];
     expect(JSON.parse(firstOptions.body).reasoning.effort).toBe('low');
-    // The rejection listed no rung our ladder knows (its ladder starts at
-    // medium), so the fallback is ONE rung below the rejected value.
     expect(JSON.parse(secondOptions.body).reasoning.effort).toBe('minimal');
   });
 

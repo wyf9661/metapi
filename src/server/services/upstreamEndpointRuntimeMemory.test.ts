@@ -20,14 +20,12 @@ function reordered(candidates: Array<'chat' | 'responses' | 'messages'>) {
   });
 }
 
-describe('responses endpoint 400 cooldown (endpoint-agnostic)', () => {
+describe('endpoint memory requires protocol evidence', () => {
   beforeEach(() => {
     resetUpstreamEndpointRuntimeState();
   });
 
-  it('cools down responses on any 400 so chat is retried next', () => {
-    // Any 400 from the responses endpoint — content-level rejection of the
-    // responses representation — is endpoint-agnostic, not vendor-specific.
+  it('cools down responses for the explicit thinking pass-back incompatibility', () => {
     const write = recordUpstreamEndpointFailure({
       ...baseInput,
       endpoint: 'responses',
@@ -98,6 +96,17 @@ describe('responses endpoint 400 cooldown (endpoint-agnostic)', () => {
 
     const next = reordered(['responses', 'chat', 'messages']);
     expect(next[0]).toBe('responses');
+  });
+
+  it.each([
+    ['gpt-6-astra', 'responses'],
+    ['claude-opus-4-6', 'messages'],
+  ] as const)('keeps %s on %s after a content error that mentions a missing tool', (modelName, endpoint) => {
+    const write = recordUpstreamEndpointFailure({
+      ...baseInput, modelName, endpoint, status: 400,
+      errorText: JSON.stringify({ error: { message: 'tool_call_id was not found', type: 'invalid_request_error' } }),
+    });
+    expect(write).toBeNull();
   });
 
   it('does not penalise ordinary chat 400s', () => {

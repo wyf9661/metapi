@@ -10,6 +10,8 @@ import { fetchWithObservedFirstByte, isObservedFirstByteTimeoutResponse } from '
 import { withSiteProxyRequestInit } from '../../services/siteProxy.js';
 import { parseUpstreamRetryHint } from '../../services/upstreamRetryAfter.js';
 import { mergeParamOverrideIntoBody } from '../../services/siteParamOverride.js';
+import { isNoneReasoningEffortRejection, stripReasoningEffortFromBody, stripThinkingModeFromBody } from '../../services/reasoningEffort.js';
+import { isThinkingModePassbackError } from '../../transformers/shared/endpointCompatibility.js';
 import {
   buildUpstreamUrl,
   summarizeUpstreamError,
@@ -346,6 +348,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       // Same final-body clamp on the in-place retry: an override would
       // otherwise resurrect the exact value the relay just rejected.
       input.enforceEffortCeiling?.(retryRequest.body, endpoint);
+      // Apply after overrides so the rejected value cannot be restored on retry.
+      if (isNoneReasoningEffortRejection(rawErrText)) stripReasoningEffortFromBody(retryRequest.body);
+      if (isThinkingModePassbackError(rawErrText)) stripThinkingModeFromBody(retryRequest.body);
       const retryTargetUrl = input.proxyUrl && !input.dispatchRequest
         ? buildUpstreamUrl(input.proxyUrl, retryRequest.path)
         : buildUpstreamUrl(input.siteUrl, retryRequest.path);

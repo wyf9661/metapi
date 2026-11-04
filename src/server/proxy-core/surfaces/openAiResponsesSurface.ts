@@ -25,7 +25,9 @@ import { promoteRequiredEndpointCandidateAfterProtocolError } from '../../transf
 import {
   clampBuiltBodyToEffortCeiling,
   isEffortRejectionRetryable,
+  isThinkingPassbackRetryable,
   recoverForEffortRejection,
+  recoverForThinkingPassback,
 } from './effortRecovery.js';
 
 import {
@@ -714,6 +716,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
           sitePlatform: selected.site.platform,
         });
         const tryRecover = async (ctx: Parameters<NonNullable<typeof endpointStrategy.tryRecover>>[0]) => {
+          // An effort verdict names the body, not the endpoint representation:
+          // the bounded in-place retry owns it, so the compatibility retry must
+          // not spend the one attempt on an equivalent body.
+          if (isEffortRejectionRetryable(ctx.response.status, ctx.rawErrText)) return null;
           if (
             ctx.request.endpoint === 'responses'
             && isResponsesPreviousResponseNotFoundError({
@@ -852,7 +858,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
             ctx.response.status,
             ctx.rawErrText || ctx.errText,
-          ),
+          ) || isThinkingPassbackRetryable(ctx.response.status, ctx.rawErrText || ctx.errText),
           onAttemptFailure: async (ctx) => {
             // A 400 that names the effort means the value we forwarded is not in
             // this upstream's accepted ladder (low/medium/high relays reject
@@ -873,7 +879,17 @@ export async function handleOpenAiResponsesSurfaceRequest(
               // learning must use its effort, not the source's client value.
               rejectedBody: ctx.request.body,
             });
-            const memoryWrite = isCompactRequest
+            recoverForThinkingPassback({
+              status: ctx.response.status,
+              errText: ctx.rawErrText || ctx.errText,
+              bodies: [normalizedResponsesBody, openAiBody],
+              rejectedBody: ctx.request.body,
+            });
+            const thinkingPassback = isThinkingPassbackRetryable(
+              ctx.response.status,
+              ctx.rawErrText || ctx.errText,
+            );
+            const memoryWrite = isCompactRequest || thinkingPassback
               ? null
               : recordUpstreamEndpointFailure({
                 ...endpointRuntimeContext,

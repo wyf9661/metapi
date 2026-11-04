@@ -12,6 +12,7 @@ import {
   resolveWebsocketReasoningEffort,
   setCurrentReasoningEffort,
   stripReasoningEffortFromBody,
+  stripThinkingModeFromBody,
 } from './reasoningEffort.js';
 
 describe('extractReasoningEffort', () => {
@@ -266,6 +267,29 @@ describe('stripReasoningEffortFromBody', () => {
     expect(body).toEqual({ model: 'gpt-5', temperature: 0.2 });
     expect(stripReasoningEffortFromBody(null)).toBe(false);
     expect(stripReasoningEffortFromBody(undefined)).toBe(false);
+  });
+});
+
+describe('stripThinkingModeFromBody', () => {
+  it('drops effort and flips an explicit thinking switch off', () => {
+    const body: Record<string, unknown> = {
+      model: 'deepseek-v4.1-flash',
+      reasoning_effort: 'max',
+      thinking: { type: 'enabled', budget_tokens: 2048 },
+    };
+    expect(stripThinkingModeFromBody(body)).toBe(true);
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('flips enable_thinking and leaves already-disabled bodies alone', () => {
+    const body: Record<string, unknown> = { model: 'qwen', enable_thinking: true };
+    expect(stripThinkingModeFromBody(body)).toBe(true);
+    expect(body.enable_thinking).toBe(false);
+
+    const already: Record<string, unknown> = { model: 'qwen', thinking: { type: 'disabled' } };
+    expect(stripThinkingModeFromBody(already)).toBe(false);
+    expect(stripThinkingModeFromBody(null)).toBe(false);
   });
 });
 

@@ -30,6 +30,8 @@ import {
   clampRequestBodyToSiteEffortCeiling,
   learnReasoningEffortCeilingFromFailure,
 } from '../../services/siteReasoningEffortCapabilityService.js';
+import { isThinkingModePassbackError } from '../../transformers/shared/endpointCompatibility.js';
+import { stripThinkingModeFromBody } from '../../services/reasoningEffort.js';
 
 /** True when this attempt failure is an effort-value rejection worth an in-place retry. */
 export function isEffortRejectionRetryable(status: number, errText: string | null | undefined): boolean {
@@ -136,3 +138,28 @@ export {
   isReasoningEffortRejection,
   isNoneReasoningEffortRejection,
 };
+
+/**
+ * Whether this attempt failed because the relay wants the conversation's prior
+ * reasoning echoed back. The downstream OpenAI-shaped client never sends it, so
+ * switching channels or faces reproduces the same 400 — the repair is to retry
+ * once on the SAME channel and face with thinking turned off.
+ */
+export function recoverForThinkingPassback(input: {
+  status: number;
+  errText: string | null | undefined;
+  bodies: ReadonlyArray<Record<string, unknown> | null | undefined>;
+  rejectedBody?: Record<string, unknown> | null;
+}): boolean {
+  if (input.status !== 400 || !isThinkingModePassbackError(input.errText)) return false;
+  let changed = false;
+  for (const body of [...input.bodies, input.rejectedBody]) {
+    if (body && stripThinkingModeFromBody(body)) changed = true;
+  }
+  return changed;
+}
+
+/** Retry predicate for the thinking pass-back verdict (bounded to one retry). */
+export function isThinkingPassbackRetryable(status: number, errText: string | null | undefined): boolean {
+  return status === 400 && isThinkingModePassbackError(errText);
+}

@@ -628,6 +628,73 @@ describe('RouteCard', () => {
 
   });
 
+  it('labels the routing mode on collapsed and expanded desktop cards', () => {
+    const renderCard = (overrides: Partial<RouteSummaryRow>, extra: { expanded?: boolean; compact?: boolean; detailPanel?: boolean } = {}) => create(
+      <RouteCard
+        route={buildRoute(overrides)}
+        brand={null}
+        expanded={!!extra.expanded}
+        compact={extra.compact}
+        detailPanel={extra.detailPanel}
+        onToggleExpand={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onClearCooldown={vi.fn()}
+        clearingCooldown={false}
+        channels={[buildChannel()]}
+        loadingChannels={false}
+        routeDecision={null}
+        loadingDecision={false}
+        candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+        channelTokenDraft={{}}
+        updatingChannel={{}}
+        savingPriority={false}
+        onTokenDraftChange={vi.fn()}
+        onSaveToken={vi.fn()}
+        onDeleteChannel={vi.fn()}
+        onToggleChannelEnabled={vi.fn()}
+        onChannelDragEnd={vi.fn()}
+        missingTokenSiteItems={[]}
+        missingTokenGroupItems={[]}
+        onCreateTokenForMissing={vi.fn()}
+        onAddChannel={vi.fn()}
+        onSiteBlockModel={vi.fn()}
+        expandedSourceGroupMap={{ routeTestId: true }}
+        onToggleSourceGroup={vi.fn()}
+      />,
+    );
+
+    const groupRoute = { routeMode: 'explicit_group' as const, modelPattern: 'gpt-5.2-codex', channelCount: 3 };
+    const wildcardRoute = { modelPattern: 're:(?:.*|.*/)(minimax-m2.1)$' };
+    const exactRoute = { modelPattern: 'deepseek-v4.1-flash' };
+
+    // Both desktop headers must name the mode: the collapsed row, the expanded card (non-compact),
+    // and the compact detail panel that mobile/desktop split views render.
+    const collapsedGroup = collectText(renderCard(groupRoute).root);
+    const collapsedWildcard = collectText(renderCard(wildcardRoute).root);
+    const collapsedExact = collectText(renderCard(exactRoute).root);
+    const expandedGroup = collectText(renderCard(groupRoute, { expanded: true }).root);
+    const expandedWildcard = collectText(renderCard(wildcardRoute, { expanded: true }).root);
+    const expandedExact = collectText(renderCard(exactRoute, { expanded: true }).root);
+    const compactGroup = collectText(renderCard(groupRoute, { expanded: true, compact: true, detailPanel: true }).root);
+    const compactWildcard = collectText(renderCard(wildcardRoute, { expanded: true, compact: true, detailPanel: true }).root);
+    const compactExact = collectText(renderCard(exactRoute, { expanded: true, compact: true, detailPanel: true }).root);
+
+    expect(collapsedGroup).toContain('群组聚合');
+    expect(collapsedWildcard).toContain('通配符路由');
+    expect(collapsedExact).not.toContain('群组聚合');
+    expect(collapsedExact).not.toContain('通配符路由');
+    expect(expandedGroup).toContain('群组聚合');
+    expect(expandedWildcard).toContain('通配符路由');
+    expect(expandedExact).not.toContain('群组聚合');
+    expect(expandedExact).not.toContain('通配符路由');
+    expect(compactGroup).toContain('群组聚合');
+    expect(compactWildcard).toContain('通配符路由');
+    expect(compactExact).not.toContain('群组聚合');
+    expect(compactExact).not.toContain('通配符路由');
+  });
+
   it('places compact route strategy and add channel controls on the same row', () => {
     const root = create(
       <RouteCard

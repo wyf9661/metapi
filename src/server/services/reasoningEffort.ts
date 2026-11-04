@@ -183,6 +183,37 @@ export function isNoneReasoningEffortRejection(errorText: string | null | undefi
       && parseEffortEnumFromError(errorText) !== null);
 }
 
+/**
+ * Turn thinking mode off for a retry. Some relays refuse to continue a
+ * conversation whose earlier turns' reasoning was not echoed back (the
+ * downstream OpenAI-shaped client never sends it), so the only viable repair
+ * is to continue without thinking instead of switching protocol face.
+ * Only flips a thinking switch that is already present — inventing provider
+ * specific parameters would trade one 400 for another.
+ */
+export function stripThinkingModeFromBody(
+  body: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  let changed = stripReasoningEffortFromBody(body);
+
+  const thinking = body.thinking;
+  if (thinking && typeof thinking === 'object' && !Array.isArray(thinking)) {
+    const holder = thinking as Record<string, unknown>;
+    const type = typeof holder.type === 'string' ? holder.type.trim().toLowerCase() : '';
+    if (type === 'enabled' || type === 'adaptive') {
+      holder.type = 'disabled';
+      delete holder.budget_tokens;
+      changed = true;
+    }
+  }
+  if (body.enable_thinking === true) {
+    body.enable_thinking = false;
+    changed = true;
+  }
+  return changed;
+}
+
 /** Remove every effort-bearing slot from a body (used when the upstream rejects
  * `none` — the model does not accept disabling reasoning, so the field must
  * simply not be sent). An emptied nested container (`reasoning`, `output_config`)

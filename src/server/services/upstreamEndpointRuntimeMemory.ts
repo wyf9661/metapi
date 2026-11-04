@@ -4,7 +4,6 @@ import type { DownstreamFormat } from '../transformers/shared/normalized.js';
 import { asTrimmedString } from '../shared/trimString.js';
 import {
 
-  hasEndpointMismatchHint,
   inferSuggestedEndpointFromUpstreamError,
   inferRequiredEndpointFromProtocolError,
   isEndpointDispatchDeniedError,
@@ -258,15 +257,6 @@ function shouldBlockEndpointByError(
   const requiredEndpoint = inferRequiredEndpointFromProtocolError(rawText);
   if (requiredEndpoint) {
     return endpoint !== requiredEndpoint;
-  }
-
-  // A 400 is the relay's verdict on THIS request body — it says nothing about
-  // whether the face exists. Only endpoint-level wording (an unknown path, an
-  // unsupported endpoint) proves the face is gone; anything else must keep
-  // the traffic on the face it belongs to, or a relay that rejects one body
-  // would silently move the model to another face (and another protocol).
-  if (status === 400) {
-    return hasEndpointMismatchHint(rawText);
   }
 
   return isEndpointDowngradeError(status, errorText);
