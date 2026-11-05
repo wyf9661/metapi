@@ -7,6 +7,25 @@ import { encryptCredential, readCredential } from '../shared/credentialCrypto.js
  * values pass through on read (forward compatibility) and are re-encrypted by
  * the boot migration; every new write is sealed.
  */
+const unreadableReported = new Set<string>();
+
+/**
+ * A credential sealed under a key that is no longer configured (the desktop
+ * build used to rotate it every launch) must not take down every route that
+ * reads the column: present it as empty so the UI opens and the user can
+ * re-enter it, and say so once per purpose in the log.
+ */
+function unreadableCredential(purpose: string): string {
+  if (!unreadableReported.has(purpose)) {
+    unreadableReported.add(purpose);
+    console.warn(
+      `[credentials] stored ${purpose} values cannot be decrypted with the configured secret `
+      + '(ACCOUNT_CREDENTIAL_SECRET changed?); they are shown as empty until re-entered',
+    );
+  }
+  return '';
+}
+
 function encryptedText(purpose: import('../shared/credentialCrypto.js').CredentialPurpose, deterministic = false) {
   return customType<{ data: string; driverData: string }>({
     dataType() {
@@ -16,7 +35,12 @@ function encryptedText(purpose: import('../shared/credentialCrypto.js').Credenti
       return value.trim() === '' ? value : encryptCredential(value, purpose, { deterministic });
     },
     fromDriver(value: string): string {
-      return value.trim() === '' ? value : readCredential(value, purpose);
+      if (value.trim() === '') return value;
+      try {
+        return readCredential(value, purpose);
+      } catch {
+        return unreadableCredential(purpose);
+      }
     },
   });
 }
