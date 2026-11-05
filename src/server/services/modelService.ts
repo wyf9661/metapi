@@ -620,28 +620,31 @@ async function doRefreshModelsForAccount(
   const adapter = getAdapter(site.platform);
   const accountProxyUrl = resolveProxyUrlFromExtraConfig(account.extraConfig);
 
-  // Snapshot current availability BEFORE discovery so any failed refresh can
-  // restore the previous list. Clearing first and failing without a rollback
-  // wiped an account's whole model set on one transient upstream timeout
-  // (2026-09-09 CAIC: a single 60s first-byte timeout left the account with
-  // zero routable models until the next full pass hours later). A stale but
-  // working list beats an empty one; the next successful refresh replaces it.
-  const previousAccountTokens = await db.select()
-    .from(schema.accountTokens)
-    .where(eq(schema.accountTokens.accountId, accountId))
-    .all();
-  const previousModelAvailability = await db.select()
-    .from(schema.modelAvailability)
-    .where(and(
-      eq(schema.modelAvailability.accountId, accountId),
-      eq(schema.modelAvailability.isManual, false),
-    ))
-    .all();
-  const previousTokenModelAvailability = (await Promise.all(previousAccountTokens.map(async (token: any) => db.select()
-    .from(schema.tokenModelAvailability)
-    .where(eq(schema.tokenModelAvailability.tokenId, token.id))
-    .all()))).flat();
-
+  // A failed refresh must not silently look like a successful one, but it also
+  // must not destroy a working routing table: only a confirmed credential
+  // failure (401/403) makes the discovered list meaningless and clears it.
+  // Every other verdict (timeout, shield page, empty list, 5xx) keeps the
+  // previous rows so traffic keeps flowing; the account is marked degraded with
+  // source 'model-discovery', which the selection engine reads to demote it and
+  // the UI reads to label the list as a previous result.
+  const snapshotAvailability = async () => ({
+    models: await db.select()
+      .from(schema.modelAvailability)
+      .where(and(
+        eq(schema.modelAvailability.accountId, accountId),
+        eq(schema.modelAvailability.isManual, false),
+      ))
+      .all(),
+    tokens: (await Promise.all(
+      (await db.select({ id: schema.accountTokens.id })
+        .from(schema.accountTokens)
+        .where(eq(schema.accountTokens.accountId, accountId))
+        .all()).map(async (token: any) => db.select()
+        .from(schema.tokenModelAvailability)
+        .where(eq(schema.tokenModelAvailability.tokenId, token.id))
+        .all()),
+    )).flat(),
+  });
   const clearExistingAvailability = async () => {
     await db.delete(schema.modelAvailability)
       .where(and(
@@ -663,16 +666,24 @@ async function doRefreshModelsForAccount(
     }
   };
 
-  const restorePreviousAvailability = async () => {
-    await clearExistingAvailability();
-    if (previousModelAvailability.length > 0) {
+  const restorePreviousAvailabilityUnlessCredentialFailure = async (
+    errorCode: ModelRefreshErrorCode,
+    previous: Awaited<ReturnType<typeof snapshotAvailability>>,
+  ) => {
+    // A revoked/invalid key means the discovered list no longer describes what
+    // this account can route, so it must go. Everything else keeps the list:
+    // those rows are what keeps traffic alive through a metadata blip, and the
+    // account health write below is what stops them from looking current.
+    if (errorCode === 'unauthorized') return;
+    if (previous.models.length === 0 && previous.tokens.length === 0) return;
+    if (previous.models.length > 0) {
       await db.insert(schema.modelAvailability).values(
-        previousModelAvailability.map((item: typeof previousModelAvailability[number]) => { const { id: _id, ...row } = item; return row; }),
+        previous.models.map(({ id: _id, ...row }: any) => row),
       ).onConflictDoNothing().run();
     }
-    if (previousTokenModelAvailability.length > 0) {
+    if (previous.tokens.length > 0) {
       await db.insert(schema.tokenModelAvailability).values(
-        previousTokenModelAvailability.map(({ id: _id, ...row }) => row),
+        previous.tokens.map(({ id: _id, ...row }: any) => row),
       ).onConflictDoNothing().run();
     }
   };
@@ -700,6 +711,7 @@ async function doRefreshModelsForAccount(
   // Only wipe the previous availability once we know this refresh will run:
   // the skip paths above must not leave the account with zero models (and
   // therefore zero routes) until the next full pass.
+  const previousAvailability = await snapshotAvailability();
   await clearExistingAvailability();
 
   if (!adapter) {
@@ -766,13 +778,13 @@ async function doRefreshModelsForAccount(
     const rawMessage = (err as { message?: string })?.message || '模型获取失败';
     const errorCode = classifyModelDiscoveryError(rawMessage);
     const errorMessage = rawMessage;
+    await restorePreviousAvailabilityUnlessCredentialFailure(errorCode, previousAvailability);
     await setAccountRuntimeHealth(account.id, {
       state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
     });
-    await restorePreviousAvailability();
     return buildFailedRefreshResult({
       accountId,
       errorCode,
@@ -925,13 +937,13 @@ async function doRefreshModelsForAccount(
     const firstMessage = failureMessages[0] || '';
     const errorCode = firstMessage ? classifyModelDiscoveryError(firstMessage) : 'empty_models';
     const errorMessage = buildModelFailureMessage(errorCode, firstMessage, site.platform);
+    await restorePreviousAvailabilityUnlessCredentialFailure(errorCode, previousAvailability);
     await setAccountRuntimeHealth(account.id, {
       state: modelDiscoveryFailureHealthState(errorCode),
       reason: errorMessage,
       source: 'model-discovery',
       checkedAt: new Date().toISOString(),
     });
-    await restorePreviousAvailability();
     return buildFailedRefreshResult({
       accountId,
       errorCode,

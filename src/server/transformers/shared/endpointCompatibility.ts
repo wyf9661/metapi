@@ -304,6 +304,17 @@ export function isEndpointDowngradeError(status: number, upstreamErrorText?: str
   if (status < 400) return false;
   const parsed = parseEndpointErrorShape(upstreamErrorText);
   const text = parsed.text;
+  // A rejected parameter is not evidence of an unavailable protocol.
+  if (status === 400) {
+    return inferRequiredEndpointFromProtocolError(upstreamErrorText) !== null
+      || isThinkingModePassbackError(upstreamErrorText)
+      || isUnsupportedMediaTypeError(status, upstreamErrorText)
+      || /\b(?:unknown|unsupported)\s+(?:endpoint|path)\b|unrecognized request url|no route matched/.test(text)
+      || /\b(?:endpoint|path|route|url)\b[^.\n]{0,80}\b(?:not found|does not exist|not implemented)\b/.test(text)
+      || /\/v1\/(?:chat\/completions|messages|responses)[\s'"`:]*(?:is\s+)?(?:not supported|not found|does not exist)/.test(text)
+      || ['endpoint_not_found', 'unknown_endpoint', 'unsupported_endpoint', 'unsupported_path'].includes(parsed.code)
+      || (parsed.code === 'invalid_request' && parsed.type === 'new_api_error' && text.includes('claude code cli'));
+  }
   if (status === 404 || status === 405 || status === 415 || status === 501) return true;
   // Codex-only gateways often return 403 with a protocol policy payload (or opaque nginx HTML).
   if (status === 403) {

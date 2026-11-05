@@ -25,7 +25,9 @@ import { detectProxyFailure } from '../../services/proxyFailureJudge.js';
 import {
   clampBuiltBodyToEffortCeiling,
   isEffortRejectionRetryable,
+  isThinkingPassbackRetryable,
   recoverForEffortRejection,
+  recoverForThinkingPassback,
 } from './effortRecovery.js';
 import { openAiChatTransformer } from '../../transformers/openai/chat/index.js';
 import { anthropicMessagesTransformer } from '../../transformers/anthropic/messages/index.js';
@@ -54,13 +56,16 @@ import {
   getProxyMaxChannelRetries,
 } from '../../services/proxyChannelRetry.js';
 import { resolveSurfaceFirstByteWindowMs } from '../surfaceFirstByteWindow.js';
-import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce } from '../../services/proxyRetryPolicy.js';
+import { buildProxyFailureDisposition, isMinuteRateLimitFailure } from '../../services/siteFailureClassification.js';
+import { parseUpstreamRetryHint } from '../../services/upstreamRetryAfter.js';
+import { shouldAbortSameSiteEndpointFallback, resolveFailoverBackoffMs, sleepMs, canRetryInPlaceForRecoveringFailure, isRecoveringTransientFailure, shouldGraceRetryInPlaceOnce, shouldInPlaceRetryEmptyContentOnce, resolveMinuteRateLimitRetryWaitMs, MINUTE_RATE_LIMIT_MAX_WAIT_MS } from '../../services/proxyRetryPolicy.js';
 import { createRequestTraceId } from '../../services/requestTraceId.js';
 import { applyOpenAiServiceTierPolicy } from '../serviceTierPolicy.js';
 import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
+  buildMinuteRateLimitKey,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
   clearSurfaceChannelAffinity,
@@ -272,6 +277,16 @@ export async function handleChatSurfaceRequest(
     let graceRetriedOnce = false;
     // 空内容（含 pure-thinking 截断）：同站同账号原地重试一次，失败才切站。
     let emptyContentRetriedOnce = false;
+    // 分钟级限流：同渠道等窗口后重发一次。上游设置了站点级 RPM/TPM，
+    // 一超限就换站等于把一个能用的站点让给几秒后的同类请求。
+    let minuteRateLimitRetriedOnce = false;
+    let minuteRateLimitWaitedMs = 0;
+    // 本轮的渠道租约：限流等待前要先交回槽位，交给下一个等待者。
+    let currentChannelLease: { release(): void } | null = null;
+    const releaseCurrentLease = () => {
+      currentChannelLease?.release();
+      currentChannelLease = null;
+    };
     const lastRetryFailure = {
       current: null as ReturnType<typeof finalizeRetryAsUpstreamFailure> | null,
     };
@@ -315,6 +330,14 @@ export async function handleChatSurfaceRequest(
       reason: string | null;
       /** Text memoised for the terminal fallback; defaults to `reason`. */
       retryFailureReason?: string;
+      /** Upstream reset hint for this failure (Retry-After / ratelimit-reset). */
+      retryAfterMs?: number | null;
+      /**
+       * Set when the upstream rejected for a full per-minute bucket (HTTP 502 on
+       * some relays). Carried explicitly: the status alone would classify this as
+       * a transient 5xx and spend a failover candidate instead of waiting.
+       */
+      upstreamBucketRateLimited?: boolean;
       /**
        * Which terminal shape the retry memo should use. Upstream failures are
        * mapped through the site protocol profile; execution failures keep the
@@ -326,12 +349,15 @@ export async function handleChatSurfaceRequest(
         | ReturnType<typeof finalizeRetryAsExecutionFailure>;
       upstreamPath: string | null;
     }): Promise<'retried' | 'terminal'> => {
+      // A bucket-limited retry is a dedicated slot: it neither waits for the
+      // failover budget to run out nor consumes a candidate.
+      const minuteRateLimitSlot = args.upstreamBucketRateLimited === true && !minuteRateLimitRetriedOnce;
       const inPlaceRecoveringRetry = !canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs })
         && canRetryInPlaceForRecoveringFailure(retryCount, args.status, args.reason, config.proxyFailoverBackoffMs);
       const terminalFailureOutcome = args.failureOutcome.action === 'retry'
         ? (
           canFailoverToNextChannel(reply)
-          && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason))
+          && (canRetryChannelSelection(retryCount, forcedChannelId, Date.now() - requestStartedAtMs, { maxRetries, budgetMs: failoverBudgetMs }) || inPlaceRecoveringRetry || minuteRateLimitSlot || shouldInPlaceRetryEmptyContentOnce(emptyContentRetriedOnce, args.reason))
             ? null
             : args.finalizeTerminalRetry()
         )
@@ -339,6 +365,33 @@ export async function handleChatSurfaceRequest(
       if (!terminalFailureOutcome) {
         if (!isRecoveringTransientFailure(args.status, args.reason)) {
           allFailuresRecovering = false;
+        }
+        // 分钟级限流：先按上游窗口等待再打同一渠道，不退会话亲和、不算站点故障。
+        // 只有一次：等完仍超限说明这个窗口确实满了，交给下面的 failover 兜底。
+        // Action alone is not enough: a rate-limited window reuses the ordinary
+        // retry action, so the class has to agree before anyone waits.
+        if (args.failureOutcome.action === 'retry' && args.failureOutcome.minuteRateLimitRetry === true
+          && args.upstreamBucketRateLimited === true) {
+          const requestKey = buildMinuteRateLimitKey(args.selected);
+          const waitMs = resolveMinuteRateLimitRetryWaitMs({
+            alreadyRetried: minuteRateLimitRetriedOnce,
+            waitedMs: minuteRateLimitWaitedMs,
+            upstreamRetryAfterMs: args.retryAfterMs ?? null,
+            budgetMs: MINUTE_RATE_LIMIT_MAX_WAIT_MS,
+          });
+          if (waitMs > 0 && requestKey) {
+            minuteRateLimitRetriedOnce = true;
+            inPlaceRetryChannel = args.selected;
+            // 与同站同模型的其他请求共用窗口；等待期间必须没有渠道租约在手，
+            // 所以这里先释放本次 attempt 的 lease 再排队。
+            releaseCurrentLease();
+            minuteRateLimitWaitedMs += await proxyChannelCoordinator.awaitMinuteRateLimitWindow({
+              key: requestKey,
+              waitMs,
+              budgetMs: MINUTE_RATE_LIMIT_MAX_WAIT_MS - minuteRateLimitWaitedMs,
+            });
+            return 'retried';
+          }
         }
         // Grace window: transient-recovering failures (WAF/429/5xx) often clear
         // within seconds. Stay on the same channel for a configurable grace
@@ -641,7 +694,7 @@ export async function handleChatSurfaceRequest(
         shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
           ctx.response.status,
           ctx.rawErrText || ctx.errText,
-        ),
+        ) || isThinkingPassbackRetryable(ctx.response.status, ctx.rawErrText || ctx.errText),
         onAttemptFailure: async (ctx) => {
           // A 400 that names the effort means the value we forwarded is not in
           // this upstream's accepted ladder: relays that only take
@@ -662,7 +715,20 @@ export async function handleChatSurfaceRequest(
             // learning must use its effort, not the source's client value.
             rejectedBody: ctx.request.body,
           });
-          const memoryWrite = recordUpstreamEndpointFailure({
+          // Prior-turn thinking cannot be echoed by an OpenAI-shaped client, so
+          // the same 400 follows every channel and every face. Continue without
+          // thinking instead: the retry keeps the channel and the face.
+          recoverForThinkingPassback({
+            status: ctx.response.status,
+            errText: ctx.rawErrText || ctx.errText,
+            bodies: [resolvedOpenAiBody],
+            rejectedBody: ctx.request.body,
+          });
+          const thinkingPassback = isThinkingPassbackRetryable(
+            ctx.response.status,
+            ctx.rawErrText || ctx.errText,
+          );
+          const memoryWrite = thinkingPassback ? null : recordUpstreamEndpointFailure({
             ...endpointRuntimeContext,
             endpoint: ctx.request.endpoint,
             status: ctx.response.status,
@@ -787,6 +853,7 @@ export async function handleChatSurfaceRequest(
       return reply;
     }
     const channelLease = leaseResult.lease;
+    currentChannelLease = channelLease;
 
     try {
       const endpointResult = await runWithSiteApiEndpointPool(selected.site, async (target) => {
@@ -795,8 +862,15 @@ export async function handleChatSurfaceRequest(
           const upstreamFailure = new SiteApiEndpointRequestError(result.errText || 'unknown error', {
             status: result.status || 502,
             rawErrText: result.rawErrText || result.errText || 'unknown error',
-          }) as SiteApiEndpointRequestError & { siteApiEndpointUpstreamFailure?: boolean };
+            retryAfterMs: result.retryAfterMs ?? null,
+          }) as SiteApiEndpointRequestError & { siteApiEndpointUpstreamFailure?: boolean; upstreamBucketRateLimited?: boolean };
           upstreamFailure.siteApiEndpointUpstreamFailure = true;
+          // The 502 status would read as a transient 5xx; only the text says this
+          // is a full per-minute bucket the same channel can serve after a wait.
+          upstreamFailure.upstreamBucketRateLimited = isMinuteRateLimitFailure({
+            status: result.status || 502,
+            errorText: result.rawErrText || result.errText || '',
+          });
           throw upstreamFailure;
         }
         return result;
@@ -1180,12 +1254,16 @@ export async function handleChatSurfaceRequest(
       const upstreamUsagePresent = hasProxyUsagePayload(upstreamData);
       const failure = detectProxyFailure({ rawText, usage: parsedUsage, downstreamAborted: isDownstreamReplyGone(reply) });
       if (failure) {
-        clearSurfaceChannelAffinity({
-          stickySessionKey,
-          selected,
-          requestedModel,
-          downstreamApiKeyId,
-        });
+        // 限流是按窗口恢复的容量状态：这里清亲和会把下一次重试赶到别的站，
+        // 正好丢掉唯一还有额度的那个渠道。
+        if (buildProxyFailureDisposition({ status: failure.status, errorText: failure.reason, modelName }).clearSticky) {
+          clearSurfaceChannelAffinity({
+            stickySessionKey,
+            selected,
+            requestedModel,
+            downstreamApiKeyId,
+          });
+        }
         const failureOutcome = await failureToolkit.handleDetectedFailure({
           selected,
             requestedModel,
@@ -1198,12 +1276,14 @@ export async function handleChatSurfaceRequest(
           totalTokens: parsedUsage.totalTokens,
           upstreamPath: successfulUpstreamPath,
           upstreamHeaders: upstream.headers,
+          rateLimitWaitMs: minuteRateLimitWaitedMs,
         });
         if (await continueAttemptOrTerminate({
           selected,
           failureOutcome,
           status: failure.status,
           reason: failure.reason,
+          retryAfterMs: parseUpstreamRetryHint(upstream.headers).retryAfterMs,
           finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, failure.reason),
           upstreamPath: successfulUpstreamPath,
         }) === 'retried') continue;
@@ -1308,12 +1388,17 @@ export async function handleChatSurfaceRequest(
           isStream,
           latencyMs: Date.now() - startTime,
           retryCount,
+          // Reset hint survives the endpoint layer only through the error object.
+          upstreamHeaders: null,
+          rateLimitWaitMs: minuteRateLimitWaitedMs,
         });
         if (await continueAttemptOrTerminate({
           selected,
           failureOutcome,
           status: endpointFailureStatus || 502,
           reason: err.message || null,
+          retryAfterMs: typeof err.retryAfterMs === 'number' ? err.retryAfterMs : null,
+          upstreamBucketRateLimited: err.upstreamBucketRateLimited === true,
           retryFailureReason: err.message || 'unknown error',
           finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(endpointFailureStatus || 502, err.message || 'unknown error'),
           upstreamPath: null,

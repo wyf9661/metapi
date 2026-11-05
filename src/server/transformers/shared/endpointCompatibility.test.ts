@@ -117,6 +117,20 @@ describe('codex-only gateway compatibility', () => {
   });
 });
 
+describe('content-level 400 errors', () => {
+  it.each([
+    "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.",
+    'output_config.effort: unsupported value',
+    'unsupported temperature for this model',
+    'tool_call_id was not found',
+    'openai_error',
+  ])('does not switch protocols for a rejected body: %s', (message) => {
+    for (const type of ['invalid_request_error', 'bad_response_status_code']) {
+      expect(isEndpointDowngradeError(400, JSON.stringify({ error: { message, type } }))).toBe(false);
+    }
+  });
+});
+
 describe('isThinkingModePassbackError', () => {
   it('matches all three protocol wordings', () => {
     expect(isThinkingModePassbackError(

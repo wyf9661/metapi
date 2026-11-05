@@ -2039,6 +2039,9 @@ export default function TokenRoutes() {
                   {explicitGroupRoute && (
                     <MobileField label={tr('模式')} value={tr('群组聚合')} />
                   )}
+                  {exactRoute && (
+                    <MobileField label={tr('模式')} value={tr('精确模型')} />
+                  )}
                   {!exactRoute && !explicitGroupRoute && (
                     <MobileField label={tr('模式')} value={tr('通配符路由')} />
                   )}

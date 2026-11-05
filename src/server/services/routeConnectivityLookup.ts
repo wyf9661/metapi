@@ -10,6 +10,7 @@
 
 import { inArray } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
+import { isMinuteRateLimitFailure } from './siteFailureClassification.js';
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 
 export type ConnectivitySignal = boolean | null;
@@ -85,8 +86,13 @@ export function connectivityScoreFactor(connectivity: ConnectivitySignal): numbe
 export function isHardConnectivityFailure(
   status: string | null | undefined,
   httpStatus: number | null | undefined,
+  errorText?: string | null,
 ): boolean {
   if (String(status || '').toLowerCase() !== 'failed') return false;
+  // A full per-minute bucket arrives as a 5xx on some relays but says nothing
+  // about reachability — the channel answers instantly. Counting it as a hard
+  // failure soft-avoids a healthy channel for the whole TTL.
+  if (isMinuteRateLimitFailure({ status: httpStatus ?? 0, errorText })) return false;
   const code = typeof httpStatus === 'number' && Number.isFinite(httpStatus)
     ? Math.trunc(httpStatus)
     : 0;

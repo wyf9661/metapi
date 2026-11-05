@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { RETRYABLE_TIMEOUT_PATTERNS } from './proxyRetryPolicy.js';
-import { isWafBlockedRuntimeFailure as isWafBlockFailure } from './siteFailureClassification.js';
+import { isWafBlockedRuntimeFailure as isWafBlockFailure, isMinuteRateLimitFailure } from './siteFailureClassification.js';
 
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const NON_RETRYABLE_STATUS_CODES = new Set([400, 401, 403, 404, 422]);
@@ -51,11 +51,18 @@ export class SiteApiEndpointRequestError extends Error {
   readonly status: number | null;
   readonly rawErrText: string | null;
   readonly firstByteLatencyMs: number | null;
+  /**
+   * Reset hint carried by the failing response. Without it the retry decision
+   * can only guess how long a rate-limited bucket needs, and the headers are
+   * already gone by then.
+   */
+  readonly retryAfterMs: number | null;
 
   constructor(message: string, options?: {
     status?: number | null;
     rawErrText?: string | null;
     firstByteLatencyMs?: number | null;
+    retryAfterMs?: number | null;
     cause?: unknown;
   }) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
@@ -66,6 +73,10 @@ export class SiteApiEndpointRequestError extends Error {
       : null;
     this.firstByteLatencyMs = typeof options?.firstByteLatencyMs === 'number' && Number.isFinite(options.firstByteLatencyMs)
       ? options.firstByteLatencyMs
+      : null;
+    this.retryAfterMs = typeof options?.retryAfterMs === 'number' && Number.isFinite(options.retryAfterMs)
+      && options.retryAfterMs > 0
+      ? Math.trunc(options.retryAfterMs)
       : null;
   }
 }
@@ -139,6 +150,12 @@ export function classifySiteApiEndpointFailure(
       // WAF blocks may be path-specific. Rotate to another configured endpoint,
       // but do not record the protocol as unsupported in endpoint runtime memory.
       return { retryable: true, rotateToNextEndpoint: true, failureReason };
+    }
+    // A full per-minute bucket is not a broken endpoint: another base URL for the
+    // same site shares the same account quota, so rotating would only add a hop
+    // (and park an endpoint for 5 minutes). Keep the current one.
+    if (isMinuteRateLimitFailure({ status, errorText: message })) {
+      return { retryable: true, rotateToNextEndpoint: false, failureReason };
     }
     if (RETRYABLE_STATUS_CODES.has(status)) {
       return { retryable: true, rotateToNextEndpoint: true, failureReason };

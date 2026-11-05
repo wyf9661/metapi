@@ -71,6 +71,14 @@ const channelRuntimeStates = new Map<number, ChannelRuntimeState>();
  * request. Entries live only while count > 0.
  */
 const channelDispatchCounts = new Map<number, number>();
+/**
+ * Per site+model "not before" gate for short-window rate limits. A rejected
+ * bucket is upstream state shared by every downstream request for that model on
+ * that site, so they all wait behind one timestamp instead of retrying together.
+ */
+const minuteRateLimitNextAvailableMs = new Map<string, number>();
+/** Spacing between requests released from the same rate-limit window. */
+const MINUTE_RATE_LIMIT_TURN_SPACING_MS = 250;
 let nextLeaseId = 1;
 
 const PROXY_CHANNEL_AFFINITY_SETTING_KEY = 'proxy_channel_affinity_v1';
@@ -97,6 +105,17 @@ type SessionScopedChannelInput =
     extraConfig?: string | null;
     oauthProvider?: string | null;
   };
+
+function sleepMsUnref(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    // A waiting request must not keep the process alive on its own.
+    if (typeof (timer as { unref?: () => void }).unref === 'function') {
+      (timer as { unref: () => void }).unref();
+    }
+  });
+}
 
 function shouldUnrefTimer(timer: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>) {
   if (typeof (timer as { unref?: () => void }).unref === 'function') {
@@ -749,6 +768,44 @@ class ProxyChannelCoordinator {
     };
   }
 
+  /**
+   * Wait for a short-window rate limit to clear on `key` (site+model).
+   *
+   * Resolves with the milliseconds actually waited. The gate is shared and FIFO:
+   * a request that arrives while another one is already waiting for the same
+   * bucket queues behind it, so the site is not hit by a thundering herd the
+   * moment its window resets. Waiting here happens with no channel lease held.
+   * Bounded by `budgetMs`: a bucket that needs longer is a site-level state the
+   * caller must fail over for rather than block the request on.
+   */
+  async awaitMinuteRateLimitWindow(input: {
+    key: string;
+    /** How long this request believes it must wait (upstream hint or default). */
+    waitMs: number;
+    /** Hard cap on the total wait for this request. */
+    budgetMs: number;
+  }): Promise<number> {
+    const nowMs = Date.now();
+    const budgetMs = Math.max(0, Math.trunc(input.budgetMs));
+    if (budgetMs <= 0) return 0;
+    for (const [key, until] of minuteRateLimitNextAvailableMs) {
+      if (until <= nowMs) minuteRateLimitNextAvailableMs.delete(key);
+    }
+    const previousUntil = minuteRateLimitNextAvailableMs.get(input.key) ?? nowMs;
+    const queued = previousUntil > nowMs;
+    const desiredWaitMs = Math.max(0, Math.trunc(input.waitMs));
+    // Queue behind whoever is already waiting, then stagger the release so the
+    // whole backlog does not hit the freshly reset bucket at the same instant.
+    const targetMs = Math.min(
+      previousUntil + desiredWaitMs + (queued ? MINUTE_RATE_LIMIT_TURN_SPACING_MS : 0),
+      nowMs + budgetMs,
+    );
+    minuteRateLimitNextAvailableMs.set(input.key, targetMs);
+    const waitMs = Math.max(0, targetMs - nowMs);
+    if (waitMs > 0) await sleepMsUnref(waitMs);
+    return waitMs;
+  }
+
   private createTrackedLease(channelId: number, state: ChannelRuntimeState): ProxyChannelLease {
     const leaseId = nextLeaseId++;
     state.activeLeaseIds.add(leaseId);
@@ -817,6 +874,7 @@ export function resetProxyChannelCoordinatorState(): void {
   lastSuccessByModelKey.clear();
   channelRuntimeStates.clear();
   channelDispatchCounts.clear();
+  minuteRateLimitNextAvailableMs.clear();
   nextLeaseId = 1;
   if (affinitySaveTimer) {
     clearTimeout(affinitySaveTimer);

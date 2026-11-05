@@ -175,6 +175,49 @@ describe('TokenRoutes mobile layout', () => {
     }
   });
 
+  it('names the route mode on the mobile summary card, including exact models', async () => {
+    apiMock.getRoutesSummary.mockResolvedValue([
+      {
+        id: 1, modelPattern: 'gpt-4o-mini', displayName: 'gpt-4o-mini', displayIcon: null, modelMapping: null,
+        enabled: true, channelCount: 1, enabledChannelCount: 1, siteNames: ['site-a'],
+        decisionSnapshot: null, decisionRefreshedAt: null,
+      },
+      {
+        id: 2, modelPattern: '*', displayName: '*', displayIcon: null, modelMapping: null,
+        enabled: true, channelCount: 1, enabledChannelCount: 1, siteNames: ['site-a'],
+        decisionSnapshot: null, decisionRefreshedAt: null,
+      },
+      {
+        id: 3, routeMode: 'explicit_group', modelPattern: 'qwen3.8-flash', displayName: 'qwen3.8-flash',
+        displayIcon: null, modelMapping: null, enabled: true, channelCount: 2, enabledChannelCount: 2,
+        siteNames: ['site-a'], decisionSnapshot: null, decisionRefreshedAt: null,
+        sourceRouteIds: [2],
+      },
+    ]);
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/routes']}>
+            <ToastProvider>
+              <TokenRoutes />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const text = collectText(root!.root);
+      // Same three labels as the desktop badge, so a route kind is never implicit.
+      expect(text).toContain('精确模型');
+      expect(text).toContain('通配符路由');
+      expect(text).toContain('群组聚合');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('lets mobile users toggle route enabled state from the summary card', async () => {
     let root!: WebTestRenderer;
 

@@ -149,23 +149,69 @@ export function isReasoningEffortAbove(candidate: unknown, cap: unknown): boolea
 }
 
 /**
- * Whether an upstream body-validation error is about the effort value. The
- * vocabulary varies by relay — `level "max" not supported, valid levels: low,
- * medium, high`, `field ReasoningEffort invalid, should be one of: ...` — but
- * every variant names the field or the accepted ladder, so match either.
+ * Parse an enum of accepted values out of a rejection that lists them
+ * (`Supported values are: 'low', 'medium', 'high'`). Unlike the "valid
+ * levels" ladder parser this one is strict: it returns null unless EVERY
+ * listed token is a known effort rung, so an unrelated enum
+ * (`'text', 'json_object'`) is never mistaken for an effort ladder.
  */
-export function isReasoningEffortRejection(errorText: string | null | undefined): boolean {
-  if (!errorText) return false;
-  return /reasoning[_\s-]?effort|(invalid|not supported|unsupported)[^.]{0,40}effort|effort[^.]{0,40}(invalid|not supported|unsupported)|valid levels/i
-    .test(errorText);
+function parseEffortEnumFromError(errorText: string): string[] | null {
+  const match = /\bsupported\s+values?\s+(?:are|is)\s*:?\s*([^.;\n]+)/i.exec(errorText);
+  if (!match) return null;
+  const tokens = match[1]
+    .split(',')
+    .map((entry) => entry.trim().replace(/^and\s+/i, '').replace(/^[`'"]|[`'"]$/g, '').trim())
+    .filter((entry) => entry.length > 0);
+  if (tokens.length === 0) return null;
+  const canonical = tokens.map((entry) => canonicalReasoningEffort(entry));
+  if (canonical.some((entry) => !entry)) return null;
+  return canonical as string[];
 }
 
-/** True when the upstream rejected `none` specifically — this is not a ladder
- * issue but a model that does not support disabling reasoning at all. We strip
- * the field on retry instead of stepping down. */
+/** Recognize a named effort rejection, or a field-less rejection whose enum is an effort ladder. */
+export function isReasoningEffortRejection(errorText: string | null | undefined): boolean {
+  if (!errorText) return false;
+  return /reasoning[_\s-]?effort|(invalid|not supported|unsupported)[^.]{0,40}effort|effort[^.]{0,40}(invalid|not supported|unsupported)|valid levels/i.test(errorText)
+    || (/\bunsupported value\b/i.test(errorText) && parseEffortEnumFromError(errorText) !== null);
+}
+
+/** A rejected `none` cannot step down: omit the field and let the upstream choose its default. */
 export function isNoneReasoningEffortRejection(errorText: string | null | undefined): boolean {
   if (!errorText) return false;
-  return /does not support\s*[`'"]?\s*reasoning_effort\s*[`'"]?\s*value\s*[`'"]?\s*none\s*[`'"]?/i.test(errorText);
+  return /does not support\s*[`'"]?\s*reasoning_effort\s*[`'"]?\s*value\s*[`'"]?\s*none\b/i.test(errorText)
+    || (/\bunsupported value\s*:\s*[`'"]none[`'"]/i.test(errorText)
+      && parseEffortEnumFromError(errorText) !== null);
+}
+
+/**
+ * Turn thinking mode off for a retry. Some relays refuse to continue a
+ * conversation whose earlier turns' reasoning was not echoed back (the
+ * downstream OpenAI-shaped client never sends it), so the only viable repair
+ * is to continue without thinking instead of switching protocol face.
+ * Only flips a thinking switch that is already present — inventing provider
+ * specific parameters would trade one 400 for another.
+ */
+export function stripThinkingModeFromBody(
+  body: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  let changed = stripReasoningEffortFromBody(body);
+
+  const thinking = body.thinking;
+  if (thinking && typeof thinking === 'object' && !Array.isArray(thinking)) {
+    const holder = thinking as Record<string, unknown>;
+    const type = typeof holder.type === 'string' ? holder.type.trim().toLowerCase() : '';
+    if (type === 'enabled' || type === 'adaptive') {
+      holder.type = 'disabled';
+      delete holder.budget_tokens;
+      changed = true;
+    }
+  }
+  if (body.enable_thinking === true) {
+    body.enable_thinking = false;
+    changed = true;
+  }
+  return changed;
 }
 
 /** Remove every effort-bearing slot from a body (used when the upstream rejects

@@ -18,6 +18,7 @@ import { buildContributionRanks, countCandidatesBySite, normalizeContributions, 
 import { DownstreamRoutingPolicy, EMPTY_DOWNSTREAM_ROUTING_POLICY } from './downstreamPolicyTypes.js';
 import { isUsableAccountToken } from './accountTokenService.js';
 import { getCredentialModeFromExtraConfig } from './accountExtraConfig.js';
+import { extractRuntimeHealth } from './accountHealthService.js';
 import { lookupSiteContextLimitForNames } from './siteContextCapabilityService.js';
 import { filterRecentlyFailedCandidates, formatContextTokens, isChannelRecentlyFailed, isSiteDisabled } from './tokenRouterFailurePolicy.js';
 import { isProbeAttributableCooldown } from './tokenRouterFailureRecording.js';
@@ -1066,6 +1067,20 @@ export function getStableFirstOrderedSiteLeaderIndices(
   });
 }
 
+/**
+ * A channel whose account last failed model discovery is routing on a stale
+ * model list: the row exists, but nothing has confirmed the site still serves
+ * it. Keep it in the pool (a metadata blip must not black-hole a working site)
+ * and let real traffic decide — but start it clearly behind channels whose list
+ * was confirmed in the same pass.
+ */
+export function resolveModelDiscoveryStalenessMultiplier(extraConfig?: string | null): number {
+  const health = extractRuntimeHealth(extraConfig);
+  if (!health || health.state === 'healthy') return 1;
+  if ((health.source || '').toLowerCase() !== 'model-discovery') return 1;
+  return 0.25;
+}
+
 export function calculateWeightedSelection(
   candidates: RouteChannelCandidate[],
   modelName: string | ((candidate: RouteChannelCandidate) => string),
@@ -1095,6 +1110,9 @@ export function calculateWeightedSelection(
       channelId: candidate.channel.id,
       accountExtraConfig: candidate.account.extraConfig,
     })
+  ));
+  const stalenessMultipliers = candidates.map((candidate) => (
+    resolveModelDiscoveryStalenessMultiplier(candidate.account.extraConfig)
   ));
 
   // Normalize each dimension to [0,1] before applying the profile weights. Raw
@@ -1150,6 +1168,7 @@ export function calculateWeightedSelection(
     const siteChannels = Math.max(1, siteChannelCounts.get(candidate.site.id) || 1);
     const runtimeMultiplier = runtimeHealthDetails[i]?.combinedMultiplier ?? 1;
     const runtimeLoadMultiplier = resolveChannelRuntimeLoadMultiplier(channelLoadSnapshots[i]);
+    const stalenessMultiplier = stalenessMultipliers[i];
     if (selectionMode === 'stable_first') {
       const recentSuccessRate = resolveStableFirstSuccessRate(
         runtimeHealthDetails[i],
@@ -1158,6 +1177,7 @@ export function calculateWeightedSelection(
       let contribution = Math.max(1e-4, recentSuccessRate ** 2);
       contribution *= runtimeMultiplier;
       contribution *= runtimeLoadMultiplier;
+      contribution *= stalenessMultiplier;
       return contribution / siteChannels;
     }
 
@@ -1179,6 +1199,7 @@ export function calculateWeightedSelection(
     contribution *= runtimeMultiplier;
     contribution *= siteHistoricalHealthMetrics.get(candidate.site.id)?.multiplier ?? 1;
     contribution *= runtimeLoadMultiplier;
+    contribution *= stalenessMultiplier;
 
     // If upstream price is unknown and we are using fallback unit cost,
     // apply an explicit penalty so raising fallback cost meaningfully lowers probability.
@@ -1249,6 +1270,9 @@ export function calculateWeightedSelection(
           ? '按权重随机（唯一可用候选'
           : '按权重随机'
       );
+    const stalenessText = stalenessMultipliers[i] === 1
+      ? ''
+      : `，模型列表陈旧=${stalenessMultipliers[i].toFixed(2)}x（上次模型刷新失败）`;
     const stablePoolText = selectionMode === 'stable_first'
       ? `，轮询顺位=P${stableSiteOrder}`
       : '';
@@ -1256,11 +1280,11 @@ export function calculateWeightedSelection(
       candidate,
       probability,
       reason: selectionMode === 'stable_first'
-        ? `${reasonPrefix}，近期成功率=${recentSuccessRateText}（样本=${siteRuntimeDetail.recentSampleCount.toFixed(2)}，置信=${siteRuntimeDetail.recentConfidence.toFixed(2)}），回退成功率=${historicalSuccessRateText}，综合近期成功率=${stableFirstSuccessRateText}，运行时健康=${runtimeHealthText}，会话负载=${runtimeLoadText}，同站点通道=${siteChannels}${stablePoolText}，评分占比≈${(probability * 100).toFixed(1)}%）`
+        ? `${reasonPrefix}，近期成功率=${recentSuccessRateText}（样本=${siteRuntimeDetail.recentSampleCount.toFixed(2)}，置信=${siteRuntimeDetail.recentConfidence.toFixed(2)}），回退成功率=${historicalSuccessRateText}，综合近期成功率=${stableFirstSuccessRateText}，运行时健康=${runtimeHealthText}${stalenessText}，会话负载=${runtimeLoadText}，同站点通道=${siteChannels}${stablePoolText}，评分占比≈${(probability * 100).toFixed(1)}%）`
         : (
           candidates.length === 1
-            ? `${reasonPrefix}，W=${weight}，成本=${costSourceText}:${(cost?.unitCost || 1).toFixed(6)}，站点权重=${siteGlobalWeight.toFixed(2)}x下游倍率=${normalizedDownstreamSiteMultiplier.toFixed(2)}=${combinedSiteWeight.toFixed(2)}，运行时健康=${runtimeHealthText}，会话负载=${runtimeLoadText}，历史健康=${siteHistoricalMultiplier.toFixed(2)}（成功率=${historicalSuccessRateText}，均延迟=${historicalLatencyText}，样本=${siteHistoricalHealth?.totalCalls ?? 0}），同站点通道=${siteChannels}，概率≈${(probability * 100).toFixed(1)}%）`
-            : `按权重随机（W=${weight}，成本=${costSourceText}:${(cost?.unitCost || 1).toFixed(6)}，站点权重=${siteGlobalWeight.toFixed(2)}x下游倍率=${normalizedDownstreamSiteMultiplier.toFixed(2)}=${combinedSiteWeight.toFixed(2)}，运行时健康=${runtimeHealthText}，会话负载=${runtimeLoadText}，历史健康=${siteHistoricalMultiplier.toFixed(2)}（成功率=${historicalSuccessRateText}，均延迟=${historicalLatencyText}，样本=${siteHistoricalHealth?.totalCalls ?? 0}），同站点通道=${siteChannels}，概率≈${(probability * 100).toFixed(1)}%）`
+            ? `${reasonPrefix}，W=${weight}，成本=${costSourceText}:${(cost?.unitCost || 1).toFixed(6)}，站点权重=${siteGlobalWeight.toFixed(2)}x下游倍率=${normalizedDownstreamSiteMultiplier.toFixed(2)}=${combinedSiteWeight.toFixed(2)}，运行时健康=${runtimeHealthText}${stalenessText}，会话负载=${runtimeLoadText}，历史健康=${siteHistoricalMultiplier.toFixed(2)}（成功率=${historicalSuccessRateText}，均延迟=${historicalLatencyText}，样本=${siteHistoricalHealth?.totalCalls ?? 0}），同站点通道=${siteChannels}，概率≈${(probability * 100).toFixed(1)}%）`
+            : `按权重随机（W=${weight}，成本=${costSourceText}:${(cost?.unitCost || 1).toFixed(6)}，站点权重=${siteGlobalWeight.toFixed(2)}x下游倍率=${normalizedDownstreamSiteMultiplier.toFixed(2)}=${combinedSiteWeight.toFixed(2)}，运行时健康=${runtimeHealthText}${stalenessText}，会话负载=${runtimeLoadText}，历史健康=${siteHistoricalMultiplier.toFixed(2)}（成功率=${historicalSuccessRateText}，均延迟=${historicalLatencyText}，样本=${siteHistoricalHealth?.totalCalls ?? 0}），同站点通道=${siteChannels}，概率≈${(probability * 100).toFixed(1)}%）`
         ),
     };
   });

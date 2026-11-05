@@ -540,6 +540,10 @@ function RouteCardInner({
   const exactRoute = isRouteExactModel(route);
   const explicitGroupRoute = isExplicitGroupRoute(route);
   const explicitGroupSourceCount = Array.isArray(route.sourceRouteIds) ? route.sourceRouteIds.length : 0;
+  // One label per route kind, in both viewports: a route whose kind is invisible
+  // reads as "unknown" next to lanes that are labelled, and exact-model routes
+  // are the majority of the list.
+  const routeModeLabel = explicitGroupRoute ? tr('群组聚合') : exactRoute ? tr('精确模型') : tr('通配符路由');
   const readOnlyRoute = route.kind === 'zero_channel' || route.readOnly === true || route.isVirtual === true;
   const channelManagementDisabled = explicitGroupRoute;
   const title = resolveRouteTitle(route);
@@ -776,6 +780,11 @@ function RouteCardInner({
               ) : null}
             </span>
           )}
+          {routeModeLabel ? (
+            <span className="badge badge-muted" style={{ fontSize: 10, flexShrink: 0 }}>
+              {tr('模式')}：{routeModeLabel}
+            </span>
+          ) : null}
           {hasCachedDecisionSnapshot ? (
             <StatusPill
               color="var(--color-info)"
@@ -894,6 +903,9 @@ function RouteCardInner({
                 ) : null}
               </span>
             )}
+            {routeModeLabel ? (
+              <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('模式')}：{routeModeLabel}</span>
+            ) : null}
             {hasCachedDecisionSnapshot ? (
               <StatusPill
                 color="var(--color-info)"
@@ -1015,6 +1027,9 @@ function RouteCardInner({
                 <span className="badge badge-muted" style={{ fontSize: 10 }}>
                   {explicitGroupSourceCount} {tr('来源模型')}
                 </span>
+              ) : null}
+              {routeModeLabel ? (
+                <span className="badge badge-muted" style={{ fontSize: 10 }}>{tr('模式')}：{routeModeLabel}</span>
               ) : null}
               {savingPriority ? <StatusPill tone="warning" style={{ fontSize: 10 }}>{tr('排序保存中')}</StatusPill> : null}
             </div>

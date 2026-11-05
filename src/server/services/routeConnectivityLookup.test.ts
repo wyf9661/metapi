@@ -53,6 +53,13 @@ describe('routeConnectivityLookup', () => {
     expect(isHardConnectivityFailure(null, 0)).toBe(false);
   });
 
+  it('does not count a short-window rate limit wrapped in 5xx as unreachable', () => {
+    const rateLimited = 'Upstream returned HTTP 502: Your requests to gpt-6.1-sol for gpt-6.1-sol in eastus2 have exceeded token rate limit.';
+    expect(isHardConnectivityFailure('failed', 502, rateLimited)).toBe(false);
+    // A real origin failure with the same status still is reachability evidence.
+    expect(isHardConnectivityFailure('failed', 502, 'Upstream returned HTTP 502: Bad gateway')).toBe(true);
+  });
+
   it('soft-avoids disconnected candidates only when alternatives exist', () => {
     const pool = [
       { id: 1, connectivity: false as const },

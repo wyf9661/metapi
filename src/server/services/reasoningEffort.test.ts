@@ -12,6 +12,7 @@ import {
   resolveWebsocketReasoningEffort,
   setCurrentReasoningEffort,
   stripReasoningEffortFromBody,
+  stripThinkingModeFromBody,
 } from './reasoningEffort.js';
 
 describe('extractReasoningEffort', () => {
@@ -195,6 +196,12 @@ describe('isReasoningEffortRejection', () => {
     expect(isReasoningEffortRejection(null)).toBe(false);
   });
 
+  it('recognises the `unsupported value` wording used by newer relays', () => {
+    expect(isReasoningEffortRejection(
+      "Upstream returned HTTP 400: Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', 'max'.",
+    )).toBe(true);
+  });
+
   it('matches reasoning effort references with space or hyphen variants', () => {
     expect(isReasoningEffortRejection('reasoning effort value rejected')).toBe(true);
     expect(isReasoningEffortRejection('reasoning-effort is unsupported')).toBe(true);
@@ -206,6 +213,21 @@ describe('isNoneReasoningEffortRejection', () => {
     expect(isNoneReasoningEffortRejection(
       'Upstream returned HTTP 400: This model does not support `reasoning_effort` value `none`.',
     )).toBe(true);
+  });
+
+  it.each([
+    "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'.",
+    "Unsupported value: 'none' is not supported with the 'gpt-6-astra' model. Supported values are: 'low', 'medium', 'high'.",
+  ])('matches an enumerated effort rejection: %s', (error) => {
+    expect(isNoneReasoningEffortRejection(error)).toBe(true);
+  });
+
+  it.each([
+    "Unsupported value: 'none' for response_format. Supported values are: 'text', 'json_object'.",
+    "Unsupported value: 'nonetheless'. Supported values are: 'low', 'medium', 'high'.",
+    "Unsupported value: 'none'. Supported values are: 'low', 'auto'.",
+  ])('does not strip effort for an unrelated rejection: %s', (error) => {
+    expect(isNoneReasoningEffortRejection(error)).toBe(false);
   });
 
   it('does not match ladder rejections or unrelated text', () => {
@@ -245,6 +267,29 @@ describe('stripReasoningEffortFromBody', () => {
     expect(body).toEqual({ model: 'gpt-5', temperature: 0.2 });
     expect(stripReasoningEffortFromBody(null)).toBe(false);
     expect(stripReasoningEffortFromBody(undefined)).toBe(false);
+  });
+});
+
+describe('stripThinkingModeFromBody', () => {
+  it('drops effort and flips an explicit thinking switch off', () => {
+    const body: Record<string, unknown> = {
+      model: 'deepseek-v4.1-flash',
+      reasoning_effort: 'max',
+      thinking: { type: 'enabled', budget_tokens: 2048 },
+    };
+    expect(stripThinkingModeFromBody(body)).toBe(true);
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('flips enable_thinking and leaves already-disabled bodies alone', () => {
+    const body: Record<string, unknown> = { model: 'qwen', enable_thinking: true };
+    expect(stripThinkingModeFromBody(body)).toBe(true);
+    expect(body.enable_thinking).toBe(false);
+
+    const already: Record<string, unknown> = { model: 'qwen', thinking: { type: 'disabled' } };
+    expect(stripThinkingModeFromBody(already)).toBe(false);
+    expect(stripThinkingModeFromBody(null)).toBe(false);
   });
 });
 

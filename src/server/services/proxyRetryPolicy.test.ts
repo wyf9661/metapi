@@ -5,12 +5,56 @@ import {
   isNonRetryableProtocolPolicyError,
   isRecoveringTransientFailure,
   resolveFailoverBackoffMs,
+  resolveMinuteRateLimitRetryWaitMs,
   shouldAbortSameSiteEndpointFallback,
   shouldGraceRetryInPlace,
   shouldGraceRetryInPlaceOnce,
   shouldInPlaceRetryEmptyContentOnce,
   shouldRetryProxyRequest,
 } from './proxyRetryPolicy.js';
+
+describe('minute rate limit recovery wait', () => {
+  const MAX_WAIT = 15_000;
+
+  it('waits the upstream hint when the bucket says when it resets', () => {
+    expect(resolveMinuteRateLimitRetryWaitMs({
+      alreadyRetried: false,
+      waitedMs: 0,
+      upstreamRetryAfterMs: 7_000,
+      budgetMs: MAX_WAIT,
+    })).toBe(7_000);
+  });
+
+  it('falls back to 5s when the response carries no hint', () => {
+    expect(resolveMinuteRateLimitRetryWaitMs({
+      alreadyRetried: false,
+      waitedMs: 0,
+      upstreamRetryAfterMs: null,
+      budgetMs: MAX_WAIT,
+    })).toBe(5_000);
+  });
+
+  it('never waits twice and never exceeds the remaining budget', () => {
+    expect(resolveMinuteRateLimitRetryWaitMs({
+      alreadyRetried: true,
+      waitedMs: 0,
+      upstreamRetryAfterMs: 7_000,
+      budgetMs: MAX_WAIT,
+    })).toBe(0);
+    expect(resolveMinuteRateLimitRetryWaitMs({
+      alreadyRetried: false,
+      waitedMs: 12_000,
+      upstreamRetryAfterMs: 7_000,
+      budgetMs: MAX_WAIT,
+    })).toBe(3_000);
+    expect(resolveMinuteRateLimitRetryWaitMs({
+      alreadyRetried: false,
+      waitedMs: 15_000,
+      upstreamRetryAfterMs: 7_000,
+      budgetMs: MAX_WAIT,
+    })).toBe(0);
+  });
+});
 
 describe('proxyRetryPolicy', () => {
   it('retries on rate limit and server errors', () => {
