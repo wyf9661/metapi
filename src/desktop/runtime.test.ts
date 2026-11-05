@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -61,6 +61,26 @@ describe('desktop runtime helpers', () => {
     expect(env.AUTH_TOKEN).not.toBe('change-me-admin-token');
     // ACCOUNT_CREDENTIAL_SECRET is a real non-default value → must be kept.
     expect(env.ACCOUNT_CREDENTIAL_SECRET).toBe('my-persisted-account-secret-32ch');
+  });
+
+  it('persists a synthesized ACCOUNT_CREDENTIAL_SECRET so the next launch can decrypt', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'metapi-secret-'));
+    const launch = () => buildDesktopServerEnv({
+      inheritedEnv: {},
+      userDataDir: dir,
+      logsDir: join(dir, 'logs'),
+      port: 4312,
+    });
+
+    const first = launch();
+    const second = launch();
+
+    // Same key across restarts, else every sealed credential becomes garbage.
+    expect(second.ACCOUNT_CREDENTIAL_SECRET).toBe(first.ACCOUNT_CREDENTIAL_SECRET);
+    // Still distinct from the (per-launch random) admin token.
+    expect(second.ACCOUNT_CREDENTIAL_SECRET).not.toBe(second.AUTH_TOKEN);
+    // Written once, not re-appended on every boot.
+    expect(readFileSync(join(dir, '.env'), 'utf8').match(/^ACCOUNT_CREDENTIAL_SECRET=/gm)).toHaveLength(1);
   });
 
   it('creates the browser URL from the local desktop port', () => {

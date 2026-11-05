@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import getPort from 'get-port';
 
@@ -136,6 +136,21 @@ export function buildDesktopServerEnv(input: DesktopServerEnvInput): NodeJS.Proc
       secret = generateRandomSecret();
     }
     env.ACCOUNT_CREDENTIAL_SECRET = secret;
+    // A synthesized key only works if it outlives this process: sealed rows are
+    // AES-GCM ciphertext under it, so a fresh key next launch makes every
+    // credential (downstream keys included) undecryptable. Persist it in the
+    // user's .env — the file already read on the next launch.
+    try {
+      appendFileSync(
+        join(input.userDataDir, '.env'),
+        '\n# Generated on first launch, never rotated: stored credentials are encrypted\n'
+        + '# with this key — changing or deleting it makes them unreadable.\n'
+        + `ACCOUNT_CREDENTIAL_SECRET=${secret}\n`,
+        'utf8',
+      );
+    } catch (error) {
+      console.warn('[metapi] could not persist ACCOUNT_CREDENTIAL_SECRET:', error);
+    }
   }
 
   return env;
