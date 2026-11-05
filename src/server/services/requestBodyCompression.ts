@@ -13,6 +13,15 @@ import {
   REQUEST_BODY_UPLOAD_ROUTE_PREFIX,
   assembleUploadedBody,
 } from './requestBodyChunkedUpload.js';
+import {
+  REQUEST_BODY_DELTA_CAPABILITY_HEADER,
+  REQUEST_BODY_DELTA_VERSION,
+  REQUEST_BODY_STORE_HEADER,
+  hasDeltaRequestHeaders,
+  parseDeltaRequestHeaders,
+  reconstructDeltaBody,
+  rememberReceivedRequestBody,
+} from './requestBodyDelta.js';
 
 /**
  * Compressed request bodies for cascaded metapi instances.
@@ -370,15 +379,74 @@ export function registerCompressedRequestBodySupport(app: FastifyInstance): void
       REQUEST_BODY_ENCODING_CAPABILITY_HEADER,
       advertisedRequestBodyEncodings().join(', '),
     );
+    // A 409 delta miss sets its own marker; do not overwrite it with the
+    // capability value (onSend runs for error responses too).
+    if (!reply.getHeader(REQUEST_BODY_DELTA_CAPABILITY_HEADER)) {
+      reply.header(
+        REQUEST_BODY_DELTA_CAPABILITY_HEADER,
+        REQUEST_BODY_DELTA_VERSION,
+      );
+    }
     return payload;
   });
 
-  app.addHook('preParsing', async (request, _reply, payload) => {
+  app.addHook('preParsing', async (request, reply, payload) => {
     // Parts of a striped upload are transport fragments, not placeholders: the
     // route stores the raw bytes as they arrive. Leave them untouched — a
     // sender that stamps the upload id on its parts would otherwise have every
     // part rejected here while the body is still being uploaded.
     if (request.url.startsWith(REQUEST_BODY_UPLOAD_ROUTE_PREFIX)) return payload;
+
+    const rawAuthorization = request.headers.authorization;
+    const authorization = Array.isArray(rawAuthorization)
+      ? rawAuthorization[0]
+      : (typeof rawAuthorization === 'string' ? rawAuthorization : null);
+    const keepBody = request.headers[REQUEST_BODY_STORE_HEADER] !== undefined;
+
+    // Prefix delta: the request carries only the bytes after a prefix this
+    // instance is expected to hold. The suffix alone is not valid JSON, so
+    // rebuild the full body here — never hand it to the parser as-is.
+    if (hasDeltaRequestHeaders(request.headers)) {
+      if (!payload) {
+        throw toStatusError('Delta request body is missing', 400, 'FST_ERR_CTP_INVALID_MEDIA_TYPE');
+      }
+      const delta = parseDeltaRequestHeaders(request.headers);
+      if (!delta) {
+        throw toStatusError('Invalid request body delta headers', 400, 'FST_ERR_CTP_INVALID_MEDIA_TYPE');
+      }
+      const rawEncoding = request.headers['content-encoding'];
+      const deltaEncoding = parseRequestBodyEncoding(rawEncoding);
+      if (rawEncoding !== undefined && !deltaEncoding) {
+        throw toStatusError('Unsupported request body encoding', 400, 'FST_ERR_CTP_INVALID_MEDIA_TYPE');
+      }
+      const suffix = deltaEncoding
+        ? await decodeRequestBodyBuffer(
+            deltaEncoding,
+            await readRequestBodyBuffer(payload as ReadableStream, maxCompressedRequestBodyBytes),
+          )
+        : await readRequestBodyBuffer(payload as ReadableStream, maxDecompressedRequestBodyBytes);
+
+      const result = reconstructDeltaBody({ authorization, delta, suffix });
+      if (!result.ok) {
+        if (result.reason === 'miss') {
+          // The base expired or was evicted: the sender must resend it whole.
+          reply.header(REQUEST_BODY_DELTA_CAPABILITY_HEADER, 'miss');
+          throw toStatusError(
+            'Request body delta base is no longer cached',
+            409,
+            'FST_ERR_CTP_INVALID_MEDIA_TYPE',
+          );
+        }
+        throw toStatusError(
+          'Request body delta does not match its digest',
+          400,
+          'FST_ERR_CTP_INVALID_MEDIA_TYPE',
+        );
+      }
+      delete request.headers['content-encoding'];
+      delete request.headers['content-length'];
+      return Readable.from([result.body]);
+    }
 
     // Striped upload: the sender moved the (already compressed) body out of the
     // request itself and uploaded it as parallel parts, leaving only the id
@@ -404,11 +472,21 @@ export function registerCompressedRequestBodySupport(app: FastifyInstance): void
       delete request.headers[REQUEST_BODY_UPLOAD_ID_HEADER];
       delete request.headers['content-length'];
       const decoded = await decodeRequestBodyBuffer(assembled.encoding, assembled.compressed);
+      if (keepBody) rememberReceivedRequestBody({ authorization, body: decoded });
       return Readable.from([decoded]);
     }
 
     const encoding = parseRequestBodyEncoding(request.headers['content-encoding']);
-    if (!encoding || !payload) return payload;
+    if (!encoding) {
+      // A full body the sender asked us to keep, so its next turn can be a
+      // delta against these exact bytes.
+      if (!keepBody || !payload) return payload;
+      delete request.headers['content-length'];
+      const body = await readRequestBodyBuffer(payload as ReadableStream, maxDecompressedRequestBodyBytes);
+      rememberReceivedRequestBody({ authorization, body });
+      return Readable.from([body]);
+    }
+    if (!payload) return payload;
 
     // The decoded body is what the content type parsers must see, and its length
     // differs from the compressed one.
@@ -420,6 +498,7 @@ export function registerCompressedRequestBodySupport(app: FastifyInstance): void
       maxCompressedRequestBodyBytes,
     );
     const decoded = await decodeRequestBodyBuffer(encoding, compressed);
+    if (keepBody) rememberReceivedRequestBody({ authorization, body: decoded });
     return Readable.from([decoded]);
   });
 

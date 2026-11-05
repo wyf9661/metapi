@@ -22,6 +22,15 @@ import {
   shouldStripeRequestBody,
   uploadRequestBodyInParts,
 } from '../../services/requestBodyChunkedUpload.js';
+import {
+  REQUEST_BODY_DELTA_CAPABILITY_HEADER,
+  REQUEST_BODY_STORE_HEADER,
+  buildDeltaRequestBody,
+  forgetUpstreamRequestBodyDeltaCapability,
+  learnUpstreamRequestBodyDeltaCapability,
+  rememberSentRequestBody,
+  supportsRequestBodyDelta,
+} from '../../services/requestBodyDelta.js';
 import { Readable } from 'node:stream';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import {
@@ -183,6 +192,18 @@ function isReplayableBody(body: unknown): boolean {
   return false;
 }
 
+/**
+ * A delta request can fail in two recoverable ways: the base expired (409 with
+ * the miss marker) or the peer no longer speaks the protocol at all (a 400 with
+ * no delta header — an unpatched/rolled-back instance parses the suffix as JSON
+ * and rejects it). Both are answered by resending the body whole.
+ */
+export function isDeltaMissOrDowngrade(response: RuntimeResponse): boolean {
+  const advertised = response.headers.get(REQUEST_BODY_DELTA_CAPABILITY_HEADER);
+  if (response.status === 409) return advertised === 'miss';
+  return response.status === 400 && advertised === null;
+}
+
 export async function performFetch(
   input: RuntimeDispatchInput,
   request: ProxyRuntimeRequest,
@@ -200,60 +221,114 @@ export async function performFetch(
     ? AbortSignal.any([input.signal, init.signal as AbortSignal])
     : (input.signal ?? init.signal);
   let dispatchInit: UndiciRequestInit = init;
-  if (typeof init.body === 'string' && init.body.length >= 1024) {
-    // Unrecognized header container -> leave the init untouched. Rebuilding a
-    // header set we cannot read faithfully is how Authorization gets dropped.
-    const headerRecord = toPlainHeaderRecord(init.headers);
-    if (headerRecord) {
-      const encoded = await maybeCompressUpstreamRequestBody({
-        origin,
-        headers: headerRecord,
-        bodyText: init.body,
-      });
-      if (encoded.compressed) {
-        dispatchInit = { ...init, headers: encoded.headers, body: encoded.body };
-        // A big enough body towards an origin that advertised striped uploads is
-        // uploaded as parallel parts first; the request itself then carries only
-        // the upload id. `uploadRequestBodyInParts` returns null on any failure
-        // (bad status, transport error, abort) and never throws, so a failed
-        // upload silently leaves the single compressed request above in place.
-        const compressedBody = Buffer.isBuffer(encoded.body)
-          ? encoded.body
-          : Buffer.from(init.body);
-        const contentEncoding = encoded.headers['content-encoding'];
-        if (
-          typeof contentEncoding === 'string'
-          && contentEncoding.length > 0
-          && shouldStripeRequestBody({ origin, byteLength: compressedBody.length })
-        ) {
-          const upload = await uploadRequestBodyInParts({
-            url: requestUrl,
-            headers: headerRecord,
-            compressedBody,
-            encoding: contentEncoding as RequestBodyEncoding,
-            signal: combinedSignal ?? undefined,
-          });
-          if (upload) {
-            const stripedHeaders: Record<string, string> = { ...encoded.headers };
-            // The body now travels beside the request: drop the encoding that
-            // described it and carry the upload id instead. The receiver
-            // reassembles and decodes the body before its parser runs.
-            delete stripedHeaders['content-encoding'];
-            stripedHeaders[REQUEST_BODY_UPLOAD_ID_HEADER] = upload.uploadId;
-            stripedHeaders['content-type'] = 'application/json';
-            dispatchInit = { ...init, headers: stripedHeaders, body: '' };
-          }
+  let usedDelta = false;
+  // True when this request makes the peer hold the full body (a stored full
+  // body, or a delta whose base is already there). Only then may the next turn
+  // reference it.
+  let bodyStoredOnPeer = false;
+  const fullBodyText = typeof init.body === 'string' ? init.body : null;
+  const headerRecord = fullBodyText === null ? null : toPlainHeaderRecord(init.headers);
+
+  if (headerRecord && fullBodyText !== null && fullBodyText.length > 0) {
+    const delta = buildDeltaRequestBody({ origin, headers: headerRecord, bodyText: fullBodyText });
+    const deltaCapable = supportsRequestBodyDelta(origin);
+    const bodyText = delta ? delta.bodyText : fullBodyText;
+    // A full body towards a delta-capable peer is kept there for next turn.
+    const headers: Record<string, string> = {
+      ...headerRecord,
+      ...(delta
+        ? delta.headers
+        : (deltaCapable ? { [REQUEST_BODY_STORE_HEADER]: '1' } : {})),
+    };
+    usedDelta = delta !== null;
+    bodyStoredOnPeer = delta !== null || deltaCapable;
+    const encoded = await maybeCompressUpstreamRequestBody({ origin, headers, bodyText });
+    if (encoded.compressed) {
+      dispatchInit = { ...init, headers: encoded.headers, body: encoded.body };
+      // A big enough body towards an origin that advertised striped uploads is
+      // uploaded as parallel parts first; the request itself then carries only
+      // the upload id. `uploadRequestBodyInParts` returns null on any failure
+      // (bad status, transport error, abort) and never throws, so a failed
+      // upload silently leaves the single compressed request above in place.
+      const compressedBody = Buffer.isBuffer(encoded.body)
+        ? encoded.body
+        : Buffer.from(bodyText);
+      const contentEncoding = encoded.headers['content-encoding'];
+      if (
+        !usedDelta
+        && typeof contentEncoding === 'string'
+        && contentEncoding.length > 0
+        && shouldStripeRequestBody({ origin, byteLength: compressedBody.length })
+      ) {
+        const upload = await uploadRequestBodyInParts({
+          url: requestUrl,
+          headers,
+          compressedBody,
+          encoding: contentEncoding as RequestBodyEncoding,
+          signal: combinedSignal ?? undefined,
+        });
+        if (upload) {
+          const stripedHeaders: Record<string, string> = { ...encoded.headers };
+          // The body now travels beside the request: drop the encoding that
+          // described it and carry the upload id instead. The receiver
+          // reassembles and decodes the body before its parser runs.
+          delete stripedHeaders['content-encoding'];
+          stripedHeaders[REQUEST_BODY_UPLOAD_ID_HEADER] = upload.uploadId;
+          stripedHeaders['content-type'] = 'application/json';
+          dispatchInit = { ...init, headers: stripedHeaders, body: '' };
         }
       }
+    } else {
+      dispatchInit = { ...init, headers, body: bodyText };
     }
   }
-  const dispatch = () => fetch(requestUrl, {
-    ...dispatchInit,
-    signal: combinedSignal,
-  });
+
+  // The first delta towards a peer can miss (its base expired, or the process
+  // restarted between turns). That is a transport-level "resend whole", not a
+  // user-visible failure: dispatch the same request again with the full body.
+  let fellBackToFullBody = false;
+  const dispatch = async (): Promise<RuntimeResponse> => {
+    let response = await fetch(requestUrl, {
+      ...dispatchInit,
+      signal: combinedSignal,
+    });
+    if (
+      usedDelta
+      && !fellBackToFullBody
+      && headerRecord
+      && fullBodyText !== null
+      && isDeltaMissOrDowngrade(response)
+    ) {
+      fellBackToFullBody = true;
+      const peerDroppedProtocol = response.status === 400;
+      await response.body?.cancel().catch(() => {});
+      if (peerDroppedProtocol) forgetUpstreamRequestBodyDeltaCapability(origin);
+      const headers: Record<string, string> = {
+        ...headerRecord,
+        ...(supportsRequestBodyDelta(origin) ? { [REQUEST_BODY_STORE_HEADER]: '1' } : {}),
+      };
+      const encoded = await maybeCompressUpstreamRequestBody({
+        origin,
+        headers,
+        bodyText: fullBodyText,
+      });
+      dispatchInit = encoded.compressed
+        ? { ...init, headers: encoded.headers, body: encoded.body }
+        : { ...init, headers, body: fullBodyText };
+      response = await fetch(requestUrl, {
+        ...dispatchInit,
+        signal: combinedSignal,
+      });
+    }
+    return response;
+  };
   const learnAndReturn = (response: RuntimeResponse) => {
     learnUpstreamRequestBodyEncoding(origin, response);
     learnUpstreamBodyUploadCapability(origin, response);
+    learnUpstreamRequestBodyDeltaCapability(origin, response);
+    if (response.ok && bodyStoredOnPeer && headerRecord && fullBodyText !== null) {
+      rememberSentRequestBody({ origin, headers: headerRecord, bodyText: fullBodyText });
+    }
     return response;
   };
   try {
