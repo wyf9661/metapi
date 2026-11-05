@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync, openSync, closeSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { platform, arch } from 'node:os';
 import { eq } from 'drizzle-orm';
@@ -50,6 +50,10 @@ const CLOUDFLARED_DOWNLOAD_DEFAULT_BASE_URL = 'https://github.com/cloudflare/clo
 // unreachable, black-holed packets) otherwise hangs the enable request forever
 // instead of failing with an actionable error.
 const CLOUDFLARED_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+// Progress band the byte counter owns: the remaining 90→100 is unpacking and
+// the atomic rename, which report nothing useful.
+const CLOUDFLARED_DOWNLOAD_PROGRESS_START = 5;
+const CLOUDFLARED_DOWNLOAD_PROGRESS_END = 90;
 // Post-start health probe: a quick tunnel can lose its QUIC session while the
 // cloudflared process stays alive, so process liveness alone keeps reporting
 // running:true while the public URL serves 5xx. Probe the public URL and,
@@ -408,6 +412,33 @@ function dropUnreadResponseBody(response: { body?: { cancel?: () => Promise<unkn
   }
 }
 
+/**
+ * Write a response body to `filePath`, reporting the running byte count.
+ * Writes are synchronous on purpose: an awaited file sink would let the stream
+ * apply backpressure and pause undici's parser (see the download call site).
+ */
+export async function saveResponseBody(
+  body: AsyncIterable<Uint8Array>,
+  totalBytes: number,
+  filePath: string,
+  onBytes: (received: number) => void,
+): Promise<void> {
+  const fd = openSync(filePath, 'w');
+  let received = 0;
+  try {
+    for await (const chunk of body) {
+      writeSync(fd, chunk);
+      received += chunk.length;
+      onBytes(received);
+    }
+  } finally {
+    closeSync(fd);
+  }
+  if (totalBytes > 0 && received !== totalBytes) {
+    throw new Error(`下载不完整：收到 ${received}/${totalBytes} 字节`);
+  }
+}
+
 async function ensureCloudflaredBinary(): Promise<string> {
   ensureDirs();
   const target = binaryPath();
@@ -443,18 +474,22 @@ async function ensureCloudflaredBinary(): Promise<string> {
       dropUnreadResponseBody(response);
       throw new Error(`HTTP ${response.status}`);
     }
-    downloadProgress = 40;
 
-    // Read the whole body before writing it out. A chunk-by-chunk streaming
-    // reader keeps undici's HTTP/1.1 parser paused while the file write
-    // drains; undici 6.28.0 can then fire `assert(!this.paused)` from
-    // Parser.finish() when the server closes the connection, killing the
-    // process (verified against an HTTP/1.0 server: 1-4 crashes per 6
-    // streaming runs, 0 per 12 buffered runs). The asset is ~40 MB, so
-    // buffering costs nothing meaningful.
-    const body = Buffer.from(await response.arrayBuffer());
-    writeFileSync(tmpFile, body);
-    downloadProgress = 90;
+    // Stream the body to disk through a synchronous writer rather than
+    // buffering 40 MB: `arrayBuffer()` hides the byte count (the bar sat at a
+    // single 40%), and `.pipe()` pauses undici's HTTP/1.1 parser while the file
+    // drains, which crashed the process on server close (undici #5360). A pull
+    // loop with blocking writes never lets the write side apply backpressure.
+    const total = Number(response.headers.get('content-length')) || 0;
+    if (!response.body) throw new Error('响应体为空');
+    downloadProgress = total > 0 ? CLOUDFLARED_DOWNLOAD_PROGRESS_START : null;
+    await saveResponseBody(response.body, total, tmpFile, (bytes) => {
+      downloadProgress = total > 0
+        ? CLOUDFLARED_DOWNLOAD_PROGRESS_START
+          + Math.round((CLOUDFLARED_DOWNLOAD_PROGRESS_END - CLOUDFLARED_DOWNLOAD_PROGRESS_START) * Math.min(1, bytes / total))
+        : null;
+    });
+    downloadProgress = CLOUDFLARED_DOWNLOAD_PROGRESS_END;
 
     if (asset.endsWith('.tgz')) {
       await new Promise<void>((resolve, reject) => {

@@ -472,6 +472,16 @@ export default function Dashboard({
     return () => window.clearInterval(timer);
   }, [refreshTunnel]);
 
+  // The one-time cloudflared download is the only case where the status moves
+  // fast enough to be worth watching: at 30 s the bar jumps instead of filling.
+  useEffect(() => {
+    if (!tunnel?.downloading) return;
+    const timer = window.setInterval(() => {
+      void refreshTunnel();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [tunnel?.downloading, refreshTunnel]);
+
   useEffect(() => {
     api.getDesktopInfo()
       .then((info) => {
@@ -984,8 +994,30 @@ export default function Dashboard({
               </code>
             ) : (
               <div className={`dashboard-endpoint-value dashboard-endpoint-status ${tunnel?.lastError || tunnelError ? 'is-error' : ''}`}>
-                {tunnel?.downloading
-                  ? `下载 cloudflared${typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '...'}`
+                {tunnel?.downloading ? (
+                  <>
+                    <span className="dashboard-endpoint-download-text">
+                      {`下载 cloudflared${typeof tunnel?.downloadProgress === 'number' ? ` ${tunnel.downloadProgress}%` : '…'}`}
+                    </span>
+                    <span
+                      className={`dashboard-endpoint-download-track ${
+                        typeof tunnel?.downloadProgress === 'number' ? '' : 'is-indeterminate'
+                      }`}
+                      role="progressbar"
+                      aria-label={tr('下载 cloudflared')}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={typeof tunnel?.downloadProgress === 'number' ? tunnel.downloadProgress : undefined}
+                    >
+                      <span
+                        className="dashboard-endpoint-download-fill"
+                        style={typeof tunnel?.downloadProgress === 'number'
+                          ? { width: `${Math.min(100, Math.max(0, tunnel.downloadProgress))}%` }
+                          : undefined}
+                      />
+                    </span>
+                  </>
+                )
                   : tunnel?.lastError || tunnelError || ((tunnel?.running || tunnel?.enabled) ? tr('正在检查隧道...') : tr('未启用'))}
               </div>
             )}
