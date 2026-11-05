@@ -2,8 +2,28 @@ import { randomBytes } from 'node:crypto';
 import { gzipSync, gunzipSync, zstdCompressSync } from 'node:zlib';
 import { Response } from 'undici';
 import { describe, expect, it } from 'vitest';
-import { enrichTransportFailure, getRuntimeResponseReader, materializeErrorResponse, MAX_JSON_UPSTREAM_BODY_TEXT_CHARS, performFetch, readRuntimeResponseText } from './types.js';
+import { enrichTransportFailure, getRuntimeResponseReader, isDeltaMissOrDowngrade, materializeErrorResponse, MAX_JSON_UPSTREAM_BODY_TEXT_CHARS, performFetch, readRuntimeResponseText } from './types.js';
 import { __resetChunkedBodyUploadForTests } from '../../services/requestBodyChunkedUpload.js';
+import { REQUEST_BODY_DELTA_CAPABILITY_HEADER } from '../../services/requestBodyDelta.js';
+
+describe('isDeltaMissOrDowngrade', () => {
+  const response = (status: number, delta: string | null) => ({
+    status,
+    headers: {
+      get: (name: string) =>
+        name === REQUEST_BODY_DELTA_CAPABILITY_HEADER ? delta : null,
+    },
+  }) as never;
+
+  it('retries only an expired base or a peer that no longer speaks delta', () => {
+    expect(isDeltaMissOrDowngrade(response(409, 'miss'))).toBe(true);
+    expect(isDeltaMissOrDowngrade(response(400, null))).toBe(true);
+    // A delta-capable peer answered on its own terms: the body was fine.
+    expect(isDeltaMissOrDowngrade(response(409, 'v1'))).toBe(false);
+    expect(isDeltaMissOrDowngrade(response(400, 'v1'))).toBe(false);
+    expect(isDeltaMissOrDowngrade(response(500, null))).toBe(false);
+  });
+});
 
 describe('readRuntimeResponseText', () => {
   it('decompresses zstd responses before reading the body text', async () => {
@@ -647,6 +667,170 @@ describe('performFetch striped request-body upload', () => {
     } finally {
       __resetRequestBodyCompressionForTests();
       __resetChunkedBodyUploadForTests();
+      server.close();
+    }
+  });
+});
+
+/**
+ * Sender side of the prefix delta: after one full body the next turn travels as
+ * a suffix, and a 409 from the peer must transparently become a full resend.
+ */
+describe('performFetch cascade prefix-delta', () => {
+  it('sends only the suffix after the peer advertised delta bodies', async () => {
+    const { createServer } = await import('node:http');
+    const received: { headers: Record<string, string | string[] | undefined>; raw: Buffer }[] = [];
+    const server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk as Buffer));
+      req.on('end', () => {
+        received.push({ headers: req.headers, raw: Buffer.concat(chunks) });
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'x-metapi-body-delta': 'v1',
+          'x-metapi-body-encoding': 'gzip',
+        });
+        res.end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const messages = [{ role: 'user', content: 'x'.repeat(200_000) }];
+    const full = JSON.stringify({ model: 'm', messages });
+    const grown = JSON.stringify({
+      model: 'm',
+      messages: [...messages, { role: 'assistant', content: 'ok' }],
+    });
+    const request = {
+      endpoint: 'chat' as const,
+      path: '/v1/chat/completions',
+      headers: {},
+      body: { model: 'm' },
+    };
+    let body = full;
+    const input = {
+      siteUrl: origin,
+      request,
+      buildInit: () => ({
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer sk-hop' },
+        body,
+      }),
+    };
+
+    const { __resetRequestBodyCompressionForTests } = await import(
+      '../../services/requestBodyCompression.js'
+    );
+    const { __resetRequestBodyDeltaForTests } = await import(
+      '../../services/requestBodyDelta.js'
+    );
+    __resetRequestBodyCompressionForTests();
+    __resetRequestBodyDeltaForTests();
+    try {
+      await performFetch(input, request);
+      expect(received[0].headers['x-metapi-body-delta-base']).toBeUndefined();
+      expect(received[0].raw.toString()).toBe(full);
+
+      // The first response taught the sender the capability; this full body is
+      // marked so the peer keeps it for the next turn.
+      await performFetch(input, request);
+      expect(received[1].headers['x-metapi-body-store']).toBe('1');
+      expect(
+        received[1].headers['content-encoding'] === 'gzip'
+          ? gunzipSync(received[1].raw).toString()
+          : received[1].raw.toString(),
+      ).toBe(full);
+
+      body = grown;
+      await performFetch(input, request);
+      const deltaHeaders = received[2].headers;
+      expect(deltaHeaders['x-metapi-body-delta-base']).toBeDefined();
+      expect(deltaHeaders['x-metapi-body-delta-sha256']).toBeDefined();
+      const prefix = Number(deltaHeaders['x-metapi-body-delta-prefix']);
+      expect(prefix).toBeGreaterThan(200_000);
+      // A tiny suffix stays uncompressed (below the 4 KB compression floor);
+      // either way it is only the bytes after the prefix.
+      const sent = received[2].headers['content-encoding'] === 'gzip'
+        ? gunzipSync(received[2].raw)
+        : received[2].raw;
+      expect(sent.toString()).toBe(grown.slice(prefix));
+      expect(received[2].raw.length).toBeLessThan(Buffer.byteLength(grown) / 5);
+    } finally {
+      __resetRequestBodyCompressionForTests();
+      __resetRequestBodyDeltaForTests();
+      server.close();
+    }
+  });
+
+  it('resends the full body once when the peer answers 409 delta miss', async () => {
+    const { createServer } = await import('node:http');
+    const received: { headers: Record<string, string | string[] | undefined>; raw: Buffer }[] = [];
+    let missNextDelta = false;
+    const server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(chunk as Buffer));
+      req.on('end', () => {
+        received.push({ headers: req.headers, raw: Buffer.concat(chunks) });
+        if (missNextDelta && req.headers['x-metapi-body-delta-base']) {
+          missNextDelta = false;
+          res.writeHead(409, { 'content-type': 'application/json', 'x-metapi-body-delta': 'miss' });
+          res.end('{"error":"miss"}');
+          return;
+        }
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'x-metapi-body-delta': 'v1',
+          'x-metapi-body-encoding': 'gzip',
+        });
+        res.end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const messages = [{ role: 'user', content: 'q'.repeat(200_000) }];
+    const full = JSON.stringify({ model: 'm', messages });
+    const grown = JSON.stringify({ model: 'm', messages: [...messages, { role: 'user', content: 'next' }] });
+    const request = {
+      endpoint: 'chat' as const,
+      path: '/v1/chat/completions',
+      headers: {},
+      body: { model: 'm' },
+    };
+    let body = full;
+    const input = {
+      siteUrl: origin,
+      request,
+      buildInit: () => ({
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer sk-hop' },
+        body,
+      }),
+    };
+
+    const { __resetRequestBodyCompressionForTests } = await import(
+      '../../services/requestBodyCompression.js'
+    );
+    const { __resetRequestBodyDeltaForTests } = await import(
+      '../../services/requestBodyDelta.js'
+    );
+    __resetRequestBodyCompressionForTests();
+    __resetRequestBodyDeltaForTests();
+    try {
+      await performFetch(input, request);
+      await performFetch(input, request);
+      body = grown;
+      missNextDelta = true;
+      const response = await performFetch(input, request);
+
+      expect(response.status).toBe(200);
+      // Four requests: full, full+store, delta (409), full again.
+      expect(received).toHaveLength(4);
+      expect(received[2].headers['x-metapi-body-delta-base']).toBeDefined();
+      expect(received[3].headers['x-metapi-body-delta-base']).toBeUndefined();
+      expect(gunzipSync(received[3].raw).toString()).toBe(grown);
+    } finally {
+      __resetRequestBodyCompressionForTests();
+      __resetRequestBodyDeltaForTests();
       server.close();
     }
   });

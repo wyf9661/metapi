@@ -22,6 +22,15 @@ import {
   registerChunkedBodyUploadRoutes,
   storeUploadedBodyPart,
 } from './requestBodyChunkedUpload.js';
+import {
+  REQUEST_BODY_DELTA_BASE_HEADER,
+  REQUEST_BODY_DELTA_CAPABILITY_HEADER,
+  REQUEST_BODY_DELTA_PREFIX_HEADER,
+  REQUEST_BODY_DELTA_SHA256_HEADER,
+  REQUEST_BODY_STORE_HEADER,
+  __resetRequestBodyDeltaForTests,
+  commonPrefixLength,
+} from './requestBodyDelta.js';
 import { config } from '../config.js';
 
 /**
@@ -403,5 +412,124 @@ describe('compressed request body support (receiver)', () => {
     });
     expect(missing.statusCode).toBe(400);
     expect(missing.json().message).toBe('Uploaded request body is missing or incomplete');
+  });
+});
+
+/**
+ * Prefix-delta bodies: the sender keeps only the appended suffix, the receiver
+ * rebuilds the exact body from its own copy before the parser runs. A miss must
+ * be a 409 the sender can retry as a full body — never a parse error and never
+ * a partially reconstructed payload.
+ */
+describe('prefix-delta request bodies (receiver)', () => {
+  const apps: FastifyInstance[] = [];
+
+  const build = async () => {
+    const app = Fastify();
+    registerCompressedRequestBodySupport(app);
+    app.post('/v1/chat/completions', async (request) => ({ ok: true, body: request.body ?? null }));
+    apps.push(app);
+    await app.ready();
+    return app;
+  };
+
+  const AUTH = { authorization: 'Bearer sk-delta-tenant' };
+
+  const post = (app: FastifyInstance, headers: Record<string, string>, payload: string | Buffer) =>
+    app.inject({ method: 'POST', url: '/v1/chat/completions', headers, payload });
+
+  const postFull = (app: FastifyInstance, body: object, authorization = AUTH.authorization) =>
+    post(app, {
+      ...AUTH,
+      authorization,
+      'content-type': 'application/json',
+      [REQUEST_BODY_STORE_HEADER]: '1',
+    }, JSON.stringify(body));
+
+  const postDelta = (
+    app: FastifyInstance,
+    base: string,
+    grown: string,
+    overrides: Partial<Record<'base' | 'prefix' | 'sha' | 'authorization', string>> = {},
+  ) => {
+    const prefix = commonPrefixLength(Buffer.from(base), Buffer.from(grown));
+    return post(app, {
+      ...AUTH,
+      authorization: overrides.authorization ?? AUTH.authorization,
+      'content-type': 'application/json',
+      'content-encoding': 'zstd',
+      [REQUEST_BODY_DELTA_BASE_HEADER]: overrides.base ?? createHash('sha256').update(base).digest('hex'),
+      [REQUEST_BODY_DELTA_PREFIX_HEADER]: overrides.prefix ?? String(prefix),
+      [REQUEST_BODY_DELTA_SHA256_HEADER]: overrides.sha ?? createHash('sha256').update(grown).digest('hex'),
+    }, zstdCompressSync(Buffer.from(grown.slice(prefix))));
+  };
+
+  beforeEach(() => {
+    __resetRequestBodyCompressionForTests();
+    __resetRequestBodyDeltaForTests();
+  });
+
+  afterEach(async () => {
+    __resetRequestBodyCompressionForTests();
+    __resetRequestBodyDeltaForTests();
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
+  it('rebuilds the full body from a stored base plus the suffix', async () => {
+    const app = await build();
+    const base = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'x'.repeat(200_000) }] });
+    const grown = JSON.stringify({
+      model: 'm',
+      messages: [
+        { role: 'user', content: 'x'.repeat(200_000) },
+        { role: 'assistant', content: 'ok' },
+        { role: 'user', content: '下一轮' },
+      ],
+    });
+
+    const stored = await postFull(app, JSON.parse(base));
+    expect(stored.statusCode).toBe(200);
+
+    const delta = await postDelta(app, base, grown);
+    expect(delta.statusCode).toBe(200);
+    expect(delta.json()).toEqual({ ok: true, body: JSON.parse(grown) });
+  });
+
+  it('answers 409 with the miss marker when the base is unknown', async () => {
+    const app = await build();
+    const grown = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'y'.repeat(200_000) }] });
+    const response = await postDelta(app, JSON.stringify({ other: 'body' }), grown);
+    expect(response.statusCode).toBe(409);
+    expect(response.headers[REQUEST_BODY_DELTA_CAPABILITY_HEADER]).toBe('miss');
+  });
+
+  it('rejects a delta whose digest does not match the rebuilt body', async () => {
+    const app = await build();
+    const base = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'z'.repeat(200_000) }] });
+    await postFull(app, JSON.parse(base));
+    const grown = `${base.slice(0, -2)},"extra":1}`;
+    const response = await postDelta(app, base, grown, { sha: 'a'.repeat(64) });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('scopes stored bases to the downstream credential', async () => {
+    const app = await build();
+    const base = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'w'.repeat(200_000) }] });
+    await postFull(app, JSON.parse(base), 'Bearer sk-owner');
+    const stolen = await postDelta(app, base, `${base.slice(0, -2)},"x":1}`, {
+      authorization: 'Bearer sk-attacker',
+    });
+    expect(stolen.statusCode).toBe(409);
+  });
+
+  it('rejects malformed delta headers instead of parsing the suffix as JSON', async () => {
+    const app = await build();
+    const response = await post(app, {
+      ...AUTH,
+      'content-type': 'application/json',
+      [REQUEST_BODY_DELTA_BASE_HEADER]: 'not-a-digest',
+    }, '{"partial":');
+    expect(response.statusCode).toBe(400);
+    expect(response.json().message).toBe('Invalid request body delta headers');
   });
 });
