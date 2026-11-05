@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const { undiciFetchMock } = vi.hoisted(() => ({ undiciFetchMock: vi.fn() }));
 
@@ -25,6 +28,7 @@ import {
   resolveQuickTunnelTransportProtocol,
   resolveTunnelMetricsPort,
   resolveTunnelProbeConnectIp,
+  saveResponseBody,
   waitForPublicUrlHealthy,
 } from './cloudflareTunnelService.js';
 
@@ -141,6 +145,40 @@ describe('cloudflared download helpers', () => {
     } as NodeJS.ProcessEnv)).toBe('socks5://127.0.0.1:1080');
     expect(resolveCloudflaredDownloadProxyUrl({} as NodeJS.ProcessEnv)).toBeNull();
     expect(resolveCloudflaredDownloadProxyUrl({ HTTPS_PROXY: 'not a url' } as NodeJS.ProcessEnv)).toBeNull();
+  });
+});
+
+describe('cloudflared download body writer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'metapi-dl-'));
+
+  it('reports the running byte count and writes every chunk', async () => {
+    const target = join(dir, 'asset.download');
+    const chunks = [new Uint8Array(1000).fill(1), new Uint8Array(1000).fill(2), new Uint8Array(500).fill(3)];
+    const seen: number[] = [];
+
+    await saveResponseBody((async function* () { yield* chunks; })(), 2500, target, (n) => seen.push(n));
+
+    expect(seen).toEqual([1000, 2000, 2500]);
+    const written = readFileSync(target);
+    expect(written.length).toBe(2500);
+    expect(written[0]).toBe(1);
+    expect(written[2000]).toBe(3);
+  });
+
+  it('fails when the peer closes short of content-length', async () => {
+    const target = join(dir, 'short.download');
+    await expect(saveResponseBody(
+      (async function* () { yield new Uint8Array(10); })(),
+      100,
+      target,
+      () => {},
+    )).rejects.toThrow(/下载不完整/);
+  });
+
+  it('skips the length check when the server sent no content-length', async () => {
+    const target = join(dir, 'unknown.download');
+    await saveResponseBody((async function* () { yield new Uint8Array(10); })(), 0, target, () => {});
+    expect(readFileSync(target).length).toBe(10);
   });
 });
 

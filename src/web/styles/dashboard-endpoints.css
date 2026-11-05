@@ -76,6 +76,54 @@
   color: var(--color-danger);
 }
 
+/* Cloudflared download: text + bar share the fixed-height address box, so the
+   row never reflows when the download starts or finishes. */
+.dashboard-endpoint-download-text {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.dashboard-endpoint-download-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 48px;
+  height: 6px;
+  margin-left: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border-light) 70%, transparent);
+}
+
+.dashboard-endpoint-download-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 240ms linear;
+}
+
+.dashboard-endpoint-download-track.is-indeterminate .dashboard-endpoint-download-fill {
+  width: 40%;
+  animation: dashboard-download-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes dashboard-download-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(260%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-endpoint-download-fill {
+    transition: none;
+  }
+
+  .dashboard-endpoint-download-track.is-indeterminate .dashboard-endpoint-download-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
 .dashboard-endpoint-copy,
 .dashboard-endpoint-action {
   min-height: 40px;
