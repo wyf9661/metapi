@@ -39,6 +39,15 @@ describe('siteFailureClassification', () => {
     expect(isLowValueFailoverFailureClass('minute_rate_limit')).toBe(false);
   });
 
+  it('scopes a peer-reported 408 first-byte timeout to the channel, not the whole site', () => {
+    // 对端 metapi 把它自己的首字哨兵当响应体回来时，这条 408 说的是「这一跳的线路慢」，
+    // 8 秒内就给了结论；整站排除会把同站其它健康渠道一起拉黑，请求只剩低质站点。
+    const peerTimeout = 'Upstream returned HTTP 408: first byte timeout (8s)';
+    expect(shouldExcludeSiteForRequestFailure({ status: 408, errorText: peerTimeout })).toBe(false);
+    // 本机哨兵意味着已在这一站等满一整段窗口，换站才是正确动作。
+    expect(shouldExcludeSiteForRequestFailure({ status: 408, errorText: 'first byte timeout (60s)' })).toBe(true);
+  });
+
   it('keeps quota, credential and plain 5xx states out of the short-window class', () => {
     for (const [status, errorText] of [
       [502, 'Bad gateway'],
