@@ -4,12 +4,14 @@ import compress from '@fastify/compress';
 import fastifyStatic from '@fastify/static';
 import { isSpaShellFallbackCandidate } from './webSpaFallback.js';
 import { createNotFoundHandler } from './notFoundHandler.js';
+import {
+  ROUTE_SCOPE_DEPENDENCIES,
+  resolveRequestRouteScope,
+  resolveRequestUrlPath,
+} from './routeScope.js';
 import { ensureEmptyBodyContentTypeParser } from './emptyBodyContentTypeParser.js';
 import { registerCompressedRequestBodySupport } from './services/requestBodyCompression.js';
-import {
-  REQUEST_BODY_UPLOAD_ROUTE_PREFIX,
-  registerChunkedBodyUploadRoutes,
-} from './services/requestBodyChunkedUpload.js';
+import { registerChunkedBodyUploadRoutes } from './services/requestBodyChunkedUpload.js';
 import {
   assertProductionSecurity,
   buildFastifyOptions,
@@ -102,7 +104,7 @@ import {
   ensureProxyChannelAffinityLoaded,
 } from './services/proxyChannelCoordinator.js';
 import { ensureRuntimeDatabaseReady } from './runtimeDatabaseBootstrap.js';
-import { isPublicApiRoute, registerDesktopRoutes } from './desktop.js';
+import { registerDesktopRoutes } from './desktop.js';
 import { tunnelRoutes } from './routes/api/tunnel.js';
 import {
   isLikelyTunnelRequest,
@@ -298,7 +300,12 @@ await app.register(compress, { global: true });
 
 // Tunnel access policy + Auth middleware for /api routes
 app.addHook('onRequest', async (request, reply) => {
-  const urlPath = (request.url || '').split('?')[0] || '/';
+  // Every decision below reads the DECODED path: find-my-way decodes the path
+  // before matching, so a raw `/%61pi/sites` runs the admin handler while a
+  // `/api/` prefix test on `request.url` sees nothing to gate (an unauthenticated
+  // read of the whole management API). See routeScope.ts.
+  const urlPath = resolveRequestUrlPath(request.url);
+  const scope = resolveRequestRouteScope(request.url, request.routeOptions?.url, ROUTE_SCOPE_DEPENDENCIES);
   if (isLikelyTunnelRequest(request as any)) {
     // Default: only OpenAI-compatible API paths + public brand assets are
     // reachable via the tunnel. Brand assets ship independently of the console
@@ -319,16 +326,10 @@ app.addHook('onRequest', async (request, reply) => {
     }
   }
 
-  // The striped body-upload route authenticates itself (admin token, or the
-  // downstream key the request it belongs to carries) and is deliberately
-  // exempt from this admin-only gate: parts arrive with the caller's real
-  // credential, so gating them on the admin token would reject every part and
-  // silently fall back to the single-request upload.
-  if (
-    request.url.startsWith('/api/')
-    && !isPublicApiRoute(request.url)
-    && !request.url.startsWith(REQUEST_BODY_UPLOAD_ROUTE_PREFIX)
-  ) {
+  // The striped body-upload route authenticates itself; that exemption and the
+  // public-route allowlist live in routeScope.ts, applied to both the matched
+  // route pattern and the decoded path so encoding cannot dodge them.
+  if (scope === 'admin') {
     await authMiddleware(request, reply);
   }
 });
