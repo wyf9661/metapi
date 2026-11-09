@@ -380,3 +380,23 @@ export function capReasoningEffortInBody(
   }
   return applied;
 }
+
+/**
+ * Effective effort values that sit outside the canonical ladder (`none`, `off`, `ultra`
+ * and any other spelling): there is no rung to step down from and no canonical form, so
+ * recovery strips the field (same treatment as a rejected `none`) instead of inventing a
+ * value for the client's request.
+ *
+ * Judging the VALUE rather than the error text is deliberate: a relay may reject
+ * `reasoning_effort: none` with a bare `invalid request to model` 400 that never names
+ * the field, the value or a ladder (observed on EXAONE-API), so any text-keyed rule
+ * misses exactly the case that hurts. Unknown spellings are also off-ladder — stripping
+ * them can only turn a body the relay refused into one it may accept.
+ */
+export function isReasoningEffortOffLadder(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const collapsed = value.trim().toLowerCase().replace(/[-\s]/g, '');
+  if (!collapsed) return false;
+  if ((REASONING_EFFORT_VALUES as readonly string[]).includes(collapsed)) return false;
+  return REASONING_EFFORT_ALIASES[collapsed] === undefined ? true : false;
+}

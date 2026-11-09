@@ -21,6 +21,7 @@
 import {
   downgradeReasoningEffortInBody,
   isNoneReasoningEffortRejection,
+  isReasoningEffortOffLadder,
   isReasoningEffortRejection,
   readReasoningEffortFromBody,
   resolveInPlaceEffortRetryCeiling,
@@ -33,9 +34,25 @@ import {
 import { isThinkingModePassbackError } from '../../transformers/shared/endpointCompatibility.js';
 import { stripThinkingModeFromBody } from '../../services/reasoningEffort.js';
 
-/** True when this attempt failure is an effort-value rejection worth an in-place retry. */
-export function isEffortRejectionRetryable(status: number, errText: string | null | undefined): boolean {
-  return status === 400 && isReasoningEffortRejection(errText);
+/**
+ * True when this attempt failure is worth an in-place effort retry.
+ *
+ * Two independent routes, because relays differ in how much they say:
+ *  - the error names the effort value (classic ladder / enum rejection), or
+ *  - the body we just sent carried an off-ladder effort (`none`, `off`, …) and the
+ *    relay answered 400 without naming anything. Judging by the value keeps this
+ *    working against relays that reject the body with a bare "invalid request to
+ *    model"; canonical values stay untouched on such a 400 (the body may be wrong
+ *    for an unrelated reason and stripping would hide that).
+ */
+export function isEffortRejectionRetryable(
+  status: number,
+  errText: string | null | undefined,
+  sentEffort?: string | null,
+): boolean {
+  if (status !== 400) return false;
+  if (isReasoningEffortRejection(errText)) return true;
+  return isReasoningEffortOffLadder(sentEffort);
 }
 
 /**
@@ -51,9 +68,9 @@ export const clampBuiltBodyToEffortCeiling = clampRequestBodyToSiteEffortCeiling
  *
  * Handles two kinds of verdict:
  *
- * 1. `none` rejection — the model does not support disabling reasoning at all.
- *    The field is stripped; no ceiling is learned (there is no ladder rung
- *    below `none`).
+ * 1. `none` / off-ladder sentinel rejection — the model does not accept the value
+ *    (`none`, `off`, `ultra`, …).  The field is stripped; no ceiling is learned:
+ *    there is no rung to step down from.
  *
  * 2. Ladder rejection — a specific effort value was outside the relay's
  *    accepted ladder.  The ceiling for this site+protocol is recorded
@@ -63,6 +80,24 @@ export const clampBuiltBodyToEffortCeiling = clampRequestBodyToSiteEffortCeiling
  *
  * Returns true when a body was actually changed, false on no-op.
  */
+/**
+ * The effort value the relay actually judged: the final outbound body when the
+ * caller has one (overrides merged), else the first source body that carries an
+ * effort. Read from the body — never from the error text.
+ */
+function verdictEffort(input: {
+  bodies: ReadonlyArray<Record<string, unknown> | null | undefined>;
+  rejectedBody?: Record<string, unknown> | null;
+}): string | null {
+  const order = input.rejectedBody ? [input.rejectedBody, ...input.bodies] : input.bodies;
+  for (const body of order) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) continue;
+    const effort = readReasoningEffortFromBody(body as Record<string, unknown>);
+    if (effort) return effort;
+  }
+  return null;
+}
+
 export function recoverForEffortRejection(input: {
   status: number;
   errText: string | null | undefined;
@@ -79,7 +114,8 @@ export function recoverForEffortRejection(input: {
    */
   rejectedBody?: Record<string, unknown> | null;
 }): boolean {
-  if (!isEffortRejectionRetryable(input.status, input.errText)) return false;
+  const sent = verdictEffort(input);
+  if (!isEffortRejectionRetryable(input.status, input.errText, sent)) return false;
 
   const candidateBodies: Array<Record<string, unknown>> = [];
   for (const body of input.bodies) {
@@ -89,8 +125,22 @@ export function recoverForEffortRejection(input: {
   }
   if (candidateBodies.length === 0) return false;
 
-  // — `none` rejection: strip the field from every source body —
-  if (isNoneReasoningEffortRejection(input.errText)) {
+  // The relay's text names nothing about effort (bare "invalid request to model"):
+  // the only defensible action is to drop the off-ladder value we ourselves sent.
+  // Canonical values are left alone — such a 400 may come from an unrelated defect
+  // and silently stripping the field would hide it.
+  if (!isReasoningEffortRejection(input.errText)) {
+    if (!isReasoningEffortOffLadder(sent)) return false;
+    let stripped = false;
+    for (const body of candidateBodies) {
+      if (stripReasoningEffortFromBody(body)) stripped = true;
+    }
+    return stripped;
+  }
+
+  // — `none` by wording, or any off-ladder value the relay judged: the field is
+  //   stripped from every source body; no ceiling is learned (no rung to step to). —
+  if (isNoneReasoningEffortRejection(input.errText) || isReasoningEffortOffLadder(sent)) {
     let changed = false;
     for (const body of candidateBodies) {
       if (stripReasoningEffortFromBody(body)) changed = true;
