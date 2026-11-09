@@ -6,6 +6,7 @@ import {
   getCurrentReasoningEffort,
   inferReasoningEffortFromModelName,
   isNoneReasoningEffortRejection,
+  isReasoningEffortOffLadder,
   isReasoningEffortRejection,
   normalizeReasoningEffort,
   resolveRequestReasoningEffort,
@@ -331,5 +332,28 @@ describe('downgradeReasoningEffortInBody', () => {
     expect(body).toEqual({ model: 'gpt-5', temperature: 0.2 });
     expect(downgradeReasoningEffortInBody(null)).toBeNull();
     expect(downgradeReasoningEffortInBody(undefined)).toBeNull();
+  });
+});
+
+describe('isReasoningEffortOffLadder', () => {
+  it('treats sentinels and unknown spellings as off-ladder', () => {
+    expect(isReasoningEffortOffLadder('none')).toBe(true);
+    expect(isReasoningEffortOffLadder('NONE')).toBe(true);
+    expect(isReasoningEffortOffLadder('off')).toBe(true);
+    expect(isReasoningEffortOffLadder('ultra')).toBe(true);
+  });
+
+  it('treats canonical rungs and collapsing aliases as on the ladder', () => {
+    for (const value of ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'extrahigh', ' extra-high ']) {
+      expect(isReasoningEffortOffLadder(value)).toBe(false);
+    }
+  });
+
+  it('treats empty, absent and non-string values as not off-ladder', () => {
+    expect(isReasoningEffortOffLadder('')).toBe(false);
+    expect(isReasoningEffortOffLadder('   ')).toBe(false);
+    expect(isReasoningEffortOffLadder(null)).toBe(false);
+    expect(isReasoningEffortOffLadder(undefined)).toBe(false);
+    expect(isReasoningEffortOffLadder(42)).toBe(false);
   });
 });

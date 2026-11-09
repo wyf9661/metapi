@@ -29,6 +29,7 @@ import {
   recoverForEffortRejection,
   recoverForThinkingPassback,
 } from './effortRecovery.js';
+import { readReasoningEffortFromBody } from '../../services/reasoningEffort.js';
 
 import {
   ProxyInputFileResolutionError,
@@ -858,6 +859,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
           shouldRetryInPlace: (ctx) => isEffortRejectionRetryable(
             ctx.response.status,
             ctx.rawErrText || ctx.errText,
+            readReasoningEffortFromBody(ctx.request?.body),
           ) || isThinkingPassbackRetryable(ctx.response.status, ctx.rawErrText || ctx.errText),
           onAttemptFailure: async (ctx) => {
             // A 400 that names the effort means the value we forwarded is not in
