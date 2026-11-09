@@ -55,6 +55,14 @@ describe('resolveRequestRouteScope', () => {
     expect(scope('/v1/chat/completions', '/v1/chat/completions')).toBe('other');
     expect(scope('/logo.svg', '/*')).toBe('other');
   });
+
+  it('does not spend the auth budget on /api-shaped paths no route matched', () => {
+    // Scanners probe /api/show and friends; the SPA wildcard serves them, so they
+    // must stay 404s rather than count as failed logins (the tunnel shares one
+    // client address for every request).
+    expect(scope('/api/show', '/*')).toBe('other');
+    expect(scope('/%61pi/show', '/*')).toBe('other');
+  });
 });
 
 describe('onRequest admin gate against a real router', () => {
@@ -112,5 +120,9 @@ describe('onRequest admin gate against a real router', () => {
   it('still serves public routes and static assets', async () => {
     expect((await get('/api/health/live')).status).toBe(200);
     expect((await get('/logo.svg')).status).toBe(200);
+  });
+
+  it('keeps unmatched /api paths as 404s so they never count as failed logins', async () => {
+    expect((await get('/api/show')).status).toBe(404);
   });
 });

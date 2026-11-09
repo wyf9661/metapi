@@ -24,30 +24,32 @@ export function resolveRequestUrlPath(rawUrl: string): string {
 }
 
 /**
- * Which gate a request falls under. Both inputs matter because they disagree
- * under encoding: `matchedRouteUrl` is the pattern find-my-way actually matched
- * (authoritative), the decoded path is what the URL claims. A request counts as
- * a management API call when EITHER looks like `/api/...`, and the public /
- * self-authenticating exemptions only apply when BOTH agree — a path that is
- * public in one form and admin in the other is admin.
+ * Which gate a request falls under, keyed on the route find-my-way actually
+ * matched — that pattern is what runs, so it cannot be dodged by encoding the
+ * URL. `routeOptions.url` is unset only when nothing matched at all; fall back
+ * to the decoded path there and gate it (fail closed).
+ *
+ * A path that merely LOOKS like `/api/...` but matched no management route (the
+ * SPA wildcard catches scanners probing `/api/show`) stays 'other': those stay
+ * 404s instead of auth failures. That matters because every tunneled request
+ * shares one client address (TRUST_PROXY is off), so unauthenticated probes on
+ * paths with no handler would spend the whole tunnel's auth failure budget and
+ * lock the console out.
  */
 export function resolveRequestRouteScope(
   rawUrl: string,
   matchedRouteUrl: string | undefined,
   deps: { isPublicApiRoute(rawUrl: string): boolean; uploadRoutePrefix: string },
 ): RouteScope {
-  const path = resolveRequestUrlPath(rawUrl);
-  const apiPaths = [matchedRouteUrl, path].filter(
-    (candidate): candidate is string => typeof candidate === 'string' && candidate.startsWith('/api/'),
-  );
-  if (apiPaths.length === 0) return 'other';
-  if (apiPaths.every((candidate) => deps.isPublicApiRoute(candidate))) return 'public';
+  const routePath = matchedRouteUrl || resolveRequestUrlPath(rawUrl);
+  if (!routePath.startsWith('/api/')) return 'other';
+  if (deps.isPublicApiRoute(routePath)) return 'public';
   // The striped body-upload route authenticates itself (admin token, or the
   // downstream key the request it belongs to carries) and is deliberately
   // exempt: parts arrive with the caller's real credential, so gating them on
   // the admin token would reject every part and silently fall back to the
   // single-request upload.
-  if (apiPaths.every((candidate) => candidate.startsWith(deps.uploadRoutePrefix))) return 'upload';
+  if (routePath.startsWith(deps.uploadRoutePrefix)) return 'upload';
   return 'admin';
 }
 
