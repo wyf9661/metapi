@@ -78,6 +78,54 @@ describe('recoverForEffortRejection', () => {
     expect(openAiBody.reasoning_effort).toBeUndefined();
   });
 
+  it('strips the field for an off-ladder sentinel instead of stepping down', () => {
+    const responsesBody = { reasoning: { effort: 'ultra', summary: 'auto' } };
+    const openAiBody = { reasoning_effort: 'ultra' };
+
+    const changed = recoverForEffortRejection({
+      status: 400,
+      errText: 'field ReasoningEffort invalid, should be one of: low, medium, high',
+      siteId: 7,
+      endpoint: 'responses',
+      bodies: [responsesBody, openAiBody],
+    });
+
+    expect(changed).toBe(true);
+    expect(responsesBody.reasoning).toEqual({ summary: 'auto' });
+    expect(openAiBody.reasoning_effort).toBeUndefined();
+    // Nothing teachable: an off-ladder sentinel must not seed a site ceiling.
+    expect(clampBuiltBodyToEffortCeiling({ reasoning: { effort: 'max' } }, 7, 'responses')).toBeNull();
+  });
+
+  it('strips an off-ladder effort when the 400 carries no effort wording at all', () => {
+    // Real shape: EXAONE-API answers a rejected `reasoning_effort: none` with a bare
+    // "invalid request to model" 400 — no effort noun, no value, no ladder.
+    const body = { reasoning_effort: 'none' };
+
+    const changed = recoverForEffortRejection({
+      status: 400,
+      errText: 'Upstream returned HTTP 400: invalid request to model',
+      siteId: 8,
+      endpoint: 'chat',
+      bodies: [body],
+    });
+
+    expect(changed).toBe(true);
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
+  it('leaves a canonical effort alone when the 400 names nothing', () => {
+    const body = { reasoning_effort: 'high' };
+    expect(recoverForEffortRejection({
+      status: 400,
+      errText: 'Upstream returned HTTP 400: invalid request to model',
+      siteId: 8,
+      endpoint: 'chat',
+      bodies: [body],
+    })).toBe(false);
+    expect(body.reasoning_effort).toBe('high');
+  });
+
   it('handles the Anthropic output_config.effort shape', () => {
     const anthropicBody = { output_config: { effort: 'max' } };
 

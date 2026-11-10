@@ -141,6 +141,41 @@ describe('executeEndpointFlow', () => {
     if (endpoint === 'responses') expect(body.reasoning?.summary).toBe('auto');
   });
 
+  it.each(['responses', 'messages', 'chat'] as const)('does not let overrides restore a rejected off-ladder sentinel on the %s retry', async (endpoint) => {
+    const { isEffortRejectionRetryable, recoverForEffortRejection } = await import('../../proxy-core/surfaces/effortRecovery.js');
+    const { readReasoningEffortFromBody } = await import('../../services/reasoningEffort.js');
+    const slots = endpoint === 'responses'
+      ? { reasoning: { effort: 'ultra', summary: 'auto' } }
+      : endpoint === 'messages' ? { output_config: { effort: 'ultra' } } : { reasoning_effort: 'ultra' };
+    const source: Record<string, unknown> = { model: 'fixture-model', ...slots };
+    const errorText = 'Upstream returned HTTP 400: invalid request to model';
+    fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({ error: { message: errorText } }), { status: 400 })))
+      .mockResolvedValueOnce(toUndiciResponse(new Response('{"ok":true}')));
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: [endpoint],
+      paramOverride: JSON.stringify(slots),
+      buildRequest: () => ({ ...requestFor('/v1/' + endpoint), endpoint, body: structuredClone(source) }),
+      shouldRetryInPlace: (ctx: any) => isEffortRejectionRetryable(
+        ctx.response.status,
+        ctx.rawErrText,
+        readReasoningEffortFromBody(ctx.request.body),
+      ),
+      onAttemptFailure: (ctx: any) => recoverForEffortRejection({
+        status: ctx.response.status, errText: ctx.rawErrText, siteId: 1, endpoint,
+        bodies: [source], rejectedBody: ctx.request.body,
+      }),
+    });
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe(fetchMock.mock.calls[0][0]);
+    const body = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.reasoning?.effort).toBeUndefined();
+    expect(body.output_config?.effort).toBeUndefined();
+    if (endpoint === 'responses') expect(body.reasoning?.summary).toBe('auto');
+  });
+
   it('returns the first successful upstream response', async () => {
     fetchMock.mockResolvedValueOnce(toUndiciResponse(new Response(JSON.stringify({ ok: true }), {
       status: 200,
