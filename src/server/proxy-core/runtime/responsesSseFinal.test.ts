@@ -47,6 +47,14 @@ describe('collectResponsesFinalPayloadFromSse', () => {
       .toThrow('quota exceeded');
   });
 
+  it.each([
+    'data: {"type":"response.created","response":{"id":"resp_cut","output":[]}}\n\n',
+    'data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_cut","delta":"partial"}\n\n',
+  ])('rejects a closed stream without its explicit terminal event', async (rawText) => {
+    await expect(collectResponsesFinalPayloadFromSse({ text: async () => rawText }, 'fixture-model'))
+      .rejects.toThrow('stream disconnected before terminal responses event');
+  });
+
   it('prefers aggregated stream content when response.completed only carries an empty output array', async () => {
     const upstream = {
       async text() {
