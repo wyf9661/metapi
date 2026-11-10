@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { config } from '../../../config.js';
 
 import { createResponsesProxyStreamSession } from './proxyStream.js';
 
@@ -257,5 +259,66 @@ describe('createResponsesProxyStreamSession', () => {
     expect(output).toContain('"output_text":"partial answer"');
     expect(output).not.toContain('event: response.completed');
     expect(output).toContain('data: [DONE]');
+  });
+});
+
+describe('createResponsesProxyStreamSession malformed tool-call gate', () => {
+  const originalEmptyFail = config.proxyEmptyContentFailEnabled;
+
+  afterEach(() => {
+    config.proxyEmptyContentFailEnabled = originalEmptyFail;
+  });
+
+  function readerOf(chunk: string) {
+    return {
+      reads: 0,
+      async read() {
+        if (this.reads > 0) return { done: true };
+        this.reads += 1;
+        return { done: false, value: new TextEncoder().encode(chunk) };
+      },
+      async cancel() { return undefined; },
+      releaseLock() {},
+    };
+  }
+
+  function completedWith(argumentsJson: string) {
+    return [
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"call_1","name":"Glob","arguments":""}}',
+      '',
+      `data: {"type":"response.function_call_arguments.delta","output_index":0,"item_id":"fc_1","delta":${JSON.stringify(argumentsJson)}}`,
+      '',
+      `data: {"type":"response.completed","response":{"id":"resp_m","status":"completed","model":"gpt-5","output":[{"id":"fc_1","type":"function_call","call_id":"call_1","name":"Glob","arguments":${JSON.stringify(argumentsJson)}}],"usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8}}}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n');
+  }
+
+  function sessionOf(lines: string[]) {
+    return createResponsesProxyStreamSession({
+      modelName: 'gpt-5',
+      successfulUpstreamPath: '/v1/responses',
+      getUsage: () => ({ promptTokens: 5, completionTokens: 3, totalTokens: 8, cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null }),
+      writeLines: (nextLines) => { lines.push(...nextLines); },
+      writeRaw: () => {},
+    });
+  }
+
+  it('fails a completion whose function_call arguments are half JSON', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+    const lines: string[] = [];
+    const result = await sessionOf(lines).run(readerOf(completedWith('{"pattern": "README')) as any, { end() {} });
+    expect(result).toMatchObject({
+      status: 'failed',
+      errorMessage: 'Upstream returned malformed tool call arguments',
+    });
+  });
+
+  it('keeps a completion whose function_call arguments parse', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+    const lines: string[] = [];
+    const result = await sessionOf(lines).run(readerOf(completedWith('{"pattern":"README*"}')) as any, { end() {} });
+    expect(result).toMatchObject({ status: 'completed', errorMessage: null });
   });
 });
