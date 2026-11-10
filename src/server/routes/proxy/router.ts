@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { proxyAuthMiddleware } from '../../middleware/auth.js';
 import { antiProbingMiddleware } from '../../middleware/antiProbing.js';
 import { resolveRequestReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
+import { setUpstreamResponseModel } from '../../services/upstreamResponseModel.js';
 import { chatProxyRoute, claudeMessagesProxyRoute } from './chat.js';
 import { modelsProxyRoute } from './models.js';
 import { embeddingsProxyRoute } from './embeddings.js';
@@ -30,6 +31,9 @@ export async function proxyRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (request) => {
     const body = request.body as { model?: unknown } | null | undefined;
     setCurrentReasoningEffort(resolveRequestReasoningEffort(body, body?.model));
+    // Same lifetime as the effort: one request, cleared before the upstream
+    // payload can set it.
+    setUpstreamResponseModel(null);
   });
 
   await app.register(chatProxyRoute);

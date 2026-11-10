@@ -344,6 +344,13 @@
       "when": 1792902123858,
       "tag": "0049_drop_oauth_objects",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1794291589390,
+      "tag": "0050_proxy_log_response_model",
+      "breakpoints": true
     }
   ]
 }

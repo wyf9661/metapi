@@ -55,6 +55,7 @@ let pgPool: pg.Pool | null = null;
 let proxyLogBillingDetailsColumnAvailable: boolean | null = null;
 let proxyLogCacheTokensColumnsAvailable: boolean | null = null;
 let proxyLogReasoningEffortColumnAvailable: boolean | null = null;
+let proxyLogResponseModelColumnAvailable: boolean | null = null;
 let proxyLogDownstreamApiKeyIdColumnAvailable: boolean | null = null;
 let proxyLogClientColumnsAvailable: boolean | null = null;
 let proxyLogStreamTimingColumnsAvailable: boolean | null = null;
@@ -855,6 +856,33 @@ export async function hasProxyLogReasoningEffortColumn(): Promise<boolean> {
   return proxyLogReasoningEffortColumnAvailable;
 }
 
+export async function hasProxyLogResponseModelColumn(): Promise<boolean> {
+  if (proxyLogResponseModelColumnAvailable !== null) {
+    return proxyLogResponseModelColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'sqlite') {
+    proxyLogResponseModelColumnAvailable = tableExists('proxy_logs')
+      && tableColumnExists('proxy_logs', 'response_model');
+    return proxyLogResponseModelColumnAvailable;
+  }
+
+  if (runtimeDbDialect === 'mysql') {
+    if (!mysqlPool) return false;
+    const [rows] = await mysqlPool.query('SHOW COLUMNS FROM `proxy_logs` LIKE ?', ['response_model']);
+    proxyLogResponseModelColumnAvailable = Array.isArray(rows) && rows.length > 0;
+    return proxyLogResponseModelColumnAvailable;
+  }
+
+  if (!pgPool) return false;
+  const result = await pgPool.query(
+    'SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2 LIMIT 1',
+    ['proxy_logs', 'response_model'],
+  );
+  proxyLogResponseModelColumnAvailable = Number(result.rowCount || 0) > 0;
+  return proxyLogResponseModelColumnAvailable;
+}
+
 export async function hasProxyLogCacheTokensColumns(): Promise<boolean> {
   if (proxyLogCacheTokensColumnsAvailable !== null) {
     return proxyLogCacheTokensColumnsAvailable;
@@ -998,6 +1026,47 @@ export async function ensureProxyLogReasoningEffortColumn(): Promise<boolean> {
       return true;
     }
     proxyLogReasoningEffortColumnAvailable = false;
+    return false;
+  }
+}
+
+export async function ensureProxyLogResponseModelColumn(): Promise<boolean> {
+  if (runtimeDbDialect === 'sqlite') {
+    if (tableExists('proxy_logs')) {
+      if (!tableColumnExists('proxy_logs', 'response_model')) {
+        execSqliteLegacyCompat('ALTER TABLE proxy_logs ADD COLUMN response_model text;');
+      }
+      proxyLogResponseModelColumnAvailable = true;
+    }
+    return proxyLogResponseModelColumnAvailable === true;
+  }
+
+  if (await hasProxyLogResponseModelColumn()) {
+    return true;
+  }
+
+  try {
+    if (runtimeDbDialect === 'mysql') {
+      if (!mysqlPool) return false;
+      await executeLegacyCompat(
+        (statement) => mysqlPool!.query(statement).then(() => undefined),
+        'ALTER TABLE `proxy_logs` ADD COLUMN `response_model` TEXT',
+      );
+    } else {
+      if (!pgPool) return false;
+      await executeLegacyCompat(
+        (statement) => pgPool!.query(statement).then(() => undefined),
+        'ALTER TABLE "proxy_logs" ADD COLUMN "response_model" text',
+      );
+    }
+    proxyLogResponseModelColumnAvailable = true;
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error)) {
+      proxyLogResponseModelColumnAvailable = true;
+      return true;
+    }
+    proxyLogResponseModelColumnAvailable = false;
     return false;
   }
 }

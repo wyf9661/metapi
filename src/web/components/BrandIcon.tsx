@@ -234,11 +234,14 @@ export function InlineBrandIcon({ model, size = 16, site }: { model: string; siz
 export function ModelBadge({
   model,
   actualModel,
+  responseModel,
   style,
   site,
 }: {
   model: string;
   actualModel?: string | null;
+  /** The model the upstream itself reported in its response body. */
+  responseModel?: string | null;
   style?: CSSProperties;
   /** Upstream site the model came from, used as the icon fallback for vendors we do not classify yet. */
   site?: SiteIconFallback | null;
@@ -278,7 +281,7 @@ export function ModelBadge({
         <InlineBrandIcon model={model} size={14} site={site} />
         {model}
       </span>
-      <ActualModelTrigger requestedModel={model} actualModel={actualModel} />
+      <ActualModelTrigger requestedModel={model} actualModel={actualModel} responseModel={responseModel} />
     </span>
   );
 }

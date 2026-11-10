@@ -6,6 +6,8 @@ type ActualModelTriggerProps = {
   /** The model the client asked for (may be a group/alias name). */
   requestedModel: string;
   actualModel?: string | null;
+  /** The model the upstream itself reported in its response body. */
+  responseModel?: string | null;
   size?: number;
 };
 
@@ -24,11 +26,17 @@ const rowValueStyle = { fontSize: 11, wordBreak: 'break-all' } as const;
 export default function ActualModelTrigger({
   requestedModel,
   actualModel,
+  responseModel,
   size = 12,
 }: ActualModelTriggerProps) {
   const actual = (actualModel || '').trim();
   const requested = (requestedModel || '').trim();
-  if (!actual || actual === requested) return null;
+  const response = (responseModel || '').trim();
+  const routedDiffers = !!actual && actual !== requested;
+  // The relay answered as a different model than the one it was sent — that is
+  // exactly what this glyph explains, even when routing already matched.
+  const responseDiffers = !!response && response !== requested && response !== actual;
+  if (!routedDiffers && !responseDiffers) return null;
 
   return (
     <HoverPopover
@@ -39,16 +47,24 @@ export default function ActualModelTrigger({
             <div style={rowLabelStyle}>{tr('请求模型')}</div>
             <code style={rowValueStyle}>{requested || '-'}</code>
           </div>
-          <div>
-            <div style={rowLabelStyle}>{tr('实际模型')}</div>
-            <code style={rowValueStyle}>{actual}</code>
-          </div>
+          {routedDiffers && (
+            <div>
+              <div style={rowLabelStyle}>{tr('实际模型')}</div>
+              <code style={rowValueStyle}>{actual}</code>
+            </div>
+          )}
+          {responseDiffers && (
+            <div>
+              <div style={rowLabelStyle}>{tr('响应模型')}</div>
+              <code style={rowValueStyle}>{response}</code>
+            </div>
+          )}
         </div>
       )}
     >
       <button
         type="button"
-        aria-label={`${tr('实际模型')}：${actual}`}
+        aria-label={`${tr('实际模型')}：${responseDiffers ? response : actual}`}
         data-testid="actual-model-trigger"
         style={{
           display: 'inline-flex',

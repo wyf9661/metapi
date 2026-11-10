@@ -210,6 +210,7 @@ describe('stats proxy logs routes', () => {
           downstreamApiKeyId: downstreamKey.id,
           modelRequested: 'gpt-4o-mini',
           modelActual: 'gpt-4o-mini',
+          responseModel: 'gpt-4o-mini-2026',
           status: 'failed',
           isStream: 0,
           firstByteLatencyMs: 12,
@@ -281,6 +282,9 @@ describe('stats proxy logs routes', () => {
     expect(body.total).toBe(2);
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.modelRequested).toBe('gpt-4o-mini');
+    // The model the upstream reported must survive the API mapping — it is what
+    // the usage log renders next to the requested/routed names.
+    expect(body.items[0]?.responseModel).toBe('gpt-4o-mini-2026');
     expect(body.items[0]?.status).toBe('failed');
     expect(body.items[0]?.downstreamKeyName).toBe('项目A-Key');
     expect(body.items[0]?.downstreamKeyGroupName).toBe('项目A');

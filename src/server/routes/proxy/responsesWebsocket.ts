@@ -20,6 +20,7 @@ import { config } from '../../config.js';
 import { applyOpenAiServiceTierPolicy } from '../../proxy-core/serviceTierPolicy.js';
 import { asTrimmedString } from '../../shared/trimString.js';
 import { resolveWebsocketReasoningEffort, setCurrentReasoningEffort } from '../../services/reasoningEffort.js';
+import { setUpstreamResponseModel } from '../../services/upstreamResponseModel.js';
 import { INTERNAL_TRANSPORT_NONCE, INTERNAL_TRANSPORT_NONCE_HEADER } from '../../proxy-core/internalTransportMarker.js';
 
 
@@ -598,6 +599,9 @@ async function handleResponsesWebsocketConnection(
             lastRequest,
             parsed.model ?? lastRequest?.model,
           ));
+          // One message = one log row: start from "upstream said nothing" so a
+          // previous turn's reported model cannot leak into this one.
+          setUpstreamResponseModel(null);
 
           const requestModel = asTrimmedString(parsed.model) || asTrimmedString(lastRequest?.model);
           if (requestModel && !await isModelAllowedByPolicyOrAllowedRoutes(requestModel, authContext.policy)) {

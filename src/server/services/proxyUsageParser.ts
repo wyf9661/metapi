@@ -1,3 +1,5 @@
+import { captureUpstreamResponseModel } from './upstreamResponseModel.js';
+
 interface ParsedProxyUsage {
   promptTokens: number;
   completionTokens: number;
@@ -306,6 +308,9 @@ function parseUsageRecord(record: Record<string, unknown>): ParsedProxyUsage {
 
 export function parseProxyUsage(payload: unknown): ParsedProxyUsage {
   if (!payload || typeof payload !== 'object') return { ...ZERO_USAGE };
+  // Every surface parses its upstream payload here, so this is the one place
+  // that sees the model the upstream reported alongside the usage numbers.
+  captureUpstreamResponseModel(payload);
   const candidates = collectUsageCandidates(payload);
 
   let best = { ...ZERO_USAGE };

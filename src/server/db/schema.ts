@@ -289,6 +289,10 @@ export const proxyLogs = sqliteTable('proxy_logs', {
   downstreamApiKeyId: integer('downstream_api_key_id'),
   modelRequested: text('model_requested'),
   modelActual: text('model_actual'),
+  // The model the upstream itself reported in its response body. model_actual
+  // is what routing decided to send; this is what actually answered (relays
+  // swap aliases and rename models). Display-only.
+  responseModel: text('response_model'),
   status: text('status'), // 'success' | 'failed' | 'retried'
   httpStatus: integer('http_status'),
   isStream: integer('is_stream', { mode: 'boolean' }),
