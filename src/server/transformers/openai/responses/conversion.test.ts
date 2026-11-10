@@ -1960,6 +1960,46 @@ describe('convertResponsesBodyToOpenAiBody', () => {
     })).toBe(false);
   });
 
+  it.each([
+    'tool_choice is not supported for this model',
+    'tools is not supported for this model',
+  ])('does not replay a capability rejection no compatibility body can fix: %s', (message) => {
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses', status: 400,
+      rawErrText: JSON.stringify({ error: { message, type: 'invalid_request_error' } }),
+      body: {
+        model: 'fixture-model',
+        input: 'hello',
+        tools: [{
+          type: 'function',
+          name: 'lookup_weather',
+          parameters: { type: 'object', properties: {} },
+        }],
+        tool_choice: { type: 'function', function: { name: 'lookup_weather' } },
+      },
+    })).toBe(false);
+  });
+
+  it('still replays when a compatibility body can drop the rejected field', () => {
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses', status: 400,
+      rawErrText: JSON.stringify({
+        error: { message: 'metadata is not supported', type: 'invalid_request_error' },
+      }),
+      body: { model: 'gpt-5', input: 'hello', metadata: { trace_id: 'req-1' } },
+    })).toBe(true);
+  });
+
+  it('still replays bare protocol hints that name no request field', () => {
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses', status: 400,
+      rawErrText: JSON.stringify({
+        error: { message: 'unsupported legacy protocol', type: 'invalid_request_error' },
+      }),
+      body: { model: 'gpt-5', input: 'hello' },
+    })).toBe(true);
+  });
+
   it('does not retry auth-shaped failures and still retries generic upstream errors through compatibility variants', () => {
     expect(shouldRetryResponsesCompatibility({
       endpoint: 'responses',
