@@ -249,7 +249,7 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     };
     const isLastEndpoint = endpointIndex >= endpointCount - 1;
 
-    if (isObservedFirstByteTimeoutResponse(response) && !isLastEndpoint) {
+    if (isObservedFirstByteTimeoutResponse(response)) {
       const errText = rawErrText.trim() || 'first byte timeout';
       const timeoutContext = {
         ...baseContext,
@@ -316,7 +316,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
     finalRetryAfterMs = parseUpstreamRetryHint(response.headers).retryAfterMs;
     let errText = withUpstreamPath(
       baseContext.request.path,
-      summarizeUpstreamError(response.status, rawErrText),
+      isObservedFirstByteTimeoutResponse(response)
+        ? rawErrText.trim() || 'first byte timeout'
+        : summarizeUpstreamError(response.status, rawErrText),
     );
     await runEndpointFlowHook(input.onAttemptFailure, {
       ...baseContext,
@@ -386,7 +388,9 @@ export async function executeEndpointFlow(input: ExecuteEndpointFlowInput): Prom
       // actually looking at, not the first attempt's 400.
       errText = withUpstreamPath(
         baseContext.request.path,
-        summarizeUpstreamError(response.status, rawErrText),
+        isObservedFirstByteTimeoutResponse(response)
+          ? rawErrText.trim() || 'first byte timeout'
+          : summarizeUpstreamError(response.status, rawErrText),
       );
     }
 

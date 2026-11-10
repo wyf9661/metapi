@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { parseLocalFirstByteTimeoutBudgetMs } from '../../proxy-core/firstByteTimeout.js';
+import { shouldExcludeSiteForRequestFailure } from '../../services/siteFailureClassification.js';
 
 import type { BuiltEndpointRequest } from './endpointFlow.js';
 import type { UpstreamEndpoint } from '../../proxy-core/orchestration/upstreamRequest.js';
@@ -39,6 +41,27 @@ function buildDelayedResponse(
 }
 
 describe('executeEndpointFlow first-byte timeout', () => {
+  it('keeps a final-endpoint local timeout local and skips compatibility replay', async () => {
+    const { executeEndpointFlow } = await import('./endpointFlow.js');
+    const tryRecover = vi.fn(async () => null);
+    const result = await executeEndpointFlow({
+      siteUrl: 'https://example.com',
+      endpointCandidates: ['responses'],
+      buildRequest: () => requestFor('/v1/responses'),
+      dispatchRequest: async (_request, _targetUrl, signal) => (
+        buildDelayedResponse('{}', 60, 200, signal) as any
+      ),
+      firstByteTimeoutMs: 10,
+      tryRecover,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(parseLocalFirstByteTimeoutBudgetMs(result.errText)).toBe(1000);
+      expect(shouldExcludeSiteForRequestFailure({ status: result.status, errorText: result.errText })).toBe(true);
+    }
+    expect(tryRecover).not.toHaveBeenCalled();
+  });
+
   it('falls through to the next endpoint candidate when the current endpoint times out before any output', async () => {
     const { executeEndpointFlow } = await import('./endpointFlow.js');
     let timedOutSignal: AbortSignal | undefined;
@@ -118,6 +141,7 @@ describe('executeEndpointFlow first-byte timeout', () => {
     if (!result.ok) {
       expect(result.status).toBe(408);
       expect(result.errText).toContain('first byte timeout');
+      expect(parseLocalFirstByteTimeoutBudgetMs(result.errText)).toBe(1000);
     }
     expect(recoverySignal).toBeDefined();
     expect(recoverySignal?.aborted).toBe(true);
