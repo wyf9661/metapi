@@ -10,7 +10,7 @@ import {
 } from './conversion.js';
 import {
 
-  hasEndpointMismatchHint,
+  isEndpointDowngradeError,
   inferRequiredEndpointFromProtocolError,
 } from '../../shared/endpointCompatibility.js';
 import { cloneJsonDeep } from '../../shared/cloneJson.js';
@@ -182,8 +182,7 @@ export function shouldRetryResponsesCompatibility(input: {
     || compact.includes('content-type')
     || compact.includes('request validation failed')
     || requiredEndpoint !== null
-    || hasEndpointMismatchHint(input.rawErrText)
-    || compact.includes('invalid_request_error')
+    || isEndpointDowngradeError(input.status, input.rawErrText)
     || compact.includes('bad_response_status_code')
     || compact.includes('openai_error')
     || compact.includes('unsupported legacy protocol')
@@ -195,7 +194,6 @@ export function shouldRetryResponsesCompatibility(input: {
     if (type === 'upstream_error' || code === 'upstream_error') return true;
     if (message === 'upstream_error' || message === 'upstream request failed') return true;
     if (rawCompact.includes('upstream_error')) return true;
-    if (compact.length > 0) return true;
   }
 
   return false;

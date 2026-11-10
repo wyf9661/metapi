@@ -103,6 +103,32 @@ describe('token expired confirmation', () => {
     expect(noteTokenExpiredSighting(3, t0 + 1_000)).toBe(false);
   });
 
+  it('clears only the successful credential expiry sightings', () => {
+    const t0 = 1_000;
+    expect(noteTokenExpiredSighting(4, t0)).toBe(false);
+    expect(noteTokenExpiredSighting(4, t0, 229)).toBe(false);
+    expect(noteTokenExpiredSighting(4, t0, 230)).toBe(false);
+
+    resetTokenExpiredSightings(4, 229);
+
+    expect(noteTokenExpiredSighting(4, t0 + 1_000, 229)).toBe(false);
+    expect(noteTokenExpiredSighting(4, t0 + 1_000, 230)).toBe(true);
+    expect(noteTokenExpiredSighting(4, t0 + 1_000)).toBe(true);
+  });
+
+  it('does not let a management success clear proxy-key expiry sightings', () => {
+    const t0 = 1_000;
+    expect(noteTokenExpiredSighting(5, t0)).toBe(false);
+    expect(noteTokenExpiredSighting(5, t0, 229)).toBe(false);
+    expect(noteTokenExpiredSighting(5, t0, null)).toBe(false);
+
+    resetTokenExpiredSightings(5);
+
+    expect(noteTokenExpiredSighting(5, t0 + 1_000)).toBe(false);
+    expect(noteTokenExpiredSighting(5, t0 + 1_000, 229)).toBe(true);
+    expect(noteTokenExpiredSighting(5, t0 + 1_000, null)).toBe(true);
+  });
+
   it('first sighting only downgrades health; second sighting triggers full alert', async () => {
     await reportTokenExpired({ accountId: 7, siteId: 9, username: 'u', siteName: 's', detail: 'invalid token' });
 

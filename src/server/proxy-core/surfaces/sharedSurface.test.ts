@@ -1363,6 +1363,35 @@ describe('selectSurfaceChannelForAttempt', () => {
     }));
   });
 
+  it.each([229, null])('only resets the successful proxy key %s', async (tokenId) => {
+    resolveProxyUsageWithSelfLogFallbackMock.mockResolvedValue({
+      promptTokens: 10, completionTokens: 5, totalTokens: 15,
+      recoveredFromSelfLog: false, estimatedCostFromQuota: 0,
+      selfLogBillingMeta: null, usageSource: 'upstream',
+    });
+    resolveProxyLogBillingMock.mockResolvedValue({ estimatedCost: 0, billingDetails: null });
+    const { recordSurfaceSuccess } = await import('./sharedSurface.js');
+
+    await recordSurfaceSuccess({
+      selected: {
+        channel: { id: 11, routeId: 22, tokenId },
+        account: { id: 33, username: 'relay-user' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api' },
+        tokenValue: 'test-token', tokenName: 'default', actualModel: 'upstream-model',
+      },
+      requestedModel: 'test-model', modelName: 'upstream-model',
+      parsedUsage: {
+        promptTokens: 10, completionTokens: 5, totalTokens: 15,
+        cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null,
+      },
+      requestStartedAtMs: 1000, latencyMs: 250, retryCount: 0,
+      logSuccess: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(resetTokenExpiredSightingsMock).toHaveBeenCalledTimes(1);
+    expect(resetTokenExpiredSightingsMock).toHaveBeenCalledWith(33, tokenId);
+  });
+
   it('treats success metrics as best-effort when requested', async () => {
     resolveProxyUsageWithSelfLogFallbackMock.mockRejectedValueOnce(new Error('billing failed'));
     const logSuccess = vi.fn().mockResolvedValue(undefined);

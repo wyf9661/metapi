@@ -299,6 +299,7 @@ export function collectResponsesFinalPayloadFromSseText(
   };
   let completedPayload: Record<string, unknown> | null = null;
   let terminalStatus: ResponsesTerminalStatus = 'completed';
+  let terminalEventSeen = false;
 
   const captureCompletedPayloadFromEvent = (
     eventType: string,
@@ -343,6 +344,7 @@ export function collectResponsesFinalPayloadFromSseText(
 
     const payloadType = typeof payload.type === 'string' ? payload.type : '';
     const eventType = payloadType || event.event;
+    if (eventType === 'response.completed' || eventType === 'response.incomplete') terminalEventSeen = true;
     rememberStreamResponseEnvelope(streamContext, payload);
     usage = mergeProxyUsage(usage, parseProxyUsage(payload));
     captureCompletedPayloadFromEvent(eventType, payload);
@@ -360,6 +362,11 @@ export function collectResponsesFinalPayloadFromSseText(
       event: normalizedEvent,
       usage,
     }));
+  }
+
+  // Aggregation repairs a terminal envelope; it cannot prove the upstream finished.
+  if (!terminalEventSeen) {
+    throw new Error('stream disconnected before terminal responses event');
   }
 
   if (
