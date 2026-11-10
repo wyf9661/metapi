@@ -69,15 +69,7 @@ export function noteTokenExpiredSighting(
 }
 
 export function resetTokenExpiredSightings(accountId: number, proxyTokenId?: number | null): void {
-  if (proxyTokenId !== undefined) {
-    tokenExpiredSightingState.delete(tokenExpiredSightingKey(accountId, proxyTokenId));
-    return;
-  }
-  tokenExpiredSightingState.delete(tokenExpiredSightingKey(accountId));
-  const proxyPrefix = `${accountId}:proxy:`;
-  for (const key of tokenExpiredSightingState.keys()) {
-    if (key.startsWith(proxyPrefix)) tokenExpiredSightingState.delete(key);
-  }
+  tokenExpiredSightingState.delete(tokenExpiredSightingKey(accountId, proxyTokenId));
 }
 
 export function __resetTokenExpiredSightingStateForTests(): void {

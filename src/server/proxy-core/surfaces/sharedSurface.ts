@@ -537,10 +537,9 @@ export async function recordSurfaceSuccess(input: {
     outcome: 'success',
     firstByteLatencyMs: input.firstByteLatencyMs,
   });
-  // A successful upstream call proves the credential works; clear any
-  // pending token-expiry sightings for this account.
+  // A proxy success validates only the API key used, not sibling keys or the management session.
   if (input.selected.account?.id != null) {
-    resetTokenExpiredSightings(input.selected.account.id);
+    resetTokenExpiredSightings(input.selected.account.id, input.selected.channel.tokenId ?? null);
   }
   input.recordDownstreamCost?.(estimatedCost);
   const logTokens = resolvedUsage.usageSource === 'unknown'
