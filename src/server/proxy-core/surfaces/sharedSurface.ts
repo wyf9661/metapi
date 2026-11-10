@@ -36,7 +36,7 @@ type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
 type SurfaceWarningScope = 'chat' | 'responses' | 'gemini';
 
 type SurfaceSelectedChannel = {
-  channel: { routeId: number | null; id: number };
+  channel: { routeId: number | null; id: number; tokenId?: number | null };
   account: { id: number; username?: string | null };
   site: { id?: number | null; name?: string | null };
   actualModel?: string | null;
@@ -901,6 +901,7 @@ export function createSurfaceFailureToolkit(input: {
           username: args.selected.account.username,
           siteName: args.selected.site.name,
           detail: `HTTP ${args.status}`,
+          proxyTokenId: args.selected.channel.tokenId ?? null,
         }));
       }
 

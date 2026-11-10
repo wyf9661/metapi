@@ -4,6 +4,7 @@ const insertValuesMock = vi.fn();
 const updateSetMock = vi.fn();
 const sendNotificationMock = vi.fn();
 const setAccountRuntimeHealthMock = vi.fn();
+const recentSuccessGetMock = vi.fn();
 
 vi.mock('../db/index.js', () => {
   const insertChain = {
@@ -19,6 +20,13 @@ vi.mock('../db/index.js', () => {
   const updateSetChain = {
     where: () => updateWhereChain,
   };
+  // Proxy-log lookup: db.select(...).from(...).where(...).limit(1).get()
+  const selectChain = {
+    from: () => selectChain,
+    where: () => selectChain,
+    limit: () => selectChain,
+    get: () => recentSuccessGetMock(),
+  };
   return {
     db: {
       insert: () => insertChain,
@@ -28,10 +36,17 @@ vi.mock('../db/index.js', () => {
           return updateSetChain;
         },
       }),
+      select: () => selectChain,
     },
     schema: {
       events: {},
       accounts: { id: 'id', siteId: 'siteId', status: 'status' },
+      proxyLogs: {
+        id: 'id',
+        accountId: 'account_id',
+        status: 'status',
+        createdAt: 'created_at',
+      },
     },
   };
 });
@@ -60,6 +75,10 @@ describe('token expired confirmation', () => {
     updateSetMock.mockReset();
     sendNotificationMock.mockReset();
     setAccountRuntimeHealthMock.mockReset();
+    recentSuccessGetMock.mockReset();
+    // Default: no successful request from this account in the window, i.e. the
+    // 401 is the only evidence — the alert must still fire.
+    recentSuccessGetMock.mockReturnValue(undefined);
   });
 
   it('requires two sightings within the window to confirm', () => {
@@ -140,5 +159,70 @@ describe('token expired confirmation', () => {
     expect(insertValuesMock).toHaveBeenCalledTimes(1);
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'expired' }));
     expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let proxy successes hide an expired check-in session', async () => {
+    recentSuccessGetMock.mockReturnValue({ id: 1 });
+
+    await reportTokenExpired({ accountId: 30, siteId: 1, detail: 'access token 无效' });
+    await reportTokenExpired({ accountId: 30, siteId: 1, detail: 'access token 无效' });
+
+    expect(recentSuccessGetMock).not.toHaveBeenCalled();
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'expired' }));
+    expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a suppressed proxy failure clear check-in expiry sightings', async () => {
+    recentSuccessGetMock.mockReturnValue({ id: 1 });
+
+    await reportTokenExpired({ accountId: 30, siteId: 1, detail: 'access token 无效' });
+    await reportTokenExpired({ accountId: 30, siteId: 1, detail: 'HTTP 401', proxyTokenId: 229 });
+    await reportTokenExpired({ accountId: 30, siteId: 1, detail: 'access token 无效' });
+
+    expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'expired' }));
+  });
+
+  it('keeps the existing confirmation flow when the success lookup fails', async () => {
+    recentSuccessGetMock.mockRejectedValue(new Error('success evidence unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const params = { accountId: 31, siteId: 1, proxyTokenId: 229, detail: 'HTTP 401' };
+      await expect(reportTokenExpired(params)).resolves.toBeUndefined();
+      await expect(reportTokenExpired(params)).resolves.toBeUndefined();
+      expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not let proxy traffic override a failed live credential verification', async () => {
+    recentSuccessGetMock.mockReturnValue({ id: 1 });
+    const params = { accountId: 32, siteId: 1, proxyTokenId: 229, detail: 'invalid access token' };
+    const verify = vi.fn(() => { throw new Error('still expired'); });
+
+    await reportTokenExpired(params, verify);
+    await reportTokenExpired(params, verify);
+
+    expect(recentSuccessGetMock).not.toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(sendNotificationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report an expiry when the account served a request in the window', async () => {
+    // A relay whose own upstream channel key expired answers 401 "Invalid token"
+    // on those picks while its sibling channels keep serving our account. The
+    // 401 is channel-scoped noise, not credential death.
+    recentSuccessGetMock.mockReturnValue({ id: 1 });
+
+    await reportTokenExpired({ accountId: 30, siteId: 1, username: 'relay-user', detail: 'HTTP 401', proxyTokenId: 229 });
+    await reportTokenExpired({ accountId: 30, siteId: 1, username: 'relay-user', detail: 'HTTP 401', proxyTokenId: 229 });
+
+    expect(insertValuesMock).not.toHaveBeenCalled();
+    expect(sendNotificationMock).not.toHaveBeenCalled();
+    // Silent: not even the degraded badge — the key is provably working.
+    expect(setAccountRuntimeHealthMock).not.toHaveBeenCalled();
+    expect(updateSetMock).not.toHaveBeenCalled();
   });
 });

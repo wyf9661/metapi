@@ -1,5 +1,5 @@
 import { db, schema } from '../db/index.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte } from 'drizzle-orm';
 import { sendNotification } from './notifyService.js';
 import { setAccountRuntimeHealth } from './accountHealthService.js';
 import { appendSessionTokenRebindHint } from './alertRules.js';
@@ -17,25 +17,67 @@ import { formatNoChannelDiagnostic, getNoChannelDiagnostic } from './proxyNoChan
 export const TOKEN_EXPIRED_CONFIRM_REQUIRED = 2;
 export const TOKEN_EXPIRED_CONFIRM_WINDOW_MS = 30 * 60 * 1000;
 
-const tokenExpiredSightingState = new Map<number, { count: number; firstSeenAtMs: number }>();
+const tokenExpiredSightingState = new Map<string, { count: number; firstSeenAtMs: number }>();
 
-export function noteTokenExpiredSighting(accountId: number, nowMs = Date.now()): boolean {
-  const current = tokenExpiredSightingState.get(accountId);
+function tokenExpiredSightingKey(accountId: number, proxyTokenId?: number | null): string {
+  const credential = proxyTokenId === undefined ? 'management' : `proxy:${proxyTokenId ?? 'account'}`;
+  return `${accountId}:${credential}`;
+}
+
+// shortcut: recent success defers expiry for 10 minutes; prefer reliable error provenance when available.
+const TOKEN_EXPIRED_SUCCESS_EVIDENCE_WINDOW_MS = 10 * 60 * 1000;
+
+async function credentialServedRequestRecently(
+  accountId: number,
+  tokenId: number | null,
+  nowMs = Date.now(),
+): Promise<boolean> {
+  const since = formatUtcSqlDateTime(new Date(nowMs - TOKEN_EXPIRED_SUCCESS_EVIDENCE_WINDOW_MS));
+  const row = await db
+    .select({ id: schema.proxyLogs.id })
+    .from(schema.proxyLogs)
+    .where(and(
+      eq(schema.proxyLogs.accountId, accountId),
+      tokenId == null ? isNull(schema.proxyLogs.tokenId) : eq(schema.proxyLogs.tokenId, tokenId),
+      eq(schema.proxyLogs.status, 'success'),
+      gte(schema.proxyLogs.createdAt, since),
+      lte(schema.proxyLogs.createdAt, formatUtcSqlDateTime(new Date(nowMs))),
+    ))
+    .limit(1)
+    .get();
+  return !!row;
+}
+
+export function noteTokenExpiredSighting(
+  accountId: number,
+  nowMs = Date.now(),
+  proxyTokenId?: number | null,
+): boolean {
+  const key = tokenExpiredSightingKey(accountId, proxyTokenId);
+  const current = tokenExpiredSightingState.get(key);
   if (!current || nowMs - current.firstSeenAtMs > TOKEN_EXPIRED_CONFIRM_WINDOW_MS) {
-    tokenExpiredSightingState.set(accountId, { count: 1, firstSeenAtMs: nowMs });
+    tokenExpiredSightingState.set(key, { count: 1, firstSeenAtMs: nowMs });
     return false;
   }
   const nextCount = current.count + 1;
   if (nextCount >= TOKEN_EXPIRED_CONFIRM_REQUIRED) {
-    tokenExpiredSightingState.delete(accountId);
+    tokenExpiredSightingState.delete(key);
     return true;
   }
-  tokenExpiredSightingState.set(accountId, { count: nextCount, firstSeenAtMs: current.firstSeenAtMs });
+  tokenExpiredSightingState.set(key, { count: nextCount, firstSeenAtMs: current.firstSeenAtMs });
   return false;
 }
 
-export function resetTokenExpiredSightings(accountId: number): void {
-  tokenExpiredSightingState.delete(accountId);
+export function resetTokenExpiredSightings(accountId: number, proxyTokenId?: number | null): void {
+  if (proxyTokenId !== undefined) {
+    tokenExpiredSightingState.delete(tokenExpiredSightingKey(accountId, proxyTokenId));
+    return;
+  }
+  tokenExpiredSightingState.delete(tokenExpiredSightingKey(accountId));
+  const proxyPrefix = `${accountId}:proxy:`;
+  for (const key of tokenExpiredSightingState.keys()) {
+    if (key.startsWith(proxyPrefix)) tokenExpiredSightingState.delete(key);
+  }
 }
 
 export function __resetTokenExpiredSightingStateForTests(): void {
@@ -49,6 +91,8 @@ export async function reportTokenExpired(
     username?: string | null;
     siteName?: string | null;
     detail?: string;
+    /** Present only for proxy failures; null denotes the account-level API key. */
+    proxyTokenId?: number | null;
   },
   /**
    * Optional live credential check, provided by callers that can perform a real
@@ -63,9 +107,21 @@ export async function reportTokenExpired(
   const detailText = params.detail ? appendSessionTokenRebindHint(params.detail) : '';
   const detail = detailText ? ` (${detailText})` : '';
 
+  // Proxy successes cannot validate the separate session token used by check-in/balance.
+  if (!verify && params.proxyTokenId !== undefined) {
+    try {
+      if (await credentialServedRequestRecently(params.accountId, params.proxyTokenId)) {
+        resetTokenExpiredSightings(params.accountId, params.proxyTokenId);
+        return;
+      }
+    } catch (error) {
+      console.warn('[alert] failed to read proxy credential success evidence', params.accountId, error);
+    }
+  }
+
   // First hit within the window is treated as a suspected transient failure:
   // only downgrade runtime health, do not mark the account expired or push.
-  if (!noteTokenExpiredSighting(params.accountId)) {
+  if (!noteTokenExpiredSighting(params.accountId, Date.now(), params.proxyTokenId)) {
     setAccountRuntimeHealth(params.accountId, {
       state: 'degraded',
       reason: detailText ? `连接状态异常：${detailText}` : '连接状态异常',
