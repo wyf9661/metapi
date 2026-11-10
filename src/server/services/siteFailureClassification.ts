@@ -46,6 +46,15 @@ export function isEmptyContentFailureText(upstreamErrorText?: string | null): bo
 }
 
 /**
+ * 对端 metapi 把它自己的首字哨兵当 HTTP 408 响应体返回
+ * （`Upstream returned HTTP 408: first byte timeout (8s)`）。
+ * 那是「这一跳的上游线路慢」，且对端几秒内就给了结论；本机哨兵的 60s 超时不在其列。
+ */
+export function isPeerReportedFirstByteTimeout(upstreamErrorText?: string | null): boolean {
+  return /upstream returned http 408[^\n]*first byte time\r?\s*out/i.test(upstreamErrorText || '');
+}
+
+/**
  * Unified failure classes for cascade / channel failover / cooldown.
  * Prefer this over ad-hoc status checks at call sites.
  */
@@ -1049,6 +1058,10 @@ export function shouldExcludeSiteForRequestFailure(context: SiteRuntimeFailureCo
   // no channel and the client gets a 502 instead. Classify it as channel-scoped
   // and let the router move to the next channel of the same site.
   if (isEmptyContentFailureText(context.errorText)) return false;
+  // 对端 metapi 自报的首字超时（408 + `first byte timeout (Ns)`）是这一跳线路慢的证据，
+  // 不是站点检修：它会整站拉黑同站其它健康渠道，请求只剩低质站点（CAICMetapi 4 个渠道 94% 成功率，
+  // 命中一次 8s 地板后整站出局）。本机 60s 哨兵仍按站点级处理——那一站已经等满一个窗口。
+  if (isPeerReportedFirstByteTimeout(context.errorText)) return false;
   // A full per-minute bucket is shared by the model's pool, so a sibling
   // account on the same site is the one that CAN serve right now. Never drop the
   // whole site for it: the sibling is the cheapest recovery we have.
