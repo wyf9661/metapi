@@ -19,6 +19,18 @@ import {
 import { config } from '../config.js';
 
 describe('siteFailureClassification', () => {
+  it.each([
+    'quota exceeded',
+    'insufficient quota',
+    '额度已用尽（费用 0.666261 / 0.5）。请先在首页用 LDC 兑换额度后重试',
+  ])('treats HTTP 429 balance exhaustion as provider quota, not a temporary rate limit: %s', (errorText) => {
+    const context = { status: 429, errorText };
+    expect(buildProxyFailureDisposition(context)).toMatchObject({
+      class: 'quota_or_credit', retryChannel: true, cascadeEndpoint: false, cooldownScope: 'credential',
+    });
+    expect(isUsageLimitRateLimitFailure(context)).toBe(false);
+  });
+
   it('classifies a short-window rate limit as capacity, even when wrapped in 5xx', () => {
     // "Your requests to gpt-6.1-sol ... in eastus2 have exceeded token rate limit."
     const real = 'Your requests to gpt-6.1-sol for gpt-6.1-sol in eastus2 have exceeded token rate limit.';
@@ -37,6 +49,21 @@ describe('siteFailureClassification', () => {
     expect(disposition.clearSticky).toBe(false);
     expect(disposition.clearLastSuccess).toBe(false);
     expect(isLowValueFailoverFailureClass('minute_rate_limit')).toBe(false);
+  });
+
+  it.each([
+    'You have reached the request limit: maximum 10 requests in 1 minutes',
+    'maximum 200 tokens in 1 minute',
+  ])('uses the minute-capacity recovery for bounded one-minute limits: %s', (errorText) => {
+    expect(buildProxyFailureDisposition({ status: 429, errorText })).toMatchObject({
+      class: 'minute_rate_limit', retrySameChannelAfterWait: true,
+      cooldownScope: 'channel_model', clearSticky: false,
+    });
+    expect(isUsageLimitRateLimitFailure({ status: 429, errorText })).toBe(false);
+  });
+
+  it.each(['maximum 10 requests in 5 minutes', 'maximum 10 requests in 1 hour'])('does not treat a longer window as minute capacity: %s', (errorText) => {
+    expect(classifyProxyFailure({ status: 429, errorText }).class).not.toBe('minute_rate_limit');
   });
 
   it('scopes a peer-reported 408 first-byte timeout to the channel, not the whole site', () => {
@@ -122,10 +149,11 @@ describe('siteFailureClassification', () => {
     expect(matchesAnyPattern([/x/], 'axb')).toBe(true);
   });
 
-  it('detects usage-limit rate limit only on 429', () => {
-    expect(isUsageLimitRateLimitFailure({ status: 429, errorText: 'quota exceeded' })).toBe(true);
-    expect(isUsageLimitRateLimitFailure({ status: 500, errorText: 'quota exceeded' })).toBe(false);
+  it('detects temporary usage limits only on 429 without confusing quota exhaustion', () => {
+    expect(isUsageLimitRateLimitFailure({ status: 429, errorText: 'usage_limit_reached' })).toBe(true);
+    expect(isUsageLimitRateLimitFailure({ status: 500, errorText: 'usage_limit_reached' })).toBe(false);
     expect(isUsageLimitRateLimitFailure({ status: 429, errorText: 'random' })).toBe(false);
+    expect(isUsageLimitRateLimitFailure({ status: 429, errorText: 'quota exceeded' })).toBe(false);
   });
 
   it('classifies model / protocol / validation failures', () => {
@@ -401,6 +429,14 @@ describe('siteFailureClassification', () => {
     // A mid-flight reset is a channel blip, not a site verdict.
     expect(classifyProxyFailure({ status: 0, errorText: 'fetch failed (ECONNRESET)' }).cooldownScope)
       .toBe('channel');
+  });
+
+  it('stops cross-channel retries after two identical request-shape failures', async () => {
+    const { noteFailoverFailureAndShouldStop } = await import('./proxyChannelRetry.js');
+    const state = { lowValueStreak: 0, lastClass: null as string | null };
+    expect(classifyProxyFailure({ status: 400, errorText: 'gpt-6.1-sol requires Responses for tool calls' }).class).toBe('ambiguous_client');
+    expect(noteFailoverFailureAndShouldStop(state, 400, 'gpt-6.1-sol requires Responses for tool calls')).toBe(false);
+    expect(noteFailoverFailureAndShouldStop(state, 400, 'gpt-6.1-sol requires Responses for tool calls')).toBe(true);
   });
 
   it('stops the failover cascade after two consecutive transport failures', async () => {

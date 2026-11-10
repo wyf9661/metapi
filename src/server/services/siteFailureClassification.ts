@@ -94,6 +94,7 @@ const QUOTA_OR_CREDIT_PATTERNS: RegExp[] = [
   /预扣费额度失败/i,
   /用户剩余额度/i,
   /余额不足/i,
+  /额度已用尽/i,
   /quota\s+exceeded/i,
   /no\s+available\s+quota/i,
 ];
@@ -298,6 +299,7 @@ export function matchesAnyPattern(patterns: RegExp[], input?: string | null): bo
  * long-window usage limits are different states with different recoveries.
  */
 const MINUTE_RATE_LIMIT_PATTERNS: RegExp[] = [
+  /maximum\s+\d+\s+(?:requests?|tokens?)\s+(?:in|per)\s+1\s+minutes?\b/i,
   /exceeded\s+(?:token|request|requests|rpm|tpm)\s+rate\s+limit/i,
   /(?:requests?|tokens?)\s+per\s+(?:minute|min)\s+(?:limit\s+)?(?:exceeded|reached)/i,
   /(?:rpm|tpm)\s+(?:limit\s+)?(?:exceeded|reached)/i,
@@ -311,7 +313,7 @@ export function isMinuteRateLimitFailure(context: SiteRuntimeFailureContext = {}
 export function isUsageLimitRateLimitFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const status = typeof context.status === 'number' ? context.status : 0;
   if (status !== 429) return false;
-  if (isMinuteRateLimitFailure(context)) return false;
+  if (isMinuteRateLimitFailure(context) || isQuotaOrCreditFailure(context)) return false;
   return matchesAnyPattern(USAGE_LIMIT_RATE_LIMIT_PATTERNS, context.errorText);
 }
 
@@ -459,7 +461,7 @@ export function resolveSiteRuntimeFailurePenalty(context: SiteRuntimeFailureCont
 export function isTransientSiteRuntimeFailure(context: SiteRuntimeFailureContext = {}): boolean {
   const status = typeof context.status === 'number' ? context.status : 0;
   const errorText = (context.errorText || '').trim();
-  if (isUsageLimitRateLimitFailure({ status, errorText })) {
+  if (isUsageLimitRateLimitFailure({ status, errorText }) || isQuotaOrCreditFailure({ status, errorText })) {
     return false;
   }
   if (isModelScopedRuntimeFailure({ status, errorText })) {
@@ -673,22 +675,22 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
     };
   }
 
-  if (isUsageLimitRateLimitFailure(ctx) || status === 429) {
-    return {
-      class: 'rate_limit',
-      retryChannel: true,
-      cascadeEndpoint: false,
-      cooldownWeight: 1.8,
-      cooldownScope: 'credential',
-    };
-  }
-
   if (isQuotaOrCreditFailure(ctx)) {
     return {
       class: 'quota_or_credit',
       retryChannel: true,
       cascadeEndpoint: false,
       cooldownWeight: 2.2,
+      cooldownScope: 'credential',
+    };
+  }
+
+  if (isUsageLimitRateLimitFailure(ctx) || status === 429) {
+    return {
+      class: 'rate_limit',
+      retryChannel: true,
+      cascadeEndpoint: false,
+      cooldownWeight: 1.8,
       cooldownScope: 'credential',
     };
   }
@@ -890,8 +892,9 @@ export function classifyProxyFailure(context: SiteRuntimeFailureContext = {}): P
     }
     // Context overflow is classified at the TOP of classifyProxyFailure
     // (failover-aware when context-aware routing is enabled).
+    // Unknown 400s may be channel-local, but repeated hits are low-value failover.
     return {
-      class: 'request_validation',
+      class: 'ambiguous_client',
       retryChannel: true,
       cascadeEndpoint: false,
       cooldownWeight: 0.1,

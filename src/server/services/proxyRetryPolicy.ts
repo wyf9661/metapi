@@ -56,11 +56,10 @@ export function shouldAbortSameSiteEndpointFallback(status: number, upstreamErro
  * pausing would only add latency to failures that will not self-heal.
  */
 export function isRecoveringTransientFailure(status: number, upstreamErrorText?: string | null): boolean {
-  // A full per-minute bucket is a capacity state with its own wait-and-resend
-  // path (resolveMinuteRateLimitRetryWaitMs). Treating it as a recovering
-  // transient would additionally burn the generic grace retry on the same
-  // channel, so the request waits twice for the same window.
-  if (classifyProxyFailure({ status, errorText: upstreamErrorText }).class === 'minute_rate_limit') return false;
+  const decision = classifyProxyFailure({ status, errorText: upstreamErrorText || '' });
+  // Minute capacity has its own wait; exhausted funds and usage windows cannot recover in seconds.
+  if (decision.class === 'minute_rate_limit' || decision.class === 'quota_or_credit' || decision.class === 'credential_invalid') return false;
+  if (status === 429 && /usage[_\s-]+limit/i.test(upstreamErrorText || '')) return false;
   // A 200-with-empty-body ('Upstream returned empty content') is a persisted
   // channel defect — the relay answers instantly with nothing — not an edge
   // block that clears within seconds. Same-channel grace/in-place retries only
@@ -69,9 +68,6 @@ export function isRecoveringTransientFailure(status: number, upstreamErrorText?:
   if (isEmptyContentFailureText(upstreamErrorText)) return false;
   if (status === 429) return true;
   if (status >= 500) return true;
-  const decision = classifyProxyFailure({ status, errorText: upstreamErrorText || '' });
-  // Site/organization-level credential death is permanent, never recovering.
-  if (decision.class === 'credential_invalid') return false;
   if (decision.class === 'waf_blocked') return true;
   // Bare 403/forbidden: WAF vocabulary may be absent (e.g. Nginx/CF without
   // the usual body) yet the block is still temporary edge filtering.
