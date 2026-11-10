@@ -394,16 +394,16 @@ describe('upstreamRequestBuilder', () => {
     expect(request.headers['anthropic-beta']).toContain('beta-from-body');
   });
 
-  it('strips the official OpenAI SDK user-agent from passthrough headers', () => {
+  it('passes the official OpenAI SDK user-agent through on the chat face', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'chat',
-      modelName: 'upstream-gpt',
+      modelName: 'deepseek-v4.1-flash',
       stream: true,
       tokenValue: 'sk-test',
       sitePlatform: 'new-api',
       siteUrl: 'https://example.com',
       openaiBody: {
-        model: 'gpt-5.2',
+        model: 'deepseek-v4.1-flash',
         messages: [{ role: 'user', content: 'hello' }],
       },
       downstreamFormat: 'openai',
@@ -412,49 +412,28 @@ describe('upstreamRequestBuilder', () => {
       },
     });
 
-    expect(request.headers['user-agent']).toBeUndefined();
+    expect(request.headers['user-agent']).toBe('OpenAI/NodeJS 4.80.1');
     expect(request.headers['User-Agent']).toBeUndefined();
   });
 
-  it('keeps non-OpenAI SDK user-agents in passthrough headers', () => {
+  it('passes the Python SDK user-agent through as well', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'chat',
-      modelName: 'upstream-gpt',
+      modelName: 'deepseek-v4.1-flash',
       stream: true,
       tokenValue: 'sk-test',
       sitePlatform: 'new-api',
       siteUrl: 'https://example.com',
       openaiBody: {
-        model: 'gpt-5.2',
+        model: 'deepseek-v4.1-flash',
         messages: [{ role: 'user', content: 'hello' }],
       },
       downstreamFormat: 'openai',
       downstreamHeaders: {
-        'user-agent': 'curl/8.0',
+        'user-agent': 'OpenAI/Python 2.54.0',
       },
     });
 
-    expect(request.headers['user-agent']).toBe('curl/8.0');
-  });
-
-  it('strips OpenAI SDK user-agent on Python binding too', () => {
-    const request = buildUpstreamEndpointRequest({
-      endpoint: 'chat',
-      modelName: 'upstream-gpt',
-      stream: true,
-      tokenValue: 'sk-test',
-      sitePlatform: 'new-api',
-      siteUrl: 'https://example.com',
-      openaiBody: {
-        model: 'gpt-5.2',
-        messages: [{ role: 'user', content: 'hello' }],
-      },
-      downstreamFormat: 'openai',
-      downstreamHeaders: {
-        'user-agent': 'OpenAI/Python 1.55.3',
-      },
-    });
-
-    expect(request.headers['user-agent']).toBeUndefined();
+    expect(request.headers['user-agent']).toBe('OpenAI/Python 2.54.0');
   });
 });

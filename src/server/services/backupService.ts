@@ -1888,6 +1888,7 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         tokenId: row.tokenId ?? null,
         modelRequested: row.modelRequested ?? null,
         modelActual: row.modelActual ?? null,
+        responseModel: row.responseModel ?? null,
         status: row.status ?? null,
         httpStatus: row.httpStatus ?? null,
         isStream: row.isStream ?? null,

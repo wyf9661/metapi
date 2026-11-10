@@ -79,6 +79,46 @@ describe('ActualModelTrigger', () => {
     clickWrapper(root);
     expect(root.root.findAll((node) => node.props?.['data-testid'] === 'actual-model-popover')).toHaveLength(0);
   });
+
+  it('shows the response model when the upstream answered as another model', () => {
+    let root!: WebTestRenderer;
+    act(() => {
+      root = create(
+        <ActualModelTrigger
+          requestedModel="deepseek-v4.1-flash"
+          actualModel="deepseek-v4.1-flash"
+          responseModel="deepseek-v4.1-flash-1017"
+        />,
+      );
+    });
+    // Routing kept the name, but the relay answered as a different model — that
+    // is exactly what the log should expose.
+    expect(findTrigger(root)).toHaveLength(1);
+    expect(findTrigger(root)[0]!.props['aria-label']).toContain('deepseek-v4.1-flash-1017');
+
+    clickWrapper(root);
+    const cards = root.root.findAll((node) => node.props?.['data-testid'] === 'actual-model-popover');
+    expect(cards).toHaveLength(1);
+    const text = collectText(cards[0]!);
+    expect(text).toContain('响应模型');
+    expect(text).toContain('deepseek-v4.1-flash-1017');
+    // Nothing was routed, so the actual-model row must not appear.
+    expect(text).not.toContain('实际模型');
+  });
+
+  it('stays hidden when the response model matches the requested one', () => {
+    let root!: WebTestRenderer;
+    act(() => {
+      root = create(
+        <ActualModelTrigger
+          requestedModel="deepseek-v4.1-flash"
+          actualModel="deepseek-v4.1-flash"
+          responseModel="deepseek-v4.1-flash"
+        />,
+      );
+    });
+    expect(findTrigger(root)).toHaveLength(0);
+  });
 });
 
 describe('ModelBadge with a routed model', () => {

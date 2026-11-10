@@ -129,6 +129,7 @@ import {
   ensureProxyLogBillingDetailsColumn,
   ensureProxyLogCacheTokensColumns,
   ensureProxyLogReasoningEffortColumn,
+  ensureProxyLogResponseModelColumn,
   ensureProxyLogStreamTimingColumns,
   ensureRouteGroupingCompatibilityColumns,
   ensureSiteCompatibilityColumns,
@@ -252,6 +253,7 @@ try {
   await ensureProxyLogBillingDetailsColumn();
   await ensureProxyLogCacheTokensColumns();
   await ensureProxyLogReasoningEffortColumn();
+  await ensureProxyLogResponseModelColumn();
   await repairStoredCreatedAtValues();
   await migrateSiteApiKeysToAccounts();
   // Downstream keys used to store site/credential *exclusions*; they now store

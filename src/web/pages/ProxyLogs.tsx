@@ -1567,6 +1567,7 @@ export default function ProxyLogs() {
                       <ActualModelTrigger
                         requestedModel={detailLog.modelRequested || ''}
                         actualModel={detailLog.modelActual}
+                        responseModel={detailLog.responseModel}
                         size={11}
                       />
                     </span>
@@ -1994,6 +1995,7 @@ export default function ProxyLogs() {
                         <ModelBadge
                           model={log.modelRequested}
                           actualModel={log.modelActual}
+                          responseModel={log.responseModel}
                           site={{
                             name: log.siteName,
                             url: log.siteUrl,
@@ -2193,6 +2195,23 @@ export default function ProxyLogs() {
                                               }}
                                             >
                                               {detailLog.modelActual}
+                                            </strong>
+                                          </>
+                                        )}
+                                      {detailLog.responseModel &&
+                                        detailLog.responseModel !==
+                                          detailLog.modelRequested &&
+                                        detailLog.responseModel !==
+                                          detailLog.modelActual && (
+                                          <>
+                                            {'→'} {tr('响应模型')}{':'}
+                                            <strong
+                                              style={{
+                                                color:
+                                                  'var(--color-text-primary)',
+                                              }}
+                                            >
+                                              {detailLog.responseModel}
                                             </strong>
                                           </>
                                         )}

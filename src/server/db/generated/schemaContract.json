@@ -1403,6 +1403,12 @@
           "notNull": false,
           "defaultValue": null,
           "primaryKey": false
+        },
+        "response_model": {
+          "logicalType": "text",
+          "notNull": false,
+          "defaultValue": null,
+          "primaryKey": false
         }
       }
     },

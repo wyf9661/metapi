@@ -1,15 +1,1 @@
-DROP INDEX `accounts_oauth_identity_idx` ON `accounts`;
-DROP INDEX `accounts_oauth_provider_idx` ON `accounts`;
-DROP INDEX `oauth_route_unit_members_account_unique` ON `oauth_route_unit_members`;
-DROP INDEX `oauth_route_unit_members_unit_account_unique` ON `oauth_route_unit_members`;
-DROP INDEX `oauth_route_unit_members_unit_cooldown_idx` ON `oauth_route_unit_members`;
-DROP INDEX `oauth_route_unit_members_unit_sort_idx` ON `oauth_route_unit_members`;
-DROP INDEX `oauth_route_units_enabled_idx` ON `oauth_route_units`;
-DROP INDEX `oauth_route_units_site_provider_idx` ON `oauth_route_units`;
-DROP INDEX `route_channels_oauth_route_unit_id_idx` ON `route_channels`;
-ALTER TABLE `accounts` DROP COLUMN `oauth_provider`;
-ALTER TABLE `accounts` DROP COLUMN `oauth_account_key`;
-ALTER TABLE `accounts` DROP COLUMN `oauth_project_id`;
-ALTER TABLE `route_channels` DROP COLUMN `oauth_route_unit_id`;
-DROP TABLE IF EXISTS `oauth_route_unit_members`;
-DROP TABLE IF EXISTS `oauth_route_units`;
+ALTER TABLE `proxy_logs` ADD COLUMN `response_model` TEXT;

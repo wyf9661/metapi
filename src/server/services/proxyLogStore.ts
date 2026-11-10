@@ -6,6 +6,7 @@ import {
   hasProxyLogCacheTokensColumns,
   hasProxyLogClientColumns,
   hasProxyLogReasoningEffortColumn,
+  hasProxyLogResponseModelColumn,
   hasProxyLogDownstreamApiKeyIdColumn,
   hasProxyLogStreamTimingColumns,
   hasProxyLogRequestTraceIdColumn,
@@ -14,6 +15,7 @@ import {
 import { canonicalizeModelName } from '../shared/modelCanonicalization.js';
 import { emitProxyLogCreated } from './proxyLogEventBus.js';
 import { getCurrentReasoningEffort } from './reasoningEffort.js';
+import { getUpstreamResponseModel } from './upstreamResponseModel.js';
 import { isHardConnectivityFailure } from './routeConnectivityLookup.js';
 import { emptyConnectivityHealth, recordConnectivityAttempt, shouldMarkDisconnected } from './routeConnectivityPolicy.js';
 
@@ -24,6 +26,7 @@ export type ProxyLogInsertInput = {
   downstreamApiKeyId?: number | null;
   modelRequested?: string | null;
   modelActual?: string | null;
+  responseModel?: string | null;
   status?: string | null;
   httpStatus?: number | null;
   isStream?: boolean | null;
@@ -112,6 +115,7 @@ function buildProxyLogSelectFields(options?: {
       cacheReadTokens: schema.proxyLogs.cacheReadTokens,
       cacheCreationTokens: schema.proxyLogs.cacheCreationTokens,
       reasoningEffort: schema.proxyLogs.reasoningEffort,
+      responseModel: schema.proxyLogs.responseModel,
     } : {}),
     ...(options?.includeStreamTimingFields ? buildProxyLogStreamTimingSelectFields() : {}),
     ...(options?.includeClientFields ? buildProxyLogClientSelectFields() : {}),
@@ -378,6 +382,17 @@ export function isMissingProxyLogReasoningEffortColumnError(error: unknown): boo
     );
 }
 
+export function isMissingProxyLogResponseModelColumnError(error: unknown): boolean {
+  const lowered = normalizeProxyLogStoreErrorMessage(error);
+  return lowered.includes('response_model')
+    && (
+      lowered.includes('does not exist')
+      || lowered.includes('unknown column')
+      || lowered.includes('no such column')
+      || lowered.includes('has no column named')
+    );
+}
+
 export function isMissingDownstreamApiKeyIdColumnError(error: unknown): boolean {
   const lowered = normalizeProxyLogStoreErrorMessage(error);
   return lowered.includes('downstream_api_key_id')
@@ -600,6 +615,9 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
   // router captured for this request (chat: reasoning_effort, responses:
   // reasoning.effort).
   const reasoningEffort = input.reasoningEffort ?? getCurrentReasoningEffort();
+  // Response model: the `model` the upstream itself reported for this request
+  // (captured in upstreamResponseModel.ts while the payload was parsed).
+  const responseModel = input.responseModel ?? getUpstreamResponseModel();
   const requestedCacheTokens = cacheReadTokens != null || cacheCreationTokens != null;
   const includeCacheTokens = requestedCacheTokens
     && await hasProxyLogCacheTokensColumns();
@@ -624,6 +642,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
   let allowBillingDetails = includeBillingDetails;
   let allowCacheTokens = includeCacheTokens;
   let allowReasoningEffort = reasoningEffort != null && await hasProxyLogReasoningEffortColumn();
+  let allowResponseModel = responseModel != null && await hasProxyLogResponseModelColumn();
   let allowDownstreamApiKeyId = includeDownstreamApiKeyId;
   let allowClientFields = includeClientFields;
   let allowStreamTimingFields = includeStreamTimingFields;
@@ -651,6 +670,7 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
         }
         : {}),
       ...(allowReasoningEffort ? { reasoningEffort } : {}),
+      ...(allowResponseModel ? { responseModel } : {}),
       ...(allowDownstreamApiKeyId ? { downstreamApiKeyId: input.downstreamApiKeyId } : {}),
       ...(allowClientFields
         ? {
@@ -681,6 +701,11 @@ export async function insertProxyLog(input: ProxyLogInsertInput): Promise<void> 
 
       if (allowReasoningEffort && isMissingProxyLogReasoningEffortColumnError(error)) {
         allowReasoningEffort = false;
+        continue;
+      }
+
+      if (allowResponseModel && isMissingProxyLogResponseModelColumnError(error)) {
+        allowResponseModel = false;
         continue;
       }
 

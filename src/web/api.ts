@@ -415,6 +415,8 @@ export type ProxyLogListItem = {
   createdAt: string;
   modelRequested: string;
   modelActual: string;
+  /** The model the upstream itself reported in its response body (what actually answered). */
+  responseModel?: string | null;
   status: string;
   latencyMs: number;
   isStream?: boolean | null;

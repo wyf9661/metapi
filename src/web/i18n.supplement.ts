@@ -1598,6 +1598,7 @@ export const zhToEnSupplemental: Record<string, string> = {
   '可读片段：': 'Readable snippet: ',
   '字符': 'characters',
   '实际模型': 'Actual model',
+  '响应模型': 'Response model',
   '⚠ 上游返回了疑似二进制/压缩数据': '⚠ Upstream returned what looks like binary/compressed data',
   '个），可能未正常解码。': '), possibly not decoded correctly.',
   '查看原始数据': 'View raw data',
