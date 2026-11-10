@@ -112,7 +112,8 @@ export function buildUpstreamUrl(siteUrl: string, requestPath: string): string {
   try {
     const parsed = new URL(baseRaw);
     const basePath = parsed.pathname.replace(/\/+$/, '');
-    const baseHasVersionSuffix = /\/(?:api\/)?v1$/i.test(basePath);
+    // Docs-pasted bases may carry any version segment (/v1, /api/v1, /paas/v4, ...), not just v1.
+    const baseHasVersionSuffix = /\/v\d+$/i.test(basePath);
     if (baseHasVersionSuffix) {
       if (path === '/v1') {
         path = '/';
@@ -124,7 +125,7 @@ export function buildUpstreamUrl(siteUrl: string, requestPath: string): string {
     const joinedPath = joinPath(basePath, path);
     return `${formatUrlOrigin(parsed)}${joinedPath}${parsed.search}${parsed.hash}`;
   } catch {
-    const baseHasVersionSuffix = /\/(?:api\/)?v1$/i.test(fallbackBase);
+    const baseHasVersionSuffix = /\/v\d+$/i.test(fallbackBase);
     if (baseHasVersionSuffix) {
       if (path === '/v1') {
         path = '/';
