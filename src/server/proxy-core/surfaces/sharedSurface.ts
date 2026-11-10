@@ -36,7 +36,7 @@ type SelectedChannel = Awaited<ReturnType<typeof tokenRouter.selectChannel>>;
 type SurfaceWarningScope = 'chat' | 'responses' | 'gemini';
 
 type SurfaceSelectedChannel = {
-  channel: { routeId: number | null; id: number };
+  channel: { routeId: number | null; id: number; tokenId?: number | null };
   account: { id: number; username?: string | null };
   site: { id?: number | null; name?: string | null };
   actualModel?: string | null;
@@ -537,10 +537,9 @@ export async function recordSurfaceSuccess(input: {
     outcome: 'success',
     firstByteLatencyMs: input.firstByteLatencyMs,
   });
-  // A successful upstream call proves the credential works; clear any
-  // pending token-expiry sightings for this account.
+  // A proxy success validates only the API key used, not sibling keys or the management session.
   if (input.selected.account?.id != null) {
-    resetTokenExpiredSightings(input.selected.account.id);
+    resetTokenExpiredSightings(input.selected.account.id, input.selected.channel.tokenId ?? null);
   }
   input.recordDownstreamCost?.(estimatedCost);
   const logTokens = resolvedUsage.usageSource === 'unknown'
@@ -901,6 +900,7 @@ export function createSurfaceFailureToolkit(input: {
           username: args.selected.account.username,
           siteName: args.selected.site.name,
           detail: `HTTP ${args.status}`,
+          proxyTokenId: args.selected.channel.tokenId ?? null,
         }));
       }
 

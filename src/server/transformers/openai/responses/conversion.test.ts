@@ -1947,6 +1947,19 @@ describe('convertResponsesBodyToOpenAiBody', () => {
     }
   });
 
+  it.each([
+    ['business rule denied', ''],
+    ['business rule denied', 'invalid_request_error'],
+    ['gpt requires Responses API for tool handling', 'invalid_request_error'],
+    ['gpt requires Responses for tool calls; this account only supports Chat Completions', 'invalid_request_error'],
+  ])('does not replay unrelated 400 errors through compatibility bodies: %s (%s)', (message, type) => {
+    expect(shouldRetryResponsesCompatibility({
+      endpoint: 'responses', status: 400,
+      rawErrText: JSON.stringify({ error: { message, type } }),
+      body: { model: 'fixture-model', input: 'hello', metadata: { trace_id: 'req-1' } },
+    })).toBe(false);
+  });
+
   it('does not retry auth-shaped failures and still retries generic upstream errors through compatibility variants', () => {
     expect(shouldRetryResponsesCompatibility({
       endpoint: 'responses',

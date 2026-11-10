@@ -236,6 +236,10 @@ describe('proxyRetryPolicy', () => {
     expect(isRecoveringTransientFailure(403, 'Forbidden')).toBe(true);
     // Rate limits and 5xx are self-healing.
     expect(isRecoveringTransientFailure(429, 'rate limit exceeded')).toBe(true);
+    expect(isRecoveringTransientFailure(429, 'You have reached the request limit: maximum 10 requests in 1 minutes')).toBe(false);
+    expect(isRecoveringTransientFailure(429, 'quota exceeded')).toBe(false);
+    expect(isRecoveringTransientFailure(429, 'You\'ve reached your 5-hour usage limit for your plan. Your limit resets at 2026-11-10T11:27:36.175Z.')).toBe(false);
+    expect(isRecoveringTransientFailure(503, 'Insufficient balance')).toBe(false);
     expect(isRecoveringTransientFailure(503, 'service unavailable')).toBe(true);
     expect(isRecoveringTransientFailure(502, 'bad gateway')).toBe(true);
     // Credential death / request-shape errors will not self-heal.
@@ -250,6 +254,21 @@ describe('proxyRetryPolicy', () => {
     // same-channel retries must not engage (failover handles them instead).
     expect(isRecoveringTransientFailure(502, 'Upstream returned empty content')).toBe(false);
     expect(isRecoveringTransientFailure(502, 'upstream returned empty content')).toBe(false);
+  });
+
+  it.each([
+    [402, 'Insufficient balance'],
+    [429, 'quota exceeded'],
+    [429, '额度已用尽（费用 0.666261 / 0.5）。请先在首页用 LDC 兑换额度后重试。'],
+    [429, "You've reached your 5-hour usage limit for your plan. Your limit resets at 2026-11-10T11:27:36.175Z."],
+    [429, 'usage_limit_reached'],
+    [503, 'Insufficient balance'],
+  ])('does not spend same-channel recovery retries on persistent exhaustion: %i %s', (status, errorText) => {
+    expect(isRecoveringTransientFailure(status, errorText)).toBe(false);
+    expect(shouldGraceRetryInPlaceOnce(false, 1000, 8000, status, errorText)).toBe(false);
+    expect(canRetryInPlaceForRecoveringFailure(0, status, errorText, 800)).toBe(false);
+    expect(resolveFailoverBackoffMs(status, errorText, 800)).toBe(0);
+    expect(shouldRetryProxyRequest(status, errorText)).toBe(true);
   });
 
   it('returns zero backoff when disabled or not a recovering failure', () => {

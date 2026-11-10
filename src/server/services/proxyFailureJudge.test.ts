@@ -250,3 +250,42 @@ describe('detectProxyFailure (empty content)', () => {
     expect(failure).toMatchObject({ status: 502 });
   });
 });
+
+describe('detectProxyFailure (malformed tool call arguments)', () => {
+  const originalEmptyFail = config.proxyEmptyContentFailEnabled;
+
+  afterEach(() => {
+    config.proxyEmptyContentFailEnabled = originalEmptyFail;
+  });
+
+  it('flags a non-stream body whose tool call arguments are half JSON', () => {
+    config.proxyEmptyContentFailEnabled = true;
+    const rawText = JSON.stringify({
+      id: 'chatcmpl_malformed',
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'terminal', arguments: '{"comm' } }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+      usage: { prompt_tokens: 100, completion_tokens: 8, total_tokens: 108 },
+    });
+
+    expect(detectProxyFailure({ rawText, usage: { completionTokens: 8 } })).toMatchObject({
+      status: 502,
+      reason: 'Upstream returned malformed tool call arguments',
+    });
+  });
+
+  it('passes SSE streams whose argument fragments reassemble by index', () => {
+    config.proxyEmptyContentFailEnabled = true;
+    const frame1 = JSON.stringify({ id: 'x', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'terminal', arguments: '{"command"' } }] } }] });
+    const frame2 = JSON.stringify({ id: 'x', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: ':"ls"}' } }] }, finish_reason: 'tool_calls' }] });
+    const rawText = [`data: ${frame1}`, '', `data: ${frame2}`, '', 'data: [DONE]', ''].join('\n');
+
+    expect(detectProxyFailure({ rawText, usage: { completionTokens: 12 } })).toBeNull();
+  });
+});

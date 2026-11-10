@@ -872,6 +872,7 @@ describe('selectSurfaceChannelForAttempt', () => {
       username: 'oauth-user',
       siteName: 'Codex OAuth',
       detail: 'HTTP 401',
+      proxyTokenId: null,
     });
     expect(reportProxyAllFailedMock).toHaveBeenCalledWith({
       model: 'gpt-5.2',
@@ -880,6 +881,38 @@ describe('selectSurfaceChannelForAttempt', () => {
       attemptedChannels: 3,
       configuredAttempts: 3,
     });
+  });
+
+  it('preserves the failed proxy key identity while retrying a relay 401', async () => {
+    composeProxyLogMessageMock.mockReturnValue('normalized error');
+    formatUtcSqlDateTimeMock.mockReturnValue('2026-11-10 07:47:18');
+    insertProxyLogMock.mockResolvedValue(undefined);
+    isTokenExpiredErrorMock.mockReturnValue(true);
+
+    const { createSurfaceFailureToolkit } = await import('./sharedSurface.js');
+    const toolkit = createSurfaceFailureToolkit({
+      warningScope: 'chat',
+      downstreamPath: '/v1/chat/completions',
+      maxRetries: 2,
+    });
+    const outcome = await toolkit.handleUpstreamFailure({
+      selected: {
+        channel: { id: 11, routeId: 22, tokenId: 229 },
+        account: { id: 33, username: 'relay-user' },
+        site: { id: 55, name: 'relay' },
+      },
+      requestedModel: 'deepseek-flash',
+      modelName: 'deepseek-flash',
+      status: 401,
+      errText: 'Invalid token',
+      latencyMs: 20,
+      retryCount: 0,
+    });
+
+    expect(outcome).toMatchObject({ action: 'retry' });
+    expect(recordFailureMock).toHaveBeenCalledWith(11, expect.objectContaining({ status: 401 }));
+    expect(reportTokenExpiredMock).toHaveBeenCalledWith(expect.objectContaining({ accountId: 33, proxyTokenId: 229 }));
+    expect(insertProxyLogMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', httpStatus: 401 }));
   });
 
   it('returns terminal failures even when final alerting throws', async () => {
@@ -1328,6 +1361,35 @@ describe('selectSurfaceChannelForAttempt', () => {
       totalTokens: null,
       usageSource: 'unknown',
     }));
+  });
+
+  it.each([229, null])('only resets the successful proxy key %s', async (tokenId) => {
+    resolveProxyUsageWithSelfLogFallbackMock.mockResolvedValue({
+      promptTokens: 10, completionTokens: 5, totalTokens: 15,
+      recoveredFromSelfLog: false, estimatedCostFromQuota: 0,
+      selfLogBillingMeta: null, usageSource: 'upstream',
+    });
+    resolveProxyLogBillingMock.mockResolvedValue({ estimatedCost: 0, billingDetails: null });
+    const { recordSurfaceSuccess } = await import('./sharedSurface.js');
+
+    await recordSurfaceSuccess({
+      selected: {
+        channel: { id: 11, routeId: 22, tokenId },
+        account: { id: 33, username: 'relay-user' },
+        site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api' },
+        tokenValue: 'test-token', tokenName: 'default', actualModel: 'upstream-model',
+      },
+      requestedModel: 'test-model', modelName: 'upstream-model',
+      parsedUsage: {
+        promptTokens: 10, completionTokens: 5, totalTokens: 15,
+        cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null,
+      },
+      requestStartedAtMs: 1000, latencyMs: 250, retryCount: 0,
+      logSuccess: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(resetTokenExpiredSightingsMock).toHaveBeenCalledTimes(1);
+    expect(resetTokenExpiredSightingsMock).toHaveBeenCalledWith(33, tokenId);
   });
 
   it('treats success metrics as best-effort when requested', async () => {

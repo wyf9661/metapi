@@ -1967,7 +1967,11 @@ describe('selectPreferredChannel low-balance yield', () => {
     expect(selected?.channel.id).toBe(channel.id);
   });
 
-  it('marks session account balance exhausted on quota_or_credit failure and leaves api keys untouched', async () => {
+  it.each([
+    [402, 'You exceeded your current quota'],
+    [429, 'quota exceeded'],
+    [429, '额度已用尽（费用 0.666261 / 0.5）。请先在首页用 LDC 兑换额度后重试'],
+  ])('parks exhausted quota on HTTP %i and leaves API-key balances untouched', async (status, errorText) => {
     const site = await db.insert(schema.sites).values({
       name: `quota-site-${localIdSeed += 1}`,
       url: 'https://quota-site.example.com',
@@ -2027,8 +2031,8 @@ describe('selectPreferredChannel low-balance yield', () => {
 
     // Session account: quota failure zeroes the balance snapshot (hard-exclude).
     await router.recordFailure(sessionChannel.id, {
-      status: 402,
-      errorText: 'You exceeded your current quota',
+      status,
+      errorText,
       modelName: 'quota-model',
     });
     const sessionAfter = await db.select().from(schema.accounts)
@@ -2050,8 +2054,8 @@ describe('selectPreferredChannel low-balance yield', () => {
 
     // API-key account: balance must stay untouched (unknown balance, default 0).
     await router.recordFailure(apiKeyChannel.id, {
-      status: 402,
-      errorText: 'quota exceeded',
+      status,
+      errorText,
       modelName: 'quota-model',
     });
     const apiKeyAfter = await db.select().from(schema.accounts)

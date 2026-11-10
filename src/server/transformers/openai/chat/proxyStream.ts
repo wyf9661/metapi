@@ -7,6 +7,7 @@ import {
   normalizeOpenAiChatFinalToNormalized,
 } from './responseBridge.js';
 import { openAiChatStream } from './streamBridge.js';
+import { hasMalformedToolCallArguments } from '../../shared/toolCallAssembler.js';
 import { config, resolveProxyStreamIdleTimeoutMs } from '../../../config.js';
 
 type StreamReader = {
@@ -206,6 +207,26 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
     return true;
   };
 
+  // A damaged relay splits one call into separate slots, each ending as
+  // half-JSON: visible but unexecutable, so it must fail like empty content.
+  const hasMalformedChatToolCallOutput = (): boolean => {
+    if (input.downstreamFormat !== 'openai') return false;
+    const values: unknown[] = [];
+    if (chatAggregateState) {
+      for (const choice of chatAggregateState.choices.values()) {
+        for (const toolCall of choice.toolCalls) values.push(toolCall.arguments);
+      }
+    }
+    if (terminalNormalizedFinal) {
+      const choices = Array.isArray(terminalNormalizedFinal.choices) ? terminalNormalizedFinal.choices : [];
+      for (const choice of choices) {
+        for (const toolCall of choice.toolCalls || []) values.push(toolCall.arguments);
+      }
+      for (const toolCall of terminalNormalizedFinal.toolCalls || []) values.push(toolCall.arguments);
+    }
+    return hasMalformedToolCallArguments(values);
+  };
+
   const finalize = () => {
     if (finalized) return;
     finalized = true;
@@ -222,6 +243,16 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
         : (hasReasoningChatOutput()
           ? 'Upstream returned empty content (reasoning only)'
           : 'Upstream returned empty content');
+      markFailed({
+        error: {
+          message,
+        },
+      }, message);
+      return;
+    }
+
+    if (config.proxyEmptyContentFailEnabled && hasMalformedChatToolCallOutput()) {
+      const message = 'Upstream returned malformed tool call arguments';
       markFailed({
         error: {
           message,

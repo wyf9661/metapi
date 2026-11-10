@@ -221,6 +221,7 @@ export async function embeddingsProxyRoute(app: FastifyInstance) {
             username: selected.account.username,
             siteName: selected.site.name,
             detail: `HTTP ${status}`,
+            proxyTokenId: selected.channel.tokenId ?? null,
           });
         }
         if ((status > 0 ? shouldRetryProxyRequest(status, errorText) : true) && canRetryChannelSelection(retryCount, forcedChannelId, null, { maxRetries, budgetMs: failoverBudgetMs })) {
