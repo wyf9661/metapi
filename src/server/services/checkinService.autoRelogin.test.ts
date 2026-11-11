@@ -422,6 +422,39 @@ describe('checkinService auto relogin', () => {
     expect(firstInsertPayload?.status).toBe('skipped');
   });
 
+  it('treats sign_in-spelling route-404 noise as skipped, not failed', async () => {
+    selectAllMock.mockReturnValue([
+      {
+        accounts: {
+          id: 19,
+          username: 'plain-user-2',
+          accessToken: 'token',
+          status: 'active',
+          extraConfig: null,
+        },
+        sites: {
+          id: 19,
+          name: 'new-api-3',
+          url: 'https://legacy.example.com',
+          platform: 'new-api',
+        },
+      },
+    ]);
+
+    adapterMock.checkin.mockResolvedValue({
+      success: false,
+      message: 'Invalid URL (POST /api/user/sign_in)',
+    });
+
+    const { checkinAccount } = await import('./checkinService.js');
+    const result = await checkinAccount(19);
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('skipped');
+    const firstInsertPayload = insertValuesMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(firstInsertPayload?.status).toBe('skipped');
+  });
+
   it('treats sub2api checkin unsupported message as skipped', async () => {
     selectAllMock.mockReturnValue([
       {
