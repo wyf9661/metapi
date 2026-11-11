@@ -187,7 +187,21 @@ export function shouldRetryResponsesCompatibility(input: {
     || compact.includes('openai_error')
     || compact.includes('unsupported legacy protocol')
   );
-  if (hasCompatibilityHint) return true;
+  if (hasCompatibilityHint) {
+    const rejectedField = rejectedRequestField(input.rawErrText);
+    if (rejectedField) {
+      const root = rejectedField.split('.')[0];
+      // A field the client sent and every candidate keeps verbatim is a model
+      // capability verdict, not a wire-shape one: replaying repeats the same 400.
+      if (
+        input.body[root] !== undefined
+        && !anyCompatibilityBodyChanges(input.body, rejectedField)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   const compatibilityCandidates = buildResponsesCompatibilityBodies(input.body);
   if (compatibilityCandidates.length > 0) {
@@ -247,6 +261,27 @@ function parseUpstreamErrorShape(rawText: string): {
   } catch {
     return { type: '', code: '', message: '' };
   }
+}
+
+// "tool_choice is not supported for this model" names a request field; the field
+// a compatibility body would have to change to clear it is the one before the
+// verdict. Bare hints ("unsupported legacy protocol") name no field.
+const REJECTED_FIELD_PATTERN = /(?:^|[^a-z0-9_.])([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\s+(?:is\s+|are\s+)?(?:not supported|unsupported)/i;
+
+function rejectedRequestField(rawErrText: string): string | null {
+  const message = parseUpstreamErrorShape(rawErrText).message || rawErrText;
+  const match = REJECTED_FIELD_PATTERN.exec(message);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function anyCompatibilityBodyChanges(
+  body: Record<string, unknown>,
+  field: string,
+): boolean {
+  const root = field.split('.')[0];
+  const original = JSON.stringify(body[root]);
+  return buildResponsesCompatibilityBodies(body)
+    .some((candidate) => JSON.stringify(candidate[root]) !== original);
 }
 
 function getExplicitResponsesInstructions(body: Record<string, unknown>): string | null {
