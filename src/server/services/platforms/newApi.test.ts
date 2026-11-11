@@ -18,6 +18,7 @@ const CHECKIN_ALREADY_TOKEN = 'checkin-already-token';
 const CHECKIN_INVALID_URL_TOKEN = 'checkin-invalid-url-token';
 const CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN = 'checkin-invalid-url-expired-session-token';
 const CHECKIN_INVALID_URL_FORBIDDEN_SESSION_TOKEN = 'checkin-invalid-url-forbidden-session-token';
+const CHECKIN_SIGNIN_NOISE_BEARER_TOKEN = 'checkin-signin-noise-bearer-token';
 const CHECKIN_CLOUDFLARE_530_TOKEN = 'checkin-cloudflare-530-token';
 const CHECKIN_SHIELDED_BEARER_TOKEN = 'checkin-shielded-bearer-token';
 const BALANCE_FAIL_TOKEN = 'balance-fail-token';
@@ -537,6 +538,17 @@ describe('NewApiAdapter', () => {
           res.end(JSON.stringify({ error: { message: 'Invalid URL (POST /api/user/checkin)' } }));
           return;
         }
+        if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${CHECKIN_SIGNIN_NOISE_BEARER_TOKEN}`) {
+          // rc.49 auth middleware rejects the stale short-lived Bearer token.
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'AUTH_UNAUTHORIZED', message: 'invalid access token' }));
+          return;
+        }
+        if (typeof req.headers.cookie === 'string' && (req.headers.cookie.includes(`session=${CHECKIN_SIGNIN_NOISE_BEARER_TOKEN}`) || req.headers.cookie.includes(`token=${CHECKIN_SIGNIN_NOISE_BEARER_TOKEN}`))) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ code: 'AUTH_UNAUTHORIZED', message: 'invalid access token' }));
+          return;
+        }
         if (typeof req.headers.authorization === 'string' && req.headers.authorization === `Bearer ${CHECKIN_ALREADY_TOKEN}`) {
           // Bearer is invalid for session cookies; this should not override already-checked-in from cookie path.
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -608,6 +620,12 @@ describe('NewApiAdapter', () => {
       }
 
       if (req.url === '/api/user/sign_in') {
+        if (typeof req.headers.cookie === 'string' && (req.headers.cookie.includes(`session=${CHECKIN_SIGNIN_NOISE_BEARER_TOKEN}`) || req.headers.cookie.includes(`token=${CHECKIN_SIGNIN_NOISE_BEARER_TOKEN}`))) {
+          // Gin NoRoute answers HTTP 200 with this JSON shape.
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: 'Invalid URL (POST /api/user/sign_in)' }));
+          return;
+        }
         if (typeof req.headers.cookie === 'string' && req.headers.cookie.includes(`session=${CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN}`)) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({}));
@@ -883,6 +901,16 @@ describe('NewApiAdapter', () => {
   it('prefers cookie session auth failure over invalid-url fallback when cookie session is expired', async () => {
     const adapter = new NewApiAdapter();
     const result = await adapter.checkin(baseUrl, CHECKIN_INVALID_URL_EXPIRED_SESSION_TOKEN, 131936);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('access token');
+    expect(result.message).not.toContain('Invalid URL');
+  });
+
+  it('keeps the honest auth failure when the legacy sign_in alias answers route-404 noise', async () => {
+    const adapter = new NewApiAdapter();
+    // Stale rc.49 Bearer token: bearer 401 -> garbage-cookie fallback -> sign_in route 404.
+    const result = await adapter.checkin(baseUrl, CHECKIN_SIGNIN_NOISE_BEARER_TOKEN, 131936);
 
     expect(result.success).toBe(false);
     expect(result.message).toContain('access token');

@@ -5,6 +5,7 @@ import { isCloudflareChallenge, isTokenExpiredError } from './alertRules.js';
 import { reportTokenExpired } from './alertService.js';
 import { refreshBalance } from './balanceService.js';
 import { parseCheckinRewardAmount } from './checkinRewardParser.js';
+import { isMissingCheckinEndpointMessage } from './platforms/newApiPure.js';
 import {
   getAutoReloginConfig,
   getNewApiManagementTokenFromExtraConfig,
@@ -47,11 +48,9 @@ function isAlreadyCheckedInMessage(message?: string | null): boolean {
 
 function isUnsupportedCheckinMessage(message?: string | null): boolean {
   if (!message) return false;
+  if (isMissingCheckinEndpointMessage(message)) return true;
   const text = message.toLowerCase();
   return (
-    text.includes('invalid url (post /api/user/checkin)') ||
-    (text.includes('http 404') && text.includes('/api/user/checkin')) ||
-    text.includes('checkin endpoint not found') ||
     text.includes('check-in is not supported') ||
     text.includes('checkin is not supported') ||
     text.includes('does not support checkin') ||

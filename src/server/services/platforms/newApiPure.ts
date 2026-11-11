@@ -491,6 +491,10 @@ export function isSessionLikeCredential(token: string): boolean {
 export function rememberCheckinFailureMessage(current: string | undefined, next?: string | null): string | undefined {
     const incoming = typeof next === 'string' ? next.trim() : '';
     if (!incoming) return current;
+    // Missing-endpoint 404 noise (e.g. the legacy /api/user/sign_in alias) must never
+    // bury an already-captured failure — it once masked a stale-token 401 and broke
+    // the auto-relogin trigger.
+    if (current && isMissingCheckinEndpointMessage(incoming)) return current;
     if (!current) return incoming;
     // Never let later auth noise override an already-checked-in result.
     if (isAlreadyCheckedInMessage(current)) return current;
@@ -529,6 +533,8 @@ export function isMissingCheckinEndpointMessage(message?: string | null): boolea
     return (
       text.includes('invalid url (post /api/user/checkin)') ||
       (text.includes('http 404') && text.includes('/api/user/checkin')) ||
+      text.includes('invalid url (post /api/user/sign_in)') ||
+      (text.includes('http 404') && text.includes('/api/user/sign_in')) ||
       text.includes('checkin endpoint not found') ||
       text.includes('check-in is not supported') ||
       text.includes('checkin is not supported') ||
