@@ -10,7 +10,7 @@ import {
 import { normalizeCodexResponsesBodyForProxy } from '../transformers/openai/responses/codexCompatibility.js';
 import { asTrimmedString } from '../shared/trimString.js';
 import { CODEX_CLI_USER_AGENT } from '../shared/codexClientFamily.js';
-import { isCodexGatedPlatform } from '../shared/codexGatedPlatforms.js';
+import { isCodexGatedPlatform, isCodexGroupGatedPlatform } from '../shared/codexGatedPlatforms.js';
 import {
   convertOpenAiBodyToAnthropicMessagesBody,
   sanitizeAnthropicMessagesBody,
@@ -821,10 +821,21 @@ export function buildUpstreamEndpointRequest(input: {
     // If neither the client nor site supplied a Codex-like UA/originator, inject a
     // conservative Codex CLI fingerprint so converted chat→responses calls work.
     headers = ensureCodexClientFingerprintHeaders(headers, sitePlatform);
+    // The group-level Codex gate checks the body too: version header, x-codex-*
+    // identifiers, include and store each still 403 "This group only allows
+    // Codex clients"; a present prompt_cache_key is what passes it. Mirror the
+    // session id the fingerprint headers already carry.
+    const gatedBody = (
+      isCodexGroupGatedPlatform(sitePlatform)
+      && configuredResponsesBody.prompt_cache_key === undefined
+      && typeof headers.Session_id === 'string'
+    )
+      ? { ...configuredResponsesBody, prompt_cache_key: headers.Session_id }
+      : configuredResponsesBody;
     return {
       path: resolveEndpointPath('responses'),
       headers,
-      body: configuredResponsesBody,
+      body: gatedBody,
       runtime,
     };
   }

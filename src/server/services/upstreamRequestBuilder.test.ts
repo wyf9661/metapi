@@ -102,6 +102,49 @@ describe('upstreamRequestBuilder', () => {
     expect(request.body.store).toBeUndefined();
   });
 
+  it('carries the Codex prompt_cache_key on gated responses bodies (group-level Codex gate)', () => {
+    // Live gate check on a new-api relay: version header, x-codex-* identifiers,
+    // include and store each still got 403 "This group only allows Codex
+    // clients"; only prompt_cache_key flipped it to a real completion.
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-6.2-sol',
+      stream: true,
+      tokenValue: 'sk-test',
+      sitePlatform: 'new-api',
+      siteUrl: 'https://anyrouter.top',
+      openaiBody: {
+        model: 'gpt-6.2-sol',
+        stream: true,
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      downstreamFormat: 'openai',
+    });
+
+    expect(request.body.prompt_cache_key).toBe(request.headers.Session_id);
+    expect(request.body.prompt_cache_key).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it('leaves official OpenAI responses bodies without a prompt_cache_key', () => {
+    // The group-level body gate is a NewAPI-class relay behavior; official
+    // OpenAI traffic must stay byte-identical to what it was.
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'gpt-4.1',
+      stream: false,
+      tokenValue: 'sk-test',
+      sitePlatform: 'openai',
+      siteUrl: 'https://api.openai.com',
+      openaiBody: {
+        model: 'gpt-4.1',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      downstreamFormat: 'openai',
+    });
+
+    expect(request.body.prompt_cache_key).toBeUndefined();
+  });
+
   it('keeps the Codex fingerprint off the messages and chat faces (face-driven identity)', () => {
     const messagesRequest = buildUpstreamEndpointRequest({
       endpoint: 'messages',
