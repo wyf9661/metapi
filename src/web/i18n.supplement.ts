@@ -128,6 +128,8 @@ export const zhToEnSupplemental: Record<string, string> = {
   '登录令牌无效': 'Invalid login token',
   '登录请求失败': 'Login request failed',
   '登录失败': 'Login failed',
+  '登录失败，请检查服务状态': 'Login failed — please check the service status',
+  '登录尝试过于频繁，请稍后重试（服务本身正常）': 'Too many login attempts — retry shortly (the service itself is fine)',
   '低延迟': 'low latency',
   '点击关闭签到，全部签到会忽略此账号': 'Click to close sign-in. All sign-ins will ignore this account.',
   '点击开启签到': 'Click to open sign-in',

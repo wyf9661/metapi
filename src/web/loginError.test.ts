@@ -14,4 +14,10 @@ describe('resolveLoginErrorMessage', () => {
   it('returns server error message for 5xx', () => {
     expect(resolveLoginErrorMessage(500, 'internal error')).toBe('服务端异常，请稍后重试');
   });
+
+  it('explains the login throttle instead of blaming the service', () => {
+    const message = resolveLoginErrorMessage(429, 'Too many failed authentication attempts');
+    expect(message).toBe('登录尝试过于频繁，请稍后重试（服务本身正常）');
+    expect(message).not.toContain('检查服务状态');
+  });
 });
