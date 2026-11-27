@@ -81,6 +81,7 @@ interface RuntimeSettingsBody {
   tunnelDashboardAccess?: boolean;
   routingFallbackUnitCost?: number;
   proxyFirstByteTimeoutSec?: number;
+  proxyFirstByteWindowFloorSec?: number;
   proxyRouteProbeRate?: number;
   proxyConcurrencySpreadEnabled?: boolean;
   tokenRouterFailureCooldownMaxSec?: number;
@@ -530,6 +531,12 @@ function applyImportedSettingToRuntime(key: string, value: unknown) {
       config.proxyFirstByteTimeoutSec = Math.max(0, Math.trunc(n));
       return;
     }
+    case 'proxy_first_byte_window_floor_sec': {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return;
+      config.proxyFirstByteWindowFloorSec = Math.max(0, Math.trunc(n));
+      return;
+    }
     case 'proxy_route_probe_rate': {
       const n = Number(value);
       if (!Number.isFinite(n) || n < 0 || n > 1) return;
@@ -603,6 +610,7 @@ async function getRuntimeSettingsResponse(currentAdminIp = '', tunnelClientView 
     proxyDebugMaxBodyBytes: config.proxyDebugMaxBodyBytes,
     routingFallbackUnitCost: config.routingFallbackUnitCost,
     proxyFirstByteTimeoutSec: config.proxyFirstByteTimeoutSec,
+    proxyFirstByteWindowFloorSec: config.proxyFirstByteWindowFloorSec,
     proxyRouteProbeRate: config.proxyRouteProbeRate,
     proxyConcurrencySpreadEnabled: config.proxyConcurrencySpreadEnabled,
     tokenRouterFailureCooldownMaxSec: config.tokenRouterFailureCooldownMaxSec,
@@ -1577,6 +1585,19 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       config.proxyFirstByteTimeoutSec = normalized;
       await upsertSetting('proxy_first_byte_timeout_sec', normalized);
+    }
+
+    if (body.proxyFirstByteWindowFloorSec !== undefined) {
+      const nextFloor = Number(body.proxyFirstByteWindowFloorSec);
+      if (!Number.isFinite(nextFloor) || nextFloor < 0) {
+        return reply.code(400).send({ success: false, message: '首字窗口下限必须是大于等于 0 的数字（秒）' });
+      }
+      const normalizedFloor = Math.max(0, Math.trunc(nextFloor));
+      if (normalizedFloor !== config.proxyFirstByteWindowFloorSec) {
+        changedLabels.push(`首字窗口下限（${config.proxyFirstByteWindowFloorSec}s -> ${normalizedFloor}s）`);
+      }
+      config.proxyFirstByteWindowFloorSec = normalizedFloor;
+      await upsertSetting('proxy_first_byte_window_floor_sec', normalizedFloor);
     }
 
     if (body.proxyRouteProbeRate !== undefined) {

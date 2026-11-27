@@ -81,6 +81,7 @@ type RuntimeSettings = {
   proxySessionChannelQueueWaitMs: number;
   routingFallbackUnitCost: number;
   proxyFirstByteTimeoutSec: number;
+  proxyFirstByteWindowFloorSec: number;
   proxyRouteProbeRate: number;
   proxyConcurrencySpreadEnabled: boolean;
   routeFailureCooldownMaxValue: number;
@@ -160,6 +161,7 @@ export default function Settings() {
     proxySessionChannelQueueWaitMs: 1500,
     routingFallbackUnitCost: 1,
     proxyFirstByteTimeoutSec: 15,
+    proxyFirstByteWindowFloorSec: 30,
     proxyRouteProbeRate: 0.15,
     proxyConcurrencySpreadEnabled: true,
     routeFailureCooldownMaxValue: 30,
@@ -471,6 +473,9 @@ export default function Settings() {
         proxyFirstByteTimeoutSec: Number(runtimeInfo.proxyFirstByteTimeoutSec) >= 0
           ? Math.trunc(Number(runtimeInfo.proxyFirstByteTimeoutSec))
           : 15,
+        proxyFirstByteWindowFloorSec: Number(runtimeInfo.proxyFirstByteWindowFloorSec) >= 0
+          ? Math.trunc(Number(runtimeInfo.proxyFirstByteWindowFloorSec))
+          : 30,
         proxyRouteProbeRate: Number(runtimeInfo.proxyRouteProbeRate) >= 0 && Number(runtimeInfo.proxyRouteProbeRate) <= 1
           ? Number(runtimeInfo.proxyRouteProbeRate)
           : 0.15,
@@ -751,6 +756,9 @@ export default function Settings() {
         proxyFirstByteTimeoutSec: Number.isFinite(runtime.proxyFirstByteTimeoutSec)
           ? Math.max(0, Math.trunc(runtime.proxyFirstByteTimeoutSec))
           : 0,
+        proxyFirstByteWindowFloorSec: Number.isFinite(runtime.proxyFirstByteWindowFloorSec)
+          ? Math.max(0, Math.trunc(runtime.proxyFirstByteWindowFloorSec))
+          : 30,
         proxyRouteProbeRate: Number.isFinite(runtime.proxyRouteProbeRate)
           ? Math.min(1, Math.max(0, runtime.proxyRouteProbeRate))
           : 0.15,
@@ -1821,7 +1829,28 @@ export default function Settings() {
               }}
               style={inputStyle}
             />
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('这是上限，不是固定等待：实际窗口按站点近期首字速度自适应（最快 30 秒），不会超过该值；无历史样本时按该值等待。`0` 表示关闭。')}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('这是上限，不是固定等待：实际窗口按站点近期首字速度自适应，不会超过该值；无历史样本时按该值等待。`0` 表示关闭。')}</div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>{tr('首字窗口下限')}</div>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              aria-label={tr('首字窗口下限秒数')}
+              value={runtime.proxyFirstByteWindowFloorSec}
+              onChange={(e) => {
+                const nextValue = Number(e.target.value);
+                setRuntime((prev) => ({
+                  ...prev,
+                  proxyFirstByteWindowFloorSec: Number.isFinite(nextValue) && nextValue >= 0
+                    ? Math.trunc(nextValue)
+                    : prev.proxyFirstByteWindowFloorSec,
+                }));
+              }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.7, marginTop: 6 }}>{tr('自适应窗口不会低于该值。推理模型的首字常在 10-20 秒，下限太低会把它们的正常回答当作超时。默认 30 秒；`0` 表示不设下限。')}</div>
           </div>
           </div>
           <div style={{ paddingTop: 2 }}>

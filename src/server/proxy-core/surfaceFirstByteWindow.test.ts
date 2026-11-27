@@ -8,6 +8,7 @@ import {
 import { resolveSurfaceFirstByteWindowMs } from './surfaceFirstByteWindow.js';
 
 const ORIGINAL_TIMEOUT_SEC = (config as any).proxyFirstByteTimeoutSec;
+const ORIGINAL_FLOOR_SEC = (config as any).proxyFirstByteWindowFloorSec;
 const SITE_ID = 316;
 const ROUTE_ID = 7;
 const MODEL = 'deepseek-v4.1-flash';
@@ -27,11 +28,15 @@ describe('resolveSurfaceFirstByteWindowMs', () => {
   beforeEach(() => {
     clearPerformanceShadowMetrics();
     (config as any).proxyFirstByteTimeoutSec = 120;
+    // Pin the floor to the historical 8s so the survival-curve cases below keep
+    // asserting what they were written for; the floor knob has its own test.
+    (config as any).proxyFirstByteWindowFloorSec = 8;
   });
 
   afterEach(() => {
     clearPerformanceShadowMetrics();
     (config as any).proxyFirstByteTimeoutSec = ORIGINAL_TIMEOUT_SEC;
+    (config as any).proxyFirstByteWindowFloorSec = ORIGINAL_FLOOR_SEC;
   });
 
   // The gemini-native door used to reach this function with isStream=false on
@@ -61,6 +66,25 @@ describe('resolveSurfaceFirstByteWindowMs', () => {
     // Learned floor (8s), not the 120s configured ceiling: the point is that the
     // decision came from the attempts, whatever the exact value.
     expect(resolve()).toBe(8_000);
+  });
+
+  it('raises the learned window with the configured floor, and removes it at 0', () => {
+    for (let i = 0; i < 8; i += 1) {
+      recordPerformanceShadowAttempt({
+        key: { routeId: ROUTE_ID, siteId: SITE_ID, modelName: MODEL, isStream: true },
+        outcome: 'success',
+        firstByteLatencyMs: 2_000,
+      });
+    }
+    // Default 30s: a fast bucket is still not allowed below the floor, because a
+    // floor sitting inside a slow site's healthy distribution censors its normal
+    // answers and then reads the censoring as evidence not to wait.
+    (config as any).proxyFirstByteWindowFloorSec = 30;
+    expect(resolve()).toBe(30_000);
+
+    // 0 removes the floor; the window may then sit at the site's own tail.
+    (config as any).proxyFirstByteWindowFloorSec = 0;
+    expect(resolve()).toBeLessThan(30_000);
   });
 
   it('uses the per-site EWMA when the raw series is still too short', () => {

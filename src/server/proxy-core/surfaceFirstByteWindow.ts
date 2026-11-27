@@ -53,9 +53,16 @@ export function resolveSurfaceFirstByteWindowMs(input: {
     modelName,
     isStream: true,
   };
+  // The floor is an operator knob, not a constant: how long a healthy upstream
+  // may stay silent is a site property (reasoning models need 10-20s), so the
+  // value that used to be compiled in now comes from settings/config.
+  const configuredFloorMs = Number.isFinite(config.proxyFirstByteWindowFloorSec)
+    ? Math.max(0, Math.trunc((config.proxyFirstByteWindowFloorSec as number) * 1000))
+    : PROXY_FIRST_BYTE_WINDOW_FLOOR_MS;
+  const floorMs = Math.min(configuredFloorMs, configuredCeilingMs);
   const learnedMs = estimateFirstByteWindowMs({
     key,
-    floorMs: PROXY_FIRST_BYTE_WINDOW_FLOOR_MS,
+    floorMs,
     ceilingMs: configuredCeilingMs,
     nowMs: input.nowMs,
   });
