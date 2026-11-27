@@ -798,10 +798,14 @@ export function buildShadowCandidateInputs(
     // Time-to-first-token from live proxy samples (routeId+siteId+model+stream).
     // No sample = null = neutral in scoring. Streaming samples are what users
     // actually feel; non-stream (embeddings etc.) samples are ignored here.
+    // Keyed by the REQUESTED model: that is what the writer stores, and it is
+    // stable across channels. The mapped/upstream name is per channel, so
+    // reading under it left every mapped route with an empty bucket and a
+    // neutral TTFT factor — routing then ranked channels blind to latency.
     const ttftSample = getPerformanceShadowMetrics({
       routeId: candidate.channel.routeId,
       siteId: candidate.site.id,
-      modelName: model,
+      modelName: requestedModel || model,
       isStream: true,
     }, nowMs);
     return {

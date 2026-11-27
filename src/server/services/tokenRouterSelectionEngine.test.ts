@@ -23,6 +23,42 @@ function coolingCandidate(cooldownUntil: string | null) {
   } as never;
 }
 
+describe('shadow candidate TTFT lookup', () => {
+  // The metric writer keys samples by the model the client asked for (a
+  // requested model is stable across channels; the upstream model it maps to is
+  // not). The reader used the mapped/upstream name, so every mapped route read
+  // an empty bucket, scored the TTFT factor neutral (1.0), and routing picked
+  // channels blind to first-byte latency — the failover then landed on a slower
+  // site than the one it had just abandoned.
+  it('reads the first-byte sample under the requested model, not the mapped one', async () => {
+    const { recordPerformanceShadowSample, clearPerformanceShadowMetrics } = await import('./performanceShadow.js');
+    const { buildShadowCandidateInputs } = await import('./tokenRouterSelectionEngine.js');
+    clearPerformanceShadowMetrics();
+    recordPerformanceShadowSample({
+      key: { routeId: 7, siteId: 33, modelName: 'requested-model', isStream: true },
+      latencyMs: 9_000,
+      firstByteLatencyMs: 2_500,
+      completionTokens: 50,
+    });
+    const candidate = {
+      channel: { id: 11, routeId: 7, sourceModel: 'upstream-model', priority: 0, weight: 10 },
+      account: { id: 22, status: 'active', username: 'u', balance: 10 },
+      site: { id: 33, status: 'active', name: 's', globalWeight: 1 },
+      token: { id: 44, name: 't', tokenValue: 'sk-test' },
+    } as never;
+    const [input] = buildShadowCandidateInputs(
+      [candidate],
+      'upstream-model',
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      Date.now(),
+      null,
+      'requested-model',
+    );
+    expect(input!.ttftEwmaMs).toBe(2_500);
+    clearPerformanceShadowMetrics();
+  });
+});
+
 describe('channel cooldown eligibility', () => {
   it('reports a live cooldown by default', () => {
     const reasons = getCandidateEligibilityReasons(

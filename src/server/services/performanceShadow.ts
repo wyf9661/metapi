@@ -60,6 +60,15 @@ export const FIRST_BYTE_WINDOW_MIN_SAMPLES = 8;
  */
 export const FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER = 1.35;
 /**
+ * How far P90 may sit above the median before the tail is read as a second
+ * mode rather than as the site's distribution.
+ *
+ * Above this ratio the bucket is bimodal (a relay fanning out to a fast and a
+ * queued internal channel), and the window belongs at the fast mode: the slow
+ * minority is not worth waiting for on every attempt.
+ */
+export const FIRST_BYTE_WINDOW_TAIL_SPREAD_LIMIT = 4;
+/**
  * Recent TTFT attempts (oldest -> newest) inspected by the escalation trigger.
  * A sliding ratio is used instead of a tail streak: peak-hour traffic
  * interleaves fast and slow answers, so one 2s success used to reset a tail
@@ -293,6 +302,40 @@ export const FIRST_BYTE_WINDOW_FLOOR_RELEASE_FAST_ATTEMPTS = 6;
  * already prices observed successes, and a bimodal relay's slow mode (45s) must
  * stay a deliberate rejection, not become an unyielding floor.
  */
+/**
+ * Floor implied by the site's own successful first bytes.
+ *
+ * P90 x headroom, clamped to [static floor, ceiling]. P90 rather than max: one
+ * 90s outlier inside a 2s site must not hand the whole bucket a 90s window,
+ * and p95 is the second-largest sample in a 20-attempt lookback.
+ *
+ * Only successes count. A bucket with no successes has no tail evidence and
+ * keeps the static floor — which is what keeps a dead channel's probes cheap.
+ */
+function resolveSuccessTailFloorMs(
+  attempts: PerformanceShadowAttempt[],
+  floorMs: number,
+  ceilingMs: number,
+): number {
+  const successes: number[] = [];
+  for (const attempt of attempts) {
+    if (attempt.outcome === 'success' && attempt.firstByteLatencyMs !== null) {
+      successes.push(attempt.firstByteLatencyMs);
+    }
+  }
+  if (successes.length < FIRST_BYTE_WINDOW_MIN_SAMPLES) return floorMs;
+  successes.sort((a, b) => a - b);
+  const median = successes[Math.min(successes.length - 1, Math.floor((successes.length - 1) * 0.5))]!;
+  const p90 = successes[Math.min(successes.length - 1, Math.floor((successes.length - 1) * 0.9))]!;
+  // A bimodal relay (most answers 2s, a queued minority at 45s) must be cut at
+  // its fast mode: waiting for the slow mode on every attempt costs the fast
+  // majority far more than the slow minority is worth. Only a tail that is
+  // within the same order of magnitude as the typical answer is treated as the
+  // site's real distribution instead of a second mode.
+  if (median > 0 && p90 > median * FIRST_BYTE_WINDOW_TAIL_SPREAD_LIMIT) return floorMs;
+  return Math.min(ceilingMs, Math.max(floorMs, Math.round(p90 * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER)));
+}
+
 export function resolveAdaptiveFirstByteFloorMs(input: {
   attempts: PerformanceShadowAttempt[];
   floorMs: number;
@@ -301,6 +344,18 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
   const ceilingMs = Math.max(0, Math.trunc(input.ceilingMs));
   const floorMs = Math.max(0, Math.min(Math.trunc(input.floorMs), ceilingMs));
   const recent = input.attempts.slice(-FIRST_BYTE_WINDOW_FLOOR_LOOKBACK);
+
+  // The site's own healthy tail is floor evidence on its own. A static floor
+  // that sits below where the site actually answers censors those answers on
+  // every attempt, and each censored attempt is then read as "waiting is not
+  // worth it" — the absorbing state this function exists to break. Waiting for
+  // a censored timeout to prove it costs one real request per bucket, and the
+  // proof is thrown away again after every fast run.
+  // Production 7-day sample: 30.3% of successful streaming first bytes land
+  // between 8s and 30s, and single sites answer at a 12-22s median, so 8s was
+  // inside their normal distribution rather than below it.
+  const successFloorMs = resolveSuccessTailFloorMs(recent, floorMs, ceilingMs);
+  const baseFloorMs = Math.max(floorMs, successFloorMs);
 
   let censoredFloorMs = 0;
   let lastCensoredIndex = -1;
@@ -319,9 +374,9 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
     }
   }
 
-  if (censoredFloorMs <= 0) return floorMs;
+  if (censoredFloorMs <= 0) return baseFloorMs;
 
-  const liftedMs = Math.min(ceilingMs, Math.max(floorMs, censoredFloorMs));
+  const liftedMs = Math.min(ceilingMs, Math.max(baseFloorMs, censoredFloorMs));
   // Release target. Falling back to the static floor would hand the recovered
   // answers' upper half straight back to the censoring zone — a site that now
   // answers in 12-13s does not want an 8s floor, it wants its own tail. P90 of
@@ -339,7 +394,7 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
   successSinceCensor.sort((a, b) => a - b);
   const releaseTargetMs = successSinceCensor.length > 0
     ? Math.min(ceilingMs, Math.max(
-      floorMs,
+      baseFloorMs,
       Math.round(
         successSinceCensor[Math.min(
           successSinceCensor.length - 1,
@@ -347,7 +402,7 @@ export function resolveAdaptiveFirstByteFloorMs(input: {
         )]! * FIRST_BYTE_WINDOW_HEADROOM_MULTIPLIER,
       ),
     ))
-    : floorMs;
+    : baseFloorMs;
 
   let fastRun = 0;
   for (let index = lastCensoredIndex + 1; index < recent.length; index += 1) {
