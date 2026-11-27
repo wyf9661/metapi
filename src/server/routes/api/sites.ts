@@ -27,6 +27,10 @@ import {
 import { normalizeSiteApiEndpointBaseUrl } from '../../services/siteApiEndpointService.js';
 import { analyzePrimarySiteUrl } from '../../../shared/sitePrimaryUrl.js';
 import { probeSiteModels } from '../../services/modelService.js';
+import {
+  isModelDisabledForSite,
+  loadSiteDisabledModelsIndex,
+} from '../../services/siteDisabledModels.js';
 import { rebuildRoutesBestEffort } from '../../services/routeRefreshWorkflow.js';
 import { invalidateAccountsSnapshot } from '../../services/accountsOverviewService.js';
 
@@ -156,7 +160,6 @@ type SiteApiEndpointInputRow = {
 };
 type SiteSelectRow = typeof schema.sites.$inferSelect;
 type SiteIdentityRow = Pick<SiteSelectRow, 'id' | 'url' | 'platform'>;
-type SiteModelNameRow = { modelName: string };
 
 function normalizeSiteApiEndpointBoolean(input: unknown): boolean | null {
   return normalizePinnedFlag(input);
@@ -1224,7 +1227,10 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     // Get models from model_availability (account-level)
-    const accountModels = await db.select({ modelName: schema.modelAvailability.modelName })
+    const accountModels = await db.select({
+      accountId: schema.modelAvailability.accountId,
+      modelName: schema.modelAvailability.modelName,
+    })
       .from(schema.modelAvailability)
       .innerJoin(schema.accounts, eq(schema.modelAvailability.accountId, schema.accounts.id))
       .where(
@@ -1233,10 +1239,13 @@ export async function sitesRoutes(app: FastifyInstance) {
           eq(schema.modelAvailability.available, true),
         ),
       )
-      .all() as SiteModelNameRow[];
+      .all() as Array<{ accountId: number; modelName: string }>;
 
     // Get models from token_model_availability (token-level)
-    const tokenModels = await db.select({ modelName: schema.tokenModelAvailability.modelName })
+    const tokenModels = await db.select({
+      accountId: schema.accounts.id,
+      modelName: schema.tokenModelAvailability.modelName,
+    })
       .from(schema.tokenModelAvailability)
       .innerJoin(schema.accountTokens, eq(schema.tokenModelAvailability.tokenId, schema.accountTokens.id))
       .innerJoin(schema.accounts, eq(schema.accountTokens.accountId, schema.accounts.id))
@@ -1246,12 +1255,19 @@ export async function sitesRoutes(app: FastifyInstance) {
           eq(schema.tokenModelAvailability.available, true),
         ),
       )
-      .all() as SiteModelNameRow[];
+      .all() as Array<{ accountId: number; modelName: string }>;
 
-    const models = Array.from(new Set([
-      ...accountModels.map((r) => r.modelName.trim()),
-      ...tokenModels.map((r) => r.modelName.trim()),
-    ])).filter((m) => m.length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    // The availability flags only record what upstream last advertised. A model
+    // can be advertised and still be disabled for this key (probe verdict,
+    // operator choice, policy), and the disable list is the authority on "not
+    // usable" — so filter by it here. Without this the panel kept listing every
+    // model right after a probe had disabled most of them.
+    const disabledModelsIndex = await loadSiteDisabledModelsIndex();
+    const models = Array.from(new Set(
+      [...accountModels, ...tokenModels]
+        .filter((row) => !isModelDisabledForSite(disabledModelsIndex, id, row.modelName, row.accountId))
+        .map((row) => String(row.modelName || '').trim()),
+    )).filter((m) => m.length > 0).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
     return { siteId: id, models };
   });
