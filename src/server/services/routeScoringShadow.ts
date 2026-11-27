@@ -116,6 +116,10 @@ const TARGET_BALANCE_COVERAGE = 100;
 const MIN_REQUEST_COST = 1e-6;
 
 export function resolveExpectedRequestCost(unitCost: number, costSource: ShadowCostSource): number {
+  // A 0 cost is a real signal, not a missing value: free token groups (0×
+  // ratio) charge nothing, so their balance never depletes. Keep it at 0 so
+  // the balance coverage can tell "free" from "unknown".
+  if (Number.isFinite(unitCost) && unitCost === 0) return 0;
   const cost = Number.isFinite(unitCost) && unitCost > 0 ? unitCost : 1;
   // observed/configured/catalog are treated as per-request effective cost already
   // (tokenRouter stores totalCost/successCount as unitCost).
@@ -127,6 +131,10 @@ export function resolveExpectedRequestCost(unitCost: number, costSource: ShadowC
 
 export function computeBalanceCoverage(balance: number | null, expectedRequestCost: number): number | null {
   if (balance == null || !Number.isFinite(balance)) return null;
+  // A free request costs nothing: any balance (including 0) covers it, so the
+  // account must not be excluded as 余额不足. Without this a 0× free group
+  // whose balance sits at 0 is hard-excluded from every route.
+  if (expectedRequestCost === 0) return Number.POSITIVE_INFINITY;
   if (balance <= 0) return 0;
   return balance / Math.max(MIN_REQUEST_COST, expectedRequestCost);
 }

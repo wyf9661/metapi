@@ -248,6 +248,16 @@ export function createChatProxyStreamSession(input: ChatProxyStreamSessionInput)
           message,
         },
       }, message);
+      // Once reasoning reached the client the response is committed: the
+      // attempt cannot fail over anymore. Ending the stream without a terminal
+      // frame leaves every OpenAI-compatible SDK with a truncated stream, and
+      // the client aborts the whole turn on it (downgrade / exit) — even
+      // though the proxy already recorded the failure and cooled the channel.
+      // Close the stream normally so the session survives; the failed attempt
+      // stays visible in the proxy logs and the channel is still penalized.
+      if (forwardedDownstreamOutput) {
+        emitLines(downstreamTransformer.serializeDone(streamContext, claudeContext), { force: true });
+      }
       return;
     }
 

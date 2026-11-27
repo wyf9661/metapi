@@ -148,6 +148,29 @@ describe('routeScoringShadow', () => {
     expect(free.candidates.find((c) => c.channelId === 1)?.factors.exclusion).toBeNull();
   });
 
+  it('keeps a 0× free-group account eligible even when its balance is exactly 0', () => {
+    // A free group (ratio 0) never depletes: the request costs nothing, so a
+    // zero balance is "nothing left to spend", not "cannot pay". The old
+    // fallback turned a 0 unit cost into 1 and then read balance=0 as
+    // "余额不足", which hard-excluded the account from every route.
+    const free = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, balance: 0, balanceKnown: true, credentialKind: 'session', unitCost: 0, costSource: 'catalog' }),
+      base({ channelId: 2, siteId: 2, accountId: 2, balance: 20, balanceKnown: true, credentialKind: 'session', unitCost: 0.02 }),
+    ]);
+    expect(free.candidates.find((c) => c.channelId === 1)?.factors.exclusion).toBeNull();
+    expect(free.excluded).not.toContainEqual({ channelId: 1, reason: '余额不足' });
+  });
+
+  it('still excludes a paid session account whose balance cannot cover one request', () => {
+    // The free-group exception must not open the door for genuinely depleted
+    // paid accounts: a positive reference cost with balance 0 stays excluded.
+    const depleted = rankShadowCandidates([
+      base({ channelId: 1, siteId: 1, accountId: 1, balance: 0, balanceKnown: true, credentialKind: 'session', unitCost: 0.02, costSource: 'catalog' }),
+      base({ channelId: 2, siteId: 2, accountId: 2, balance: 20, balanceKnown: true, credentialKind: 'session', unitCost: 0.02 }),
+    ]);
+    expect(depleted.excluded).toContainEqual({ channelId: 1, reason: '余额不足' });
+  });
+
   it('formats a compact shadow log line', () => {
     const shadow = rankShadowCandidates([
       base({ channelId: 1, siteId: 1, accountId: 1, balance: 0 }),
