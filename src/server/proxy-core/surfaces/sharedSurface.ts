@@ -517,7 +517,7 @@ export async function recordSurfaceSuccess(input: {
     key: {
       routeId: input.selected.channel.routeId,
       siteId: input.selected.site.id,
-      modelName: input.modelName,
+      modelName: input.requestedModel,
       isStream: input.isStream === true,
     },
     latencyMs: input.latencyMs,
@@ -531,7 +531,7 @@ export async function recordSurfaceSuccess(input: {
     key: {
       routeId: input.selected.channel.routeId,
       siteId: input.selected.site.id,
-      modelName: input.modelName,
+      modelName: input.requestedModel,
       isStream: input.isStream === true,
     },
     outcome: 'success',

@@ -1309,6 +1309,49 @@ describe('selectSurfaceChannelForAttempt', () => {
     });
   });
 
+  it('feeds mapped-model successes into the requested-model first-byte window', async () => {
+    const { recordSurfaceSuccess } = await import('./sharedSurface.js');
+    const { clearPerformanceShadowMetrics, listPerformanceShadowAttempts, getPerformanceShadowMetrics } = await import('../../services/performanceShadow.js');
+    const { resolveSurfaceFirstByteWindowMs } = await import('../surfaceFirstByteWindow.js');
+    const originalTimeout = config.proxyFirstByteTimeoutSec;
+    clearPerformanceShadowMetrics();
+    config.proxyFirstByteTimeoutSec = 120;
+    resolveProxyUsageWithSelfLogFallbackMock.mockResolvedValue({
+      promptTokens: 5, completionTokens: 3, totalTokens: 8,
+      recoveredFromSelfLog: false, estimatedCostFromQuota: 0,
+      selfLogBillingMeta: null, usageSource: 'upstream',
+    });
+    resolveProxyLogBillingMock.mockResolvedValue({ estimatedCost: 0, billingDetails: null });
+    try {
+      for (let i = 0; i < 8; i += 1) {
+        await recordSurfaceSuccess({
+          selected: {
+            channel: { id: 11, routeId: 22 },
+            account: { id: 33 },
+            site: { id: 44, url: 'https://upstream.example.com', platform: 'new-api' },
+            tokenValue: 'fixture-token', actualModel: 'upstream-model-variant',
+          },
+          requestedModel: 'requested-model', modelName: 'upstream-model-variant',
+          parsedUsage: {
+            promptTokens: 5, completionTokens: 3, totalTokens: 8,
+            cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null,
+          },
+          isStream: true, firstByteLatencyMs: 2_000, latencyMs: 4_000,
+          requestStartedAtMs: Date.now() - 4_000, retryCount: 0,
+          logSuccess: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+      const key = { routeId: 22, siteId: 44, modelName: 'requested-model', isStream: true };
+      expect(listPerformanceShadowAttempts(key)).toHaveLength(8);
+      expect(getPerformanceShadowMetrics(key)?.sampleCount).toBe(8);
+      expect(resolveSurfaceFirstByteWindowMs(key)).toBeLessThan(120_000);
+      expect(recordSuccessMock).toHaveBeenCalledWith(11, 4_000, 0, 'upstream-model-variant');
+    } finally {
+      config.proxyFirstByteTimeoutSec = originalTimeout;
+      clearPerformanceShadowMetrics();
+    }
+  });
+
   it('logs unknown usage as null tokens while preserving success bookkeeping', async () => {
     resolveProxyUsageWithSelfLogFallbackMock.mockResolvedValue({
       promptTokens: 0,
