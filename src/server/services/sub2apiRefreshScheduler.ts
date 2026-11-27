@@ -8,6 +8,7 @@ import { advanceRefreshBackoff, isRefreshBackoffActive } from './refreshBackoff.
 import {
   isManagedSub2ApiTokenDue,
   isSub2ApiPlatform,
+  probeSub2ApiAccessTokenLiveness,
 } from './sub2apiManagedAuth.js';
 import { refreshSub2ApiManagedSessionSingleflight } from './sub2apiRefreshSingleflight.js';
 
@@ -155,12 +156,35 @@ export async function executeSub2ApiManagedRefreshPass(input: {
           const managedAuth = getSub2ApiAuthFromExtraConfig(row.accounts.extraConfig);
           const firstSeenAt = managedAuth?.refreshInvalidConfirmedAt;
           if (firstSeenAt && nowMs - firstSeenAt <= REFRESH_INVALID_CONFIRM_WINDOW_MS) {
+            // Before expiring anything, ask whether the account is actually
+            // broken: a revoked refresh token can leave the current access token
+            // working for hours, and an expired account leaves the scheduler for
+            // good (it only scans active ones). Losing a working account is worse
+            // than retrying a dead one.
+            const liveness = await probeSub2ApiAccessTokenLiveness({
+              site: row.sites,
+              accessToken: row.accounts.accessToken || '',
+              extraConfig: row.accounts.extraConfig,
+            });
+            if (liveness !== 'rejected') {
+              console.warn(
+                `[sub2api-refresh] account ${row.accounts.id}: refresh token revoked but the session is still ${liveness}; keeping it active and backing off instead of expiring it`,
+              );
+              await db.update(schema.accounts).set({
+                extraConfig: mergeAccountExtraConfig(
+                  row.accounts.extraConfig,
+                  buildBackoffExtraConfigPatch(row.accounts.extraConfig, nowMs),
+                ),
+                updatedAt: new Date().toISOString(),
+              }).where(eq(schema.accounts.id, row.accounts.id)).run();
+              return;
+            }
             await db.update(schema.accounts).set({
               status: 'expired',
               updatedAt: new Date().toISOString(),
             }).where(eq(schema.accounts.id, row.accounts.id)).run();
             console.warn(
-              `[sub2api-refresh] account ${row.accounts.id} expired: refresh token invalid confirmed twice`,
+              `[sub2api-refresh] account ${row.accounts.id} expired: refresh token invalid confirmed twice and the session is rejected`,
             );
             return;
           }

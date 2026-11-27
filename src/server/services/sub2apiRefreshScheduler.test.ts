@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 
 const refreshSub2ApiManagedSessionSingleflightMock = vi.fn();
+const probeSub2ApiAccessTokenLivenessMock = vi.fn();
 
 vi.mock('./sub2apiRefreshSingleflight.js', () => ({
   refreshSub2ApiManagedSessionSingleflight: (...args: unknown[]) => refreshSub2ApiManagedSessionSingleflightMock(...args),
@@ -14,6 +15,9 @@ vi.mock('./sub2apiManagedAuth.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./sub2apiManagedAuth.js')>();
   return {
     ...actual,
+    // Network-facing: the scheduler only calls it to decide "expired or not",
+    // so the tests drive that decision directly.
+    probeSub2ApiAccessTokenLiveness: (...args: unknown[]) => probeSub2ApiAccessTokenLivenessMock(...args),
   };
 });
 
@@ -67,6 +71,10 @@ describe('sub2apiRefreshScheduler', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     refreshSub2ApiManagedSessionSingleflightMock.mockReset();
+    // Default: the upstream rejects the current session too, which is the
+    // genuinely-dead case. Tests that need a live session override this.
+    probeSub2ApiAccessTokenLivenessMock.mockReset();
+    probeSub2ApiAccessTokenLivenessMock.mockResolvedValue('rejected');
     await stopSub2ApiManagedRefreshScheduler();
     await resetSub2ApiManagedRefreshSchedulerForTests();
 
@@ -401,5 +409,45 @@ describe('sub2apiRefreshScheduler', () => {
     await executeSub2ApiManagedRefreshPass({ nowMs: nowMs + 10 * 60 * 1000 });
     const afterSecond = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
     expect(afterSecond?.status).toBe('expired');
+    // Only the second confirmation asks upstream whether the session is really
+    // dead; the first one is just recorded.
+    expect(probeSub2ApiAccessTokenLivenessMock).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['valid', 'unknown'] as const)(
+    'keeps the account active when the refresh token is revoked but the session still answers (%s)',
+    async (liveness) => {
+      const nowMs = Date.parse('2026-04-06T02:00:00.000Z');
+      vi.setSystemTime(nowMs);
+      const site = await db.insert(schema.sites).values({
+        name: `sub2-live-session-site-${liveness}`,
+        url: `https://sub2-live-${liveness}.example.com`,
+        platform: 'sub2api',
+        status: 'active',
+      }).returning().get();
+      const account = await db.insert(schema.accounts).values({
+        siteId: site.id,
+        username: `live-session-${liveness}@example.com`,
+        accessToken: 'still-working-access-token',
+        status: 'active',
+        extraConfig: buildSub2ApiExtraConfig({
+          refreshToken: 'revoked-refresh-token',
+          tokenExpiresAt: nowMs - 1_000,
+        }),
+      }).returning().get();
+
+      refreshSub2ApiManagedSessionSingleflightMock.mockRejectedValue(
+        new Error('sub2api token refresh failed: HTTP 401: invalid refresh token (REFRESH_TOKEN_INVALID)'),
+      );
+      probeSub2ApiAccessTokenLivenessMock.mockResolvedValue(liveness);
+
+      await executeSub2ApiManagedRefreshPass({ nowMs });
+      await executeSub2ApiManagedRefreshPass({ nowMs: nowMs + 10 * 60 * 1000 });
+
+      const row = await db.select().from(schema.accounts).where(eq(schema.accounts.id, account.id)).get();
+      // The account still serves traffic, so expiring it (which also removes it
+      // from the scheduler's scan) would throw away working capacity.
+      expect(row?.status).toBe('active');
+    },
+  );
 });
