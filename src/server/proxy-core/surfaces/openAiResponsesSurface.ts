@@ -1108,24 +1108,39 @@ requestStartedAtMs: startTime,
             promptTokensIncludeCache: null,
           };
           let upstreamUsagePresent = false;
-          // Every stream failure below happens after the SSE response has been
-          // hijacked: no new HTTP response can be sent and channel failover is
-          // over, so the only work left is the same bookkeeping — drop the
-          // affinity hints, record the channel failure and close the debug
-          // trace. Four call sites used to spell this out by hand and had
-          // drifted (one missed the affinity clear, two missed the 502 status).
           const failStreamAttempt = async (errorMessage: string | null, latency: number) => {
+            const reason = errorMessage || 'stream processing failed';
             clearSurfaceChannelAffinity({
               stickySessionKey,
               selected,
               requestedModel,
               downstreamApiKeyId,
             });
+            if (!isFastifyReplyCommitted(reply)) {
+              const failureOutcome = await failureToolkit.handleDetectedFailure({
+                selected, requestedModel, modelName,
+                failure: { status: 502, reason },
+                isStream: true, firstByteLatencyMs,
+                latencyMs: latency, retryCount,
+                promptTokens: parsedUsage.promptTokens,
+                completionTokens: parsedUsage.completionTokens,
+                totalTokens: parsedUsage.totalTokens,
+                upstreamPath: successfulUpstreamPath,
+                upstreamHeaders: upstream.headers,
+              });
+              return continueAttemptOrTerminate({
+                selected, failureOutcome, status: 502, reason,
+                finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(502, reason),
+                upstreamPath: successfulUpstreamPath,
+              });
+            }
             await failureToolkit.recordStreamFailure({
               selected,
               requestedModel,
               modelName,
-              errorMessage,
+              errorMessage: reason,
+              isStream: true,
+              firstByteLatencyMs,
               latencyMs: latency,
               retryCount,
               promptTokens: parsedUsage.promptTokens,
@@ -1135,14 +1150,19 @@ requestStartedAtMs: startTime,
               runtimeFailureStatus: 502,
             });
             await finalizeDebugFailure(502, {
-              error: {
-                message: errorMessage,
-                type: 'stream_error',
-              },
+              error: { message: reason, type: 'stream_error' },
             }, successfulUpstreamPath);
+            return 'terminal';
           };
           const writeLines = (lines: string[]) => {
+            if (lines.length === 0) return;
+            startSseResponse();
             for (const line of lines) reply.raw.write(line);
+          };
+          const streamResponse = {
+            end() {
+              if (streamStarted) reply.raw.end();
+            },
           };
           const websocketTransportRequest = isResponsesWebsocketTransportRequest(request.headers as Record<string, unknown>);
           const streamSession = openAiResponsesTransformer.proxyStream.createSession({
@@ -1160,21 +1180,21 @@ requestStartedAtMs: startTime,
             },
             writeLines,
             writeRaw: (chunk) => {
+              startSseResponse();
               reply.raw.write(chunk);
             },
           });
           if (!upstreamContentType.includes('text/event-stream')) {
             const rawText = await readRuntimeResponseText(upstream, bodyReadGuards);
             if (looksLikeResponsesSseText(rawText)) {
-              startSseResponse();
               const streamResult = await streamSession.run(
                 createSingleChunkStreamReader(rawText),
-                reply.raw,
+                streamResponse,
               );
               const latency = Date.now() - startTime;
 	              if (streamResult.status === 'failed') {
-	                await failStreamAttempt(streamResult.errorMessage, latency);
-	                return;
+	                if (await failStreamAttempt(streamResult.errorMessage, latency) === 'retried') continue;
+	                return reply;
 	              }
 
 	              await finalizeStreamSuccess(
@@ -1244,11 +1264,10 @@ finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, fail
 	              return reply;
             }
 
-            startSseResponse();
-            const streamResult = streamSession.consumeUpstreamFinalPayload(upstreamData, rawText, reply.raw);
+            const streamResult = streamSession.consumeUpstreamFinalPayload(upstreamData, rawText, streamResponse);
 	            if (streamResult.status === 'failed') {
-	              await failStreamAttempt(streamResult.errorMessage, latency);
-	              return;
+	              if (await failStreamAttempt(streamResult.errorMessage, latency) === 'retried') continue;
+	              return reply;
 	            }
 
 	            await finalizeStreamSuccess(
@@ -1265,8 +1284,6 @@ finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, fail
           });
 	            return;
 	          }
-
-          startSseResponse();
 
           let replayReader: ReturnType<typeof createSingleChunkStreamReader> | null = null;
           if (websocketTransportRequest) {
@@ -1314,12 +1331,12 @@ finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, fail
 
               const streamResult = await streamSession.run(
                 createSingleChunkStreamReader(rawText),
-                reply.raw,
+                streamResponse,
               );
               const latency = Date.now() - startTime;
               if (streamResult.status === 'failed') {
-                await failStreamAttempt(streamResult.errorMessage, latency);
-                return;
+                if (await failStreamAttempt(streamResult.errorMessage, latency) === 'retried') continue;
+                return reply;
               }
 
               await finalizeStreamSuccess(
@@ -1353,14 +1370,14 @@ finalizeTerminalRetry: () => finalizeRetryAsUpstreamFailure(failure.status, fail
             reply,
             () => (reader ? () => reader.cancel('client disconnected') : null),
           );
-          const streamResult = await streamSession.run(reader, reply.raw);
+          const streamResult = await streamSession.run(reader, streamResponse);
           unwireStreamCancel();
           rawText += decoder.decode();
 
           const latency = Date.now() - startTime;
 	          if (streamResult.status === 'failed') {
-	            await failStreamAttempt(streamResult.errorMessage, latency);
-	            return;
+	            if (await failStreamAttempt(streamResult.errorMessage, latency) === 'retried') continue;
+	            return reply;
 	          }
 
           // Once SSE has been hijacked and bytes may already be on the wire, we

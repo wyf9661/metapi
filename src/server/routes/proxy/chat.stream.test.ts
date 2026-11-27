@@ -194,6 +194,52 @@ describe('chat proxy stream behavior', () => {
     }
   });
 
+  it('fails over to the next channel when a chat stream upstream answers 400 Invalid request', async () => {
+    // Production shape: the relay processes the request for ~80s and then
+    // rejects it with a bare 400 "Invalid request". The attempt must switch
+    // channels instead of ending the request, so the session can continue on
+    // a healthy channel.
+    selectNextChannelMock.mockReturnValueOnce({
+      channel: { id: 12, routeId: 22 },
+      site: { name: 'healthy-site', url: 'https://healthy.example.com' },
+      account: { id: 34, username: 'healthy-user' },
+      tokenValue: 'fixture-token',
+      actualModel: 'upstream-gpt',
+    });
+    // The production relay answers after ~80s. Reproduce that wait so the
+    // failover budget decision sees the real elapsed time.
+    const slowReject = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return new Response(JSON.stringify({
+        error: { message: 'Invalid request', type: 'invalid_request_error', code: 'invalid_request' },
+      }), { status: 400, headers: { 'content-type': 'application/json' } });
+    };
+    fetchMock
+      .mockImplementationOnce(slowReject)
+      .mockImplementation(async () => new Response(JSON.stringify({
+        id: 'chatcmpl-after-400',
+        object: 'chat.completion',
+        model: 'upstream-gpt',
+        choices: [{ index: 0, message: { role: 'assistant', content: 'ok after 400' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      payload: {
+        model: 'gpt-4o-mini',
+        stream: true,
+        messages: [{ role: 'user', content: 'hello there' }],
+      },
+    });
+
+    expect(selectNextChannelMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('ok after 400');
+  });
+
   it('waits for a full per-minute bucket and resends on the same channel instead of failing over', async () => {
     // Production shape: the relay answers 502 with the shared pool's token
     // rate-limit message, then serves the same channel once the window passes.
@@ -509,6 +555,76 @@ describe('chat proxy stream behavior', () => {
     expect(recordFailureMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    { contentType: 'text/event-stream', upstream: 'native SSE' },
+    { contentType: 'text/plain', upstream: 'mislabelled SSE' },
+  ])('returns an HTTP error before committing an empty Responses $upstream stream', async ({ contentType }) => {
+    config.proxyEmptyContentFailEnabled = true;
+    fetchMock.mockImplementation(async () => new Response([
+      'event: response.created',
+      `data: ${JSON.stringify({ type: 'response.created', response: { id: 'resp_empty_recovery', status: 'in_progress', output: [] } })}`,
+      '',
+      'event: response.completed',
+      `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_empty_recovery', status: 'completed', output: [], usage: { input_tokens: 5, output_tokens: 0, total_tokens: 5 } } })}`,
+      '',
+      'data: [DONE]',
+      '',
+      '',
+    ].join('\n'), { status: 200, headers: { 'content-type': contentType } }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: { model: 'gpt-4o-mini', stream: true, input: 'a normal request' },
+    });
+
+    expect(response.statusCode, response.body).toBe(502);
+    expect(response.headers['content-type']).not.toContain('text/event-stream');
+    expect(response.json().error.message).toContain('empty content');
+    expect(response.body).not.toContain('response.completed');
+    expect(recordSuccessMock).not.toHaveBeenCalled();
+    expect(recordFailureMock).toHaveBeenCalled();
+  });
+
+  it('fails over an empty Responses stream before any downstream output', async () => {
+    config.proxyEmptyContentFailEnabled = true;
+    selectNextChannelMock.mockReturnValueOnce({
+      channel: { id: 12, routeId: 22 },
+      site: { name: 'healthy-site', url: 'https://healthy.example.com' },
+      account: { id: 34, username: 'healthy-user' },
+      tokenValue: 'fixture-token', actualModel: 'upstream-gpt',
+    });
+    fetchMock
+      .mockImplementationOnce(async () => new Response([
+        'event: response.created',
+        `data: ${JSON.stringify({ type: 'response.created', response: { id: 'resp_empty_attempt', status: 'in_progress', output: [] } })}`,
+        '',
+        'event: response.completed',
+        `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_empty_attempt', status: 'completed', output: [], usage: { input_tokens: 5, output_tokens: 0, total_tokens: 5 } } })}`,
+        '',
+        '',
+      ].join('\n'), { status: 200, headers: { 'content-type': 'text/event-stream' } }))
+      .mockImplementation(async () => new Response(JSON.stringify({
+        id: 'resp_healthy_attempt', status: 'completed',
+        output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'recovered answer' }] }],
+        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await app.inject({
+      method: 'POST', url: '/v1/responses',
+      payload: { model: 'gpt-4o-mini', stream: true, input: 'a normal request' },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.body).toContain('recovered answer');
+    expect(response.body).not.toContain('resp_empty_attempt');
+    expect(response.body).not.toContain('response.failed');
+    expect(selectNextChannelMock).toHaveBeenCalledTimes(1);
+    expect(recordFailureMock).toHaveBeenCalledTimes(1);
+    expect(recordSuccessMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('streams reasoning live and fails with empty content when only reasoning arrives before DONE', async () => {
     config.proxyEmptyContentFailEnabled = true;
 
@@ -543,13 +659,18 @@ describe('chat proxy stream behavior', () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.headers['content-type']).toContain('text/event-stream');
     expect(response.body).toContain('"reasoning_content":"thinking about the question"');
-    // The empty-content gate still fails the attempt: no fabricated [DONE]
-    // claims a normal completion, and the channel gets penalized.
-    expect(response.body).not.toContain('data: [DONE]');
-    expect(response.body).not.toContain('upstream_error');
+    // The attempt is still recorded as a failure and the channel is penalized:
+    // no deliverable answer was produced.
     expect(recordSuccessMock).not.toHaveBeenCalled();
     expect(recordFailureMock).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(recordFailureMock.mock.calls)).toContain('reasoning only');
+    // The committed stream still ends normally. An open-ended SSE stream is a
+    // broken stream to every OpenAI-compatible SDK, and the client aborts the
+    // whole turn on it (downgrade / exit) even though the proxy already knows
+    // the attempt failed and the channel is cooled. A terminal frame keeps the
+    // session alive; the failure stays visible in the proxy logs.
+    expect(response.body).toContain('data: [DONE]');
+    expect(response.body).not.toContain('upstream_error');
   });
 
   it('streams reasoning followed by the final answer when visible output arrives', async () => {
@@ -1940,7 +2061,7 @@ describe('chat proxy stream behavior', () => {
     expect(response.body).toContain('response.completed');
   });
 
-  it('emits response.failed without synthetic response.completed when upstream stream fails on /v1/responses', async () => {
+  it('emits response.failed without synthetic response.completed after partial output on /v1/responses', async () => {
     fetchModelPricingCatalogMock.mockResolvedValue({
       models: [
         {
@@ -1955,6 +2076,7 @@ describe('chat proxy stream behavior', () => {
     const upstreamBody = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(encoder.encode('data: {"id":"chatcmpl-r3","model":"upstream-gpt","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"id":"chatcmpl-r3","model":"upstream-gpt","choices":[{"delta":{"content":"partial answer"},"finish_reason":null}]}\n\n'));
         controller.enqueue(encoder.encode('event: error\ndata: {"type":"error","error":{"message":"upstream stream failed","type":"upstream_error"}}\n\n'));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();

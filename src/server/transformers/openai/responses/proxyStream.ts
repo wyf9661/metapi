@@ -3,6 +3,8 @@ import { resolveProxyStreamIdleTimeoutMs } from '../../../config.js';
 import { type ParsedSseEvent } from '../../shared/normalized.js';
 import { completeResponsesStream, createOpenAiResponsesAggregateState, failResponsesStream, serializeConvertedResponsesEvents } from './aggregator.js';
 import {
+  hasMeaningfulResponsesOutputItem,
+  hasMeaningfulResponsesPayloadOutput,
   hasReasoningResponsesOutputItem,
   hasReasoningResponsesPayloadOutput,
   hasVisibleResponsesOutputItem,
@@ -128,6 +130,21 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
     status: 'completed',
     errorMessage: null,
   };
+  let forwardedOutput = false;
+  const pendingWrites: string[] = [];
+  const emitLines = (lines: string[], force = false) => {
+    if (lines.length === 0) return;
+    if (!forwardedOutput && !force && !responsesState.outputItems.some(hasMeaningfulResponsesOutputItem)) {
+      pendingWrites.push(...lines);
+      return;
+    }
+    forwardedOutput = true;
+    if (pendingWrites.length > 0) {
+      input.writeLines(pendingWrites);
+      pendingWrites.length = 0;
+    }
+    input.writeLines(lines);
+  };
 
   const finalize = () => {
     if (finalized) return;
@@ -136,17 +153,43 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
       status: 'completed',
       errorMessage: null,
     };
-    input.writeLines(completeResponsesStream(responsesState, streamContext, input.getUsage()));
+    emitLines(completeResponsesStream(responsesState, streamContext, input.getUsage()), true);
   };
 
-  const fail = (payload: unknown, fallbackMessage?: string) => {
+  const fail = (payload: unknown, fallbackMessage?: string, options?: { writeFrame?: boolean }) => {
     if (finalized) return;
     finalized = true;
     terminalResult = {
       status: 'failed',
       errorMessage: getResponsesStreamFailureMessage(payload, fallbackMessage),
     };
-    input.writeLines(failResponsesStream(responsesState, streamContext, input.getUsage(), payload));
+    // Two different verdicts arrive here:
+    // - an upstream terminal failure (`response.failed`): the client must see
+    //   it, including any partial output it carries;
+    // - a local gate verdict (empty content): nothing was delivered, and the
+    //   caller may still fail over to another channel — writing a frame now
+    //   would commit the response and kill that failover.
+    // `writeFrame` defaults to true (upstream terminal); the local gate passes
+    // false.
+    // An upstream terminal failure that still carries output must reach the
+    // client even when nothing was forwarded before it: that output is the
+    // turn's only content and dropping it leaves the stream with nothing. A
+    // local gate verdict (empty content) carries no output and must not commit
+    // the response — the caller may still fail over to another channel.
+    const responsePayload = isRecord(payload) && isRecord(payload.response) ? payload.response : null;
+    const carriesOutput = hasMeaningfulResponsesPayloadOutput(payload)
+      || (responsePayload ? hasMeaningfulResponsesPayloadOutput(responsePayload) : false);
+    const writeFrame = options?.writeFrame !== false && (forwardedOutput || carriesOutput);
+    if (writeFrame) {
+      // A pending buffer that carries output is flushed first so partial
+      // content is not lost on the way out.
+      if (pendingWrites.length > 0) {
+        input.writeLines(pendingWrites);
+        pendingWrites.length = 0;
+      }
+      input.writeLines(failResponsesStream(responsesState, streamContext, input.getUsage(), payload));
+    }
+    pendingWrites.length = 0;
   };
 
   const complete = () => {
@@ -235,7 +278,17 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
           return true;
         }
       }
-      input.writeLines(convertedLines);
+      // A terminal event must reach the client even when nothing visible was
+      // streamed before it: `response.failed` can carry partial output the
+      // client needs (and `response.incomplete` is the truncation verdict).
+      // Holding it back drops that output on the floor — the stream then ends
+      // with nothing at all.
+      const isTerminalEvent = isIncompleteEvent
+        || eventBlock.event === 'response.failed'
+        || payloadType === 'response.failed'
+        || eventBlock.event === 'response.completed'
+        || payloadType === 'response.completed';
+      emitLines(convertedLines, isTerminalEvent || !config.proxyEmptyContentFailEnabled);
       if (eventBlock.event === 'response.completed' || payloadType === 'response.completed' || isIncompleteEvent) {
         terminalEventSeen = true;
         complete();
@@ -243,7 +296,7 @@ export function createResponsesProxyStreamSession(input: ResponsesProxyStreamSes
       return false;
     }
 
-    input.writeLines(serializeConvertedResponsesEvents({
+    emitLines(serializeConvertedResponsesEvents({
       state: responsesState,
       streamContext,
       event: { contentDelta: eventBlock.data },
