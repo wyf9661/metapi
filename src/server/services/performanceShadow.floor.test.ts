@@ -129,6 +129,24 @@ describe('adaptive first-byte floor: lift, and release after recovery', () => {
     expect(floorOf(attempts)).toBe(FLOOR);
   });
 
+  it('lifts the floor to the site own healthy tail without waiting for a timeout', () => {
+    // Production evidence (7 days): 30.3% of successful streaming answers
+    // arrive between 8s and 30s, so a static 8s floor sits inside the healthy
+    // distribution of most sites and cuts them every time the optimiser
+    // prefers "fail fast". Waiting for a censored timeout to prove it costs a
+    // real request per bucket, and the window then re-learns the same lesson
+    // after every fast run.
+    const attempts = run(8, (i) => success(12_000, B + i));
+    // P90 = 12s, x1.35 headroom = 16.2s — the floor must follow it.
+    expect(floorOf(attempts)).toBe(16_200);
+  });
+
+  it('keeps the static floor when the site tail is genuinely fast', () => {
+    const attempts = run(8, (i) => success(1_500, B + i));
+    // P90 = 1.5s, x1.35 = 2.0s — still below the static floor.
+    expect(floorOf(attempts)).toBe(FLOOR);
+  });
+
   it('respects the ceiling and an empty history', () => {
     expect(floorOf([])).toBe(FLOOR);
     const attempts = [
